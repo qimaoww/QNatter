@@ -24,6 +24,8 @@ type Mapping struct {
 	Server Server
 }
 
+var ErrNoServerAvailable = errors.New("no STUN server is available right now")
+
 type ExchangeFunc func(context.Context, string, Server, netip.AddrPort, []byte) (netip.AddrPort, []byte, error)
 
 type Client struct {
@@ -66,7 +68,7 @@ func (c *Client) GetMapping(ctx context.Context) (Mapping, error) {
 		return Mapping{Inner: inner, Outer: outer, Server: server}, nil
 	}
 
-	return Mapping{}, errors.New("no STUN server is available right now")
+	return Mapping{}, ErrNoServerAvailable
 }
 
 func (c *Client) transactionID() ([12]byte, error) {

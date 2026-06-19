@@ -83,6 +83,33 @@ func TestClientGetMappingRotatesUnavailableServer(t *testing.T) {
 	}
 }
 
+func TestClientGetMappingReturnsTypedErrorWhenAllServersUnavailable(t *testing.T) {
+	txid := [12]byte{'N', 'A', 'T', 'R', 4, 4, 4, 4, 4, 4, 4, 4}
+	transport := &fakeTransport{
+		errs: []error{
+			errors.New("first timeout"),
+			errors.New("second timeout"),
+		},
+	}
+	client := Client{
+		Servers: []Server{
+			{Host: "first.example", Port: 3478},
+			{Host: "second.example", Port: 3478},
+		},
+		Source: netip.MustParseAddrPort("0.0.0.0:0"),
+		TxID:   fixedTxID(txid),
+		Do:     transport.Exchange,
+	}
+
+	_, err := client.GetMapping(context.Background())
+	if !errors.Is(err, ErrNoServerAvailable) {
+		t.Fatalf("GetMapping error = %v, want ErrNoServerAvailable", err)
+	}
+	if len(transport.servers) != 2 {
+		t.Fatalf("server attempts = %#v, want two attempts", transport.servers)
+	}
+}
+
 func TestNetworkTransportExchangesTCP(t *testing.T) {
 	txid := [12]byte{'N', 'A', 'T', 'R', 1, 1, 1, 1, 1, 1, 1, 1}
 	server, stop := startLocalTCPStun(t, txid, netip.MustParseAddrPort("203.0.113.20:53000"))

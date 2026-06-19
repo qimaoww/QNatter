@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"natter-openwrt/go-natter/internal/config"
+	"natter-openwrt/go-natter/internal/stun"
 )
 
 type RetryOptions struct {
@@ -39,7 +40,8 @@ func retryable(err error, fn func(error) bool) bool {
 		return fn(err)
 	}
 	return errors.Is(err, ErrMappingChanged) || errors.Is(err, ErrKeepAliveFailed) ||
-		errors.Is(err, ErrTargetClosed) || errors.Is(err, ErrLocalAddressChanged)
+		errors.Is(err, ErrTargetClosed) || errors.Is(err, ErrLocalAddressChanged) ||
+		errors.Is(err, stun.ErrNoServerAvailable)
 }
 
 func retryDelay(cfg config.Config) time.Duration {
