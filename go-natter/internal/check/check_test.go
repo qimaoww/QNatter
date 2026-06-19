@@ -3,7 +3,9 @@ package check
 import (
 	"bytes"
 	"context"
+	"encoding/binary"
 	"errors"
+	"net/netip"
 	"os"
 	"path/filepath"
 	"strings"
@@ -95,6 +97,42 @@ func TestNATResultMatchesPythonStatusRules(t *testing.T) {
 	}
 }
 
+func TestParseSTUNMappedAddressSupportsRFC3489MappedAddress(t *testing.T) {
+	txid := [16]byte{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}
+	response := stunResponse(txid, stunAttrMappedAddress, mappedAddressAttr(netip.MustParseAddrPort("198.51.100.7:45678")))
+
+	addr, err := ParseSTUNMappedAddress(response, txid)
+	if err != nil {
+		t.Fatalf("ParseSTUNMappedAddress returned error: %v", err)
+	}
+	if addr != netip.MustParseAddrPort("198.51.100.7:45678") {
+		t.Fatalf("mapped address = %s, want 198.51.100.7:45678", addr)
+	}
+}
+
+func TestParseSTUNMappedAddressSupportsXORMappedAddress(t *testing.T) {
+	txid := [16]byte{0x21, 0x12, 0xa4, 0x42, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}
+	response := stunResponse(txid, stunAttrXORMappedAddress, xorMappedAddressAttr(netip.MustParseAddrPort("203.0.113.9:54321")))
+
+	addr, err := ParseSTUNMappedAddress(response, txid)
+	if err != nil {
+		t.Fatalf("ParseSTUNMappedAddress returned error: %v", err)
+	}
+	if addr != netip.MustParseAddrPort("203.0.113.9:54321") {
+		t.Fatalf("mapped address = %s, want 203.0.113.9:54321", addr)
+	}
+}
+
+func TestParseSTUNMappedAddressRejectsWrongTransaction(t *testing.T) {
+	txid := [16]byte{1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1}
+	other := [16]byte{2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2}
+	response := stunResponse(other, stunAttrMappedAddress, mappedAddressAttr(netip.MustParseAddrPort("198.51.100.7:45678")))
+
+	if _, err := ParseSTUNMappedAddress(response, txid); err == nil {
+		t.Fatal("ParseSTUNMappedAddress accepted wrong transaction id")
+	}
+}
+
 func TestDefaultRunReportsUnimplementedChecksWithoutFakeSuccess(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 
@@ -116,6 +154,38 @@ func TestDefaultRunReportsUnimplementedChecksWithoutFakeSuccess(t *testing.T) {
 	if stderr.Len() != 0 {
 		t.Fatalf("stderr = %q, want empty stderr", stderr.String())
 	}
+}
+
+func stunResponse(txid [16]byte, attrType uint16, attrValue []byte) []byte {
+	response := make([]byte, 24+len(attrValue))
+	binary.BigEndian.PutUint16(response[0:2], stunBindingResponse)
+	binary.BigEndian.PutUint16(response[2:4], uint16(4+len(attrValue)))
+	copy(response[4:20], txid[:])
+	binary.BigEndian.PutUint16(response[20:22], attrType)
+	binary.BigEndian.PutUint16(response[22:24], uint16(len(attrValue)))
+	copy(response[24:], attrValue)
+	return response
+}
+
+func mappedAddressAttr(addr netip.AddrPort) []byte {
+	value := make([]byte, 8)
+	value[1] = stunFamilyIPv4
+	binary.BigEndian.PutUint16(value[2:4], addr.Port())
+	ip := addr.Addr().As4()
+	copy(value[4:8], ip[:])
+	return value
+}
+
+func xorMappedAddressAttr(addr netip.AddrPort) []byte {
+	value := mappedAddressAttr(addr)
+	binary.BigEndian.PutUint16(value[2:4], addr.Port()^uint16(stunMagicCookie>>16))
+	ip := addr.Addr().As4()
+	cookie := [4]byte{}
+	binary.BigEndian.PutUint32(cookie[:], stunMagicCookie)
+	for i := range ip {
+		value[4+i] = ip[i] ^ cookie[i]
+	}
+	return value
 }
 
 func TestCheckDockerNetworkRejectsDockerBridgeNetwork(t *testing.T) {

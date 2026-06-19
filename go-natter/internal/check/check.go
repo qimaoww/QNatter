@@ -2,6 +2,8 @@ package check
 
 import (
 	"context"
+	"encoding/binary"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -14,6 +16,14 @@ import (
 )
 
 const Version = "2.2.1-go"
+
+const (
+	stunBindingResponse      uint16 = 0x0101
+	stunAttrMappedAddress    uint16 = 0x0001
+	stunAttrXORMappedAddress uint16 = 0x0020
+	stunFamilyIPv4           byte   = 0x01
+	stunMagicCookie          uint32 = 0x2112a442
+)
 
 type Status int
 
@@ -107,6 +117,61 @@ func ResultFromNATType(nat NATType) Result {
 		status = NA
 	}
 	return Result{Status: status, Info: fmt.Sprintf("NAT Type: %d", nat)}
+}
+
+func ParseSTUNMappedAddress(data []byte, txid [16]byte) (netip.AddrPort, error) {
+	if len(data) < 20 {
+		return netip.AddrPort{}, errors.New("short STUN response")
+	}
+	if binary.BigEndian.Uint16(data[0:2]) != stunBindingResponse {
+		return netip.AddrPort{}, errors.New("not a STUN binding response")
+	}
+	msgLen := int(binary.BigEndian.Uint16(data[2:4]))
+	if len(data) < 20+msgLen {
+		return netip.AddrPort{}, errors.New("truncated STUN response")
+	}
+	if string(data[4:20]) != string(txid[:]) {
+		return netip.AddrPort{}, errors.New("STUN transaction id mismatch")
+	}
+
+	payload := data[20 : 20+msgLen]
+	for len(payload) >= 4 {
+		attrType := binary.BigEndian.Uint16(payload[0:2])
+		attrLen := int(binary.BigEndian.Uint16(payload[2:4]))
+		if len(payload) < 4+attrLen {
+			return netip.AddrPort{}, errors.New("truncated STUN attribute")
+		}
+		if attrType == stunAttrMappedAddress || attrType == stunAttrXORMappedAddress {
+			return parseSTUNAddressAttribute(attrType, payload[4:4+attrLen])
+		}
+		padded := (attrLen + 3) &^ 3
+		if len(payload) < 4+padded {
+			return netip.AddrPort{}, errors.New("truncated STUN attribute padding")
+		}
+		payload = payload[4+padded:]
+	}
+	return netip.AddrPort{}, errors.New("mapped address attribute not found")
+}
+
+func parseSTUNAddressAttribute(attrType uint16, value []byte) (netip.AddrPort, error) {
+	if len(value) < 8 {
+		return netip.AddrPort{}, errors.New("short STUN address attribute")
+	}
+	if value[1] != stunFamilyIPv4 {
+		return netip.AddrPort{}, fmt.Errorf("unsupported STUN address family %d", value[1])
+	}
+	port := binary.BigEndian.Uint16(value[2:4])
+	ip := [4]byte{}
+	copy(ip[:], value[4:8])
+	if attrType == stunAttrXORMappedAddress {
+		port ^= uint16(stunMagicCookie >> 16)
+		cookie := [4]byte{}
+		binary.BigEndian.PutUint32(cookie[:], stunMagicCookie)
+		for i := range ip {
+			ip[i] ^= cookie[i]
+		}
+	}
+	return netip.AddrPortFrom(netip.AddrFrom4(ip), port), nil
 }
 
 func unimplementedTCP(context.Context, config.Config) (Result, error) {
