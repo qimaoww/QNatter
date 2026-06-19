@@ -69,6 +69,32 @@ func TestRunConvertsCheckErrorToFailLine(t *testing.T) {
 	}
 }
 
+func TestNATResultMatchesPythonStatusRules(t *testing.T) {
+	tests := []struct {
+		name   string
+		nat    NATType
+		status Status
+		info   string
+	}{
+		{name: "unknown", nat: NATUnknown, status: NA, info: "NAT Type: -1"},
+		{name: "open internet", nat: NATOpenInternet, status: OK, info: "NAT Type: 0"},
+		{name: "full cone", nat: NATFullCone, status: OK, info: "NAT Type: 1"},
+		{name: "restricted", nat: NATRestricted, status: FAIL, info: "NAT Type: 2"},
+		{name: "port restricted", nat: NATPortRestricted, status: FAIL, info: "NAT Type: 3"},
+		{name: "symmetric", nat: NATSymmetric, status: FAIL, info: "NAT Type: 4"},
+		{name: "symmetric udp firewall", nat: NATSymmetricUDPFirewall, status: FAIL, info: "NAT Type: 5"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := ResultFromNATType(tt.nat)
+			if got.Status != tt.status || got.Info != tt.info {
+				t.Fatalf("ResultFromNATType(%d) = %+v, want status %v info %q", tt.nat, got, tt.status, tt.info)
+			}
+		})
+	}
+}
+
 func TestDefaultRunReportsUnimplementedChecksWithoutFakeSuccess(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 

@@ -29,6 +29,18 @@ type Result struct {
 	Info   string
 }
 
+type NATType int
+
+const (
+	NATUnknown              NATType = -1
+	NATOpenInternet         NATType = 0
+	NATFullCone             NATType = 1
+	NATRestricted           NATType = 2
+	NATPortRestricted       NATType = 3
+	NATSymmetric            NATType = 4
+	NATSymmetricUDPFirewall NATType = 5
+)
+
 type Probe func(context.Context, config.Config) (Result, error)
 
 type Runner struct {
@@ -84,6 +96,17 @@ func (s Status) rep() string {
 	default:
 		return "[  FAIL  ]"
 	}
+}
+
+func ResultFromNATType(nat NATType) Result {
+	status := FAIL
+	switch nat {
+	case NATOpenInternet, NATFullCone:
+		status = OK
+	case NATUnknown:
+		status = NA
+	}
+	return Result{Status: status, Info: fmt.Sprintf("NAT Type: %d", nat)}
 }
 
 func unimplementedTCP(context.Context, config.Config) (Result, error) {
