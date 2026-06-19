@@ -197,13 +197,20 @@ func (s *fakeSTUN) GetMapping(context.Context) (stun.Mapping, error) {
 
 type fakeKeepAlive struct {
 	events *[]string
+	err    error
+	errs   []error
 }
 
 func (k *fakeKeepAlive) KeepAlive() error {
 	if k.events != nil {
 		*k.events = append(*k.events, "keepalive")
 	}
-	return nil
+	if len(k.errs) > 0 {
+		err := k.errs[0]
+		k.errs = k.errs[1:]
+		return err
+	}
+	return k.err
 }
 
 func (k *fakeKeepAlive) Close() error {

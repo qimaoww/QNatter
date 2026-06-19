@@ -4,7 +4,9 @@ import (
 	"context"
 	"errors"
 	"net/netip"
+	"os"
 	"reflect"
+	"syscall"
 	"testing"
 	"time"
 
@@ -223,6 +225,58 @@ func TestRunLoopUDPAlwaysUsesSTUNRecheck(t *testing.T) {
 	}
 	if containsEvent(events, "portcheck") {
 		t.Fatalf("UDP loop should not call portcheck, events=%#v", events)
+	}
+}
+
+func TestRunLoopReportsLocalAddressChange(t *testing.T) {
+	events := []string{}
+	ticks := make(chan time.Time)
+
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- RunLoop(context.Background(), config.Config{ForwardMethod: "none"}, Dependencies{
+			STUN: &fakeSTUN{
+				mappings: []stun.Mapping{
+					{
+						Inner: netip.MustParseAddrPort("10.10.10.3:41000"),
+						Outer: netip.MustParseAddrPort("203.0.113.11:62010"),
+					},
+					{
+						Inner: netip.MustParseAddrPort("10.10.10.3:41000"),
+						Outer: netip.MustParseAddrPort("203.0.113.11:62010"),
+					},
+				},
+				events: &events,
+			},
+			KeepAlive: &fakeKeepAlive{
+				events: &events,
+				errs: []error{
+					nil,
+					os.NewSyscallError("write", syscall.EADDRNOTAVAIL),
+				},
+			},
+			NewForwarder: func(method string) (forward.Forwarder, error) {
+				return &fakeForwarder{events: &events}, nil
+			},
+		}, LoopOptions{Ticks: ticks})
+	}()
+
+	ticks <- time.Now()
+
+	if err := <-errCh; !errors.Is(err, ErrLocalAddressChanged) {
+		t.Fatalf("RunLoop error = %v, want ErrLocalAddressChanged", err)
+	}
+	wantEvents := []string{
+		"stun",
+		"keepalive",
+		"stun",
+		"forward",
+		"keepalive",
+		"forward-stop",
+		"keepalive-close",
+	}
+	if !reflect.DeepEqual(events, wantEvents) {
+		t.Fatalf("events = %#v, want %#v", events, wantEvents)
 	}
 }
 

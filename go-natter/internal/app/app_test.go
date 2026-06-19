@@ -130,3 +130,16 @@ func TestRunWithContextTreatsExitWhenChangedAsCleanExit(t *testing.T) {
 		t.Fatalf("RunWithContext returned code %d, want clean exit", code)
 	}
 }
+
+func TestRunWithContextTreatsLocalAddressChangeAsCleanExitWhenRequested(t *testing.T) {
+	code := RunWithContext(context.Background(), []string{"-q"}, &bytes.Buffer{}, &bytes.Buffer{}, func(ctx context.Context, cfg config.Config) error {
+		if !cfg.ExitWhenChanged {
+			t.Fatal("ExitWhenChanged = false, want true")
+		}
+		return engine.ErrLocalAddressChanged
+	})
+
+	if code != 0 {
+		t.Fatalf("RunWithContext returned code %d, want clean exit", code)
+	}
+}

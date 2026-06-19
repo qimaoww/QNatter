@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"syscall"
 	"time"
 
 	"natter-openwrt/go-natter/internal/config"
@@ -16,9 +17,10 @@ type LoopOptions struct {
 }
 
 var (
-	ErrMappingChanged  = errors.New("mapped address changed")
-	ErrKeepAliveFailed = errors.New("keep-alive failed")
-	ErrTargetClosed    = errors.New("target port closed")
+	ErrMappingChanged      = errors.New("mapped address changed")
+	ErrKeepAliveFailed     = errors.New("keep-alive failed")
+	ErrTargetClosed        = errors.New("target port closed")
+	ErrLocalAddressChanged = errors.New("local address changed")
 )
 
 func RunLoop(ctx context.Context, cfg config.Config, deps Dependencies, options LoopOptions) error {
@@ -51,6 +53,9 @@ func RunLoop(ctx context.Context, cfg config.Config, deps Dependencies, options 
 			return nil
 		case <-ticks:
 			if err := session.KeepAlive.KeepAlive(); err != nil {
+				if errors.Is(err, syscall.EADDRNOTAVAIL) {
+					return fmt.Errorf("%w: %v", ErrLocalAddressChanged, err)
+				}
 				return fmt.Errorf("%w: %v", ErrKeepAliveFailed, err)
 			}
 			if session.UPnP != nil {

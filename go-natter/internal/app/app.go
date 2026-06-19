@@ -55,7 +55,7 @@ func RunWithContext(ctx context.Context, args []string, stdout io.Writer, stderr
 	}
 
 	if err := run(ctx, cfg); err != nil {
-		if cfg.ExitWhenChanged && errors.Is(err, engine.ErrMappingChanged) {
+		if cfg.ExitWhenChanged && (errors.Is(err, engine.ErrMappingChanged) || errors.Is(err, engine.ErrLocalAddressChanged)) {
 			return 0
 		}
 		fmt.Fprintf(stderr, "natter: %v\n", err)
