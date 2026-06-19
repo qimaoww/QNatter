@@ -244,14 +244,16 @@ sh -n "$ROOT/luci-app-natter/root/usr/libexec/rpcd/luci.natter"
 
 (cd "$ROOT/go-natter" && go test ./...)
 
-dummy_natter="$tmp/natter.py"
 dummy_natter_go="$tmp/natter-go"
 archive="$tmp/natter-openwrt-direct.tar.gz"
-printf '#!/usr/bin/env python3\n' > "$dummy_natter"
 printf '#!/bin/sh\n' > "$dummy_natter_go"
-chmod 0755 "$dummy_natter"
 chmod 0755 "$dummy_natter_go"
-tar -tvzf "$archive" | awk '$6 == "usr/bin/Natter" { print $1 }' | grep -q '^-rwxr-xr-x$' || \
+if tar -tzf "$archive" | grep -qx 'usr/bin/natter.py'; then
+fi
+if tar -tzf "$archive" | grep -qx 'usr/bin/Natter'; then
+fi
+if tar -tzf "$archive" | grep -qx 'usr/share/natter/natter-python-wrapper.py'; then
+fi
 tar -tvzf "$archive" | awk '$6 == "usr/bin/natter-go" { print $1 }' | grep -q '^-rwxr-xr-x$' || \
 if tar -tzf "$archive" | grep -Eq '^\./?$'; then
 fi
