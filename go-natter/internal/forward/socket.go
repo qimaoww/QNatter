@@ -11,14 +11,13 @@ import (
 type SocketForwarder struct {
 	mu       sync.Mutex
 	listener net.Listener
+	udp      *net.UDPConn
 	addr     *net.TCPAddr
+	udpAddr  *net.UDPAddr
 	target   string
 }
 
 func (f *SocketForwarder) Start(options StartOptions) error {
-	if options.UDP {
-		return fmt.Errorf("UDP socket forwarding is not implemented yet")
-	}
 	if options.IP == "" {
 		options.IP = "0.0.0.0"
 	}
@@ -27,6 +26,9 @@ func (f *SocketForwarder) Start(options StartOptions) error {
 	}
 	if options.IP == options.TargetIP && options.Port == options.TargetPort {
 		return fmt.Errorf("cannot forward to the same address %s:%d", options.IP, options.Port)
+	}
+	if options.UDP {
+		return f.startUDP(options)
 	}
 
 	ln, err := net.Listen("tcp", fmt.Sprintf("%s:%d", options.IP, options.Port))
@@ -50,17 +52,32 @@ func (f *SocketForwarder) Addr() *net.TCPAddr {
 	return f.addr
 }
 
+func (f *SocketForwarder) UDPAddr() *net.UDPAddr {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.udpAddr
+}
+
 func (f *SocketForwarder) Stop() error {
 	f.mu.Lock()
 	ln := f.listener
+	udp := f.udp
 	f.listener = nil
 	f.addr = nil
+	f.udp = nil
+	f.udpAddr = nil
 	f.mu.Unlock()
 
-	if ln == nil {
-		return nil
+	var err error
+	if ln != nil {
+		err = ln.Close()
 	}
-	return ln.Close()
+	if udp != nil {
+		if closeErr := udp.Close(); err == nil {
+			err = closeErr
+		}
+	}
+	return err
 }
 
 func (f *SocketForwarder) acceptLoop(ln net.Listener) {
@@ -97,4 +114,83 @@ func (f *SocketForwarder) handleTCP(inbound net.Conn) {
 		_, _ = io.Copy(inbound, outbound)
 		once.Do(closeBoth)
 	}()
+}
+
+func (f *SocketForwarder) startUDP(options StartOptions) error {
+	addr, err := net.ResolveUDPAddr("udp", fmt.Sprintf("%s:%d", options.IP, options.Port))
+	if err != nil {
+		return err
+	}
+	conn, err := net.ListenUDP("udp", addr)
+	if err != nil {
+		return err
+	}
+
+	f.mu.Lock()
+	f.udp = conn
+	f.udpAddr = conn.LocalAddr().(*net.UDPAddr)
+	f.target = fmt.Sprintf("%s:%d", options.TargetIP, options.TargetPort)
+	f.mu.Unlock()
+
+	go f.udpLoop(conn)
+	return nil
+}
+
+func (f *SocketForwarder) udpLoop(conn *net.UDPConn) {
+	buf := make([]byte, 8192)
+	clients := map[string]*net.UDPConn{}
+	for {
+		n, clientAddr, err := conn.ReadFromUDP(buf)
+		if err != nil {
+			for _, outbound := range clients {
+				_ = outbound.Close()
+			}
+			return
+		}
+
+		key := clientAddr.String()
+		outbound := clients[key]
+		if outbound == nil {
+			created, err := f.newUDPOutbound(conn, clientAddr)
+			if err != nil {
+				continue
+			}
+			outbound = created
+			clients[key] = outbound
+		}
+
+		if _, err := outbound.Write(buf[:n]); err != nil {
+			_ = outbound.Close()
+			delete(clients, key)
+		}
+	}
+}
+
+func (f *SocketForwarder) newUDPOutbound(server *net.UDPConn, clientAddr *net.UDPAddr) (*net.UDPConn, error) {
+	f.mu.Lock()
+	target := f.target
+	f.mu.Unlock()
+
+	targetAddr, err := net.ResolveUDPAddr("udp", target)
+	if err != nil {
+		return nil, err
+	}
+	outbound, err := net.DialUDP("udp", nil, targetAddr)
+	if err != nil {
+		return nil, err
+	}
+
+	go func() {
+		buf := make([]byte, 8192)
+		for {
+			n, err := outbound.Read(buf)
+			if err != nil {
+				_ = outbound.Close()
+				return
+			}
+			_, _ = server.WriteToUDP(buf[:n], clientAddr)
+		}
+	}()
+
+	return outbound, nil
 }
