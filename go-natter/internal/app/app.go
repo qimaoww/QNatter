@@ -101,17 +101,21 @@ func runWithContext(ctx context.Context, args []string, stdout io.Writer, stderr
 		if cfg.ExitWhenChanged && (errors.Is(err, engine.ErrMappingChanged) || errors.Is(err, engine.ErrLocalAddressChanged)) {
 			return 0
 		}
-		fmt.Fprintf(stderr, "natter: %v\n", err)
+		logLine(stderr, "E", "natter: %v", err)
 		return 1
 	}
 	return 0
 }
 
 func printStartup(stderr io.Writer, showTip bool) {
-	fmt.Fprintf(stderr, "Natter v%s\n", Version)
+	logLine(stderr, "I", "Natter v%s", Version)
 	if showTip {
-		fmt.Fprintln(stderr, "Tips: Use `--help` to see help messages")
+		logLine(stderr, "I", "Tips: Use `--help` to see help messages")
 	}
+}
+
+func logLine(w io.Writer, level string, format string, args ...any) {
+	fmt.Fprintf(w, "%s [%s] %s\n", time.Now().Format("2006-01-02 15:04:05"), level, fmt.Sprintf(format, args...))
 }
 
 func runEngine(ctx context.Context, cfg config.Config) error {
@@ -149,7 +153,7 @@ func runEngineWithLog(ctx context.Context, cfg config.Config, log io.Writer) err
 		return engine.RunLoop(ctx, cfg, deps, engine.LoopOptions{})
 	}, engine.RetryOptions{
 		OnRetry: func(err error, delay time.Duration) {
-			fmt.Fprintf(log, "[W] %v; retrying in %s\n", err, delay)
+			logLine(log, "W", "%v; retrying in %s", err, delay)
 		},
 	})
 }

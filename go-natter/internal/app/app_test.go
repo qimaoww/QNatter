@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -189,6 +190,29 @@ func TestRunWithReportsEngineError(t *testing.T) {
 	}
 	if !strings.Contains(stderr.String(), "mapping failed") {
 		t.Fatalf("stderr = %q, want mapping failed", stderr.String())
+	}
+}
+
+func TestRunLogsUseTimestampedLevels(t *testing.T) {
+	var stderr bytes.Buffer
+	code := RunWith([]string{"-m", "none"}, &bytes.Buffer{}, &stderr, func(config.Config) error {
+		return errors.New("mapping failed")
+	})
+	if code != 1 {
+		t.Fatalf("RunWith returned code %d, want 1", code)
+	}
+
+	lines := strings.Split(strings.TrimSpace(stderr.String()), "\n")
+	if len(lines) < 2 {
+		t.Fatalf("stderr = %q, want startup and error log lines", stderr.String())
+	}
+	infoLine := regexp.MustCompile(`^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2} \[I\] Natter v`)
+	errorLine := regexp.MustCompile(`^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2} \[E\] natter: mapping failed$`)
+	if !infoLine.MatchString(lines[0]) {
+		t.Fatalf("startup line = %q, want timestamped info log", lines[0])
+	}
+	if !errorLine.MatchString(lines[len(lines)-1]) {
+		t.Fatalf("error line = %q, want timestamped error log", lines[len(lines)-1])
 	}
 }
 
