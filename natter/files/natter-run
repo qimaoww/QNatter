@@ -4,4 +4,7 @@ log_file="$1"
 shift
 
 mkdir -p "$(dirname "$log_file")"
+if [ "${NATTER_RUNTIME:-python}" = "go" ]; then
+	exec /usr/bin/natter-go "$@" >> "$log_file" 2>&1
+fi
 exec /usr/bin/Natter "$@" >> "$log_file" 2>&1
