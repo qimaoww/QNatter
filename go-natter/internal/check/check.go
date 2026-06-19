@@ -1062,14 +1062,6 @@ func addrPortFromNetAddr(addr net.Addr) (netip.AddrPort, error) {
 	return netip.AddrPortFrom(parsed.Unmap(), uint16(port)), nil
 }
 
-func unimplementedTCP(context.Context, config.Config) (Result, error) {
-	return Result{}, fmt.Errorf("Go TCP NAT check is not implemented yet")
-}
-
-func unimplementedUDP(context.Context, config.Config) (Result, error) {
-	return Result{}, fmt.Errorf("Go UDP NAT check is not implemented yet")
-}
-
 func CheckDockerNetwork(env DockerEnv) error {
 	env = env.withDefaults()
 	if env.GOOS != "linux" {

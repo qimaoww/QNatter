@@ -18,6 +18,34 @@ import (
 
 const Version = "2.2.1-go"
 
+const helpText = `usage: natter [options]
+
+Expose your port behind full-cone NAT to the Internet.
+
+options:
+  --version, -V       show the version of Natter and exit
+  --help              show this help message and exit
+  --check             run natter-check and exit
+  -v                  verbose mode, printing debug messages
+  -q                  exit when mapped address is changed
+  -u                  UDP mode
+  -U                  enable UPnP/IGD discovery
+  -k <interval>       seconds between each keep-alive
+  -s <address>        hostname or address to STUN server
+  -h <address>        hostname or address to keep-alive server
+  -e <path>           script path for notifying mapped address
+
+bind options:
+  -i <interface>      network interface name or IP to bind
+  -b <port>           port number to bind
+
+forward options:
+  -m <method>         forward method, common values are 'nftables', 'socat', 'gost' and 'socket'
+  -t <address>        IP address of forward target
+  -p <port>           port number of forward target
+  -r                  keep retrying until the port of forward target is open
+`
+
 type EngineRunner func(context.Context, config.Config) error
 type CheckRunner func(context.Context, config.Config, io.Writer, io.Writer) error
 
@@ -43,6 +71,10 @@ func runWithContext(ctx context.Context, args []string, stdout io.Writer, stderr
 	for _, arg := range args {
 		if arg == "--version" || arg == "-V" {
 			fmt.Fprintf(stdout, "Natter Go %s\n", Version)
+			return 0
+		}
+		if arg == "--help" {
+			fmt.Fprint(stdout, helpText)
 			return 0
 		}
 	}

@@ -27,6 +27,38 @@ func TestRunVersion(t *testing.T) {
 	}
 }
 
+func TestRunHelpPrintsUsageWithoutStartingEngine(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	engineCalled := false
+
+	code := RunWithContext(context.Background(), []string{"--help"}, &stdout, &stderr, func(context.Context, config.Config) error {
+		engineCalled = true
+		return nil
+	})
+
+	if code != 0 {
+		t.Fatalf("Run returned code %d, want 0", code)
+	}
+	if engineCalled {
+		t.Fatal("--help started the mapping engine")
+	}
+	out := stdout.String()
+	for _, want := range []string{
+		"Expose your port behind full-cone NAT to the Internet.",
+		"--check",
+		"-h <address>",
+		"hostname or address to keep-alive server",
+		"-m <method>",
+	} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("help output = %q, missing %q", out, want)
+		}
+	}
+	if stderr.Len() != 0 {
+		t.Fatalf("stderr = %q, want empty stderr", stderr.String())
+	}
+}
+
 func TestRunCheckParsesExistingOpenWrtArguments(t *testing.T) {
 	var stdout bytes.Buffer
 	notifyPath := filepath.Join(t.TempDir(), "cmcc.notify")
@@ -81,7 +113,7 @@ func TestRunCheckPrintsReportWithoutFakeSuccess(t *testing.T) {
 		},
 		func(_ context.Context, _ config.Config, out io.Writer, _ io.Writer) error {
 			fmt.Fprintln(out, "> NatterCheck v2.2.1-go")
-			fmt.Fprintln(out, "Checking TCP NAT...                  [  FAIL  ] ... Go TCP NAT check is not implemented yet")
+			fmt.Fprintln(out, "Checking TCP NAT...                  [   OK   ] ... NAT Type: 1")
 			return nil
 		})
 
@@ -94,8 +126,8 @@ func TestRunCheckPrintsReportWithoutFakeSuccess(t *testing.T) {
 	if !strings.Contains(stdout.String(), "> NatterCheck v2.2.1-go") {
 		t.Fatalf("stdout = %q, want NatterCheck report", stdout.String())
 	}
-	if !strings.Contains(stdout.String(), "[  FAIL  ] ... Go TCP NAT check is not implemented yet") {
-		t.Fatalf("stdout = %q, want TCP not implemented line", stdout.String())
+	if !strings.Contains(stdout.String(), "[   OK   ] ... NAT Type: 1") {
+		t.Fatalf("stdout = %q, want TCP NAT result line", stdout.String())
 	}
 	if stderr.Len() != 0 {
 		t.Fatalf("stderr = %q, want empty stderr", stderr.String())
