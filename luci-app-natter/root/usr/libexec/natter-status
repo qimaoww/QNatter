@@ -1,0 +1,94 @@
+#!/bin/sh
+
+. /lib/functions.sh
+. /usr/share/natter/natter-common.sh
+
+first=1
+
+json_pair() {
+	local key="$1"
+	local value="$2"
+	printf '"%s":"%s"' "$(natter_json_escape "$key")" "$(natter_json_escape "$value")"
+}
+
+json_bool_pair() {
+	local key="$1"
+	local value="$2"
+	[ "$value" = "1" ] && printf '"%s":true' "$key" || printf '"%s":false' "$key"
+}
+
+status_field() {
+	local file="$1"
+	local key="$2"
+	[ -r "$file" ] || return 0
+	sed -n 's/.*"'"$key"'":"\([^"]*\)".*/\1/p' "$file" | head -n 1
+}
+
+status_number_field() {
+	local file="$1"
+	local key="$2"
+	[ -r "$file" ] || return 0
+	sed -n 's/.*"'"$key"'":\([0-9][0-9]*\).*/\1/p' "$file" | head -n 1
+}
+
+instance_running() {
+	local name="$1"
+	local proc env
+	for proc in /proc/[0-9]*; do
+		[ -r "$proc/environ" ] || continue
+		env="$(tr '\0' '\n' < "$proc/environ" 2>/dev/null | grep -x "NATTER_INSTANCE=$name" || true)"
+		if [ -n "$env" ]; then
+			return 0
+		fi
+	done
+	return 1
+}
+
+emit_instance() {
+	local section="$1"
+	local label enabled network bind_value protocol qb_enabled qb_forward slug file running
+	local inner_ip inner_port outer_ip outer_port updated_at message
+
+	config_get label "$section" label "$section"
+	config_get enabled "$section" enabled "0"
+	config_get network "$section" network "wan"
+	config_get bind_value "$section" bind_value ""
+	config_get protocol "$section" protocol "tcp"
+	config_get qb_enabled "$section" qbittorrent_enabled "0"
+	config_get qb_forward "$section" qbittorrent_forward "0"
+
+	slug="$(natter_slug "$section")"
+	file="/var/run/natter/${slug}.json"
+	inner_ip="$(status_field "$file" inner_ip)"
+	inner_port="$(status_number_field "$file" inner_port)"
+	outer_ip="$(status_field "$file" outer_ip)"
+	outer_port="$(status_number_field "$file" outer_port)"
+	updated_at="$(status_field "$file" updated_at)"
+	message="$(status_field "$file" message)"
+
+	running=0
+	instance_running "$section" && running=1
+
+	[ "$first" = "1" ] || printf ','
+	first=0
+	printf '{'
+	json_pair name "$section"; printf ','
+	json_pair label "$label"; printf ','
+	json_bool_pair enabled "$enabled"; printf ','
+	json_bool_pair running "$running"; printf ','
+	json_pair network "$network"; printf ','
+	json_pair bind_value "$bind_value"; printf ','
+	json_pair protocol "$protocol"; printf ','
+	json_bool_pair qbittorrent_enabled "$qb_enabled"; printf ','
+	json_bool_pair qbittorrent_forward "$qb_forward"; printf ','
+	json_pair inner_ip "$inner_ip"; printf ',"inner_port":%s,' "${inner_port:-0}"
+	json_pair outer_ip "$outer_ip"; printf ',"outer_port":%s,' "${outer_port:-0}"
+	json_pair updated_at "$updated_at"; printf ','
+	json_pair message "$message"
+	printf '}'
+}
+
+printf '{"instances":['
+config_load natter
+config_foreach emit_instance instance
+printf ']}'

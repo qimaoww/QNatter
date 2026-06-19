@@ -1,0 +1,206 @@
+#!/bin/sh /etc/rc.common
+
+USE_PROCD=1
+START=95
+STOP=10
+
+NAME="natter"
+PROG="/usr/bin/natter.py"
+RUNNER="/usr/share/natter/natter-run"
+CONF="natter"
+RUN_DIR="/var/run/natter"
+LOG_DIR="/var/log/natter"
+
+. /lib/functions.sh
+. /lib/functions/network.sh
+. /usr/share/natter/natter-common.sh
+. /usr/share/natter/natter-qbittorrent.sh
+
+service_triggers() {
+	procd_add_reload_trigger "$CONF"
+	config_load "$CONF"
+	config_foreach natter_add_interface_trigger instance
+}
+
+natter_add_interface_trigger() {
+	local section="$1"
+	local network
+
+	config_get network "$section" network "wan"
+	[ -n "$network" ] || network="wan"
+	procd_add_interface_trigger "interface.*" "$network" /etc/init.d/natter reload
+}
+
+natter_resolve_bind_value() {
+	local network="$1"
+	local configured="$2"
+	local device=""
+	local ipaddr=""
+
+	if [ -n "$configured" ]; then
+		printf '%s\n' "$configured"
+		return 0
+	fi
+
+	if [ -n "$network" ]; then
+		network_get_device device "$network"
+		network_get_ipaddr ipaddr "$network"
+	fi
+
+	if [ -n "$device" ]; then
+		printf '%s\n' "$device"
+	elif [ -n "$ipaddr" ]; then
+		printf '%s\n' "$ipaddr"
+	else
+		printf '%s\n' "0.0.0.0"
+	fi
+}
+
+natter_write_notify_env() {
+	local section="$1"
+	local env_file="$2"
+	local status_file="$3"
+	local notify_script qb_enabled qb_url qb_user qb_pass qb_forward qb_target_ip qb_target_port qb_forward_method
+
+	config_get notify_script "$section" notify_script ""
+	config_get_bool qb_enabled "$section" qbittorrent_enabled 0
+	config_get qb_url "$section" qbittorrent_url ""
+	config_get qb_user "$section" qbittorrent_username ""
+	config_get qb_pass "$section" qbittorrent_password ""
+	config_get_bool qb_forward "$section" qbittorrent_forward 0
+	config_get qb_target_ip "$section" qbittorrent_target_ip ""
+	config_get qb_target_port "$section" qbittorrent_target_port "0"
+	config_get qb_forward_method "$section" qbittorrent_forward_method "nftables"
+
+	natter_qb_write_notify_env "$env_file" \
+		NATTER_INSTANCE "$section" \
+		NATTER_STATUS_FILE "$status_file" \
+		NATTER_USER_NOTIFY "$notify_script" \
+		QBITTORRENT_ENABLED "$qb_enabled" \
+		QBITTORRENT_URL "$qb_url" \
+		QBITTORRENT_USERNAME "$qb_user" \
+		QBITTORRENT_PASSWORD "$qb_pass" \
+		QBITTORRENT_FORWARD "$qb_forward" \
+		QBITTORRENT_TARGET_IP "$qb_target_ip" \
+		QBITTORRENT_TARGET_PORT "$qb_target_port" \
+		QBITTORRENT_FORWARD_METHOD "$qb_forward_method"
+}
+
+natter_add_stun_server() {
+	local item="$1"
+	[ -n "$item" ] || return 0
+	if [ -n "$stun_servers" ]; then
+		stun_servers="${stun_servers} ${item}"
+	else
+		stun_servers="$item"
+	fi
+}
+
+natter_start_instance() {
+	local section="$1"
+	local enabled label protocol network bind_value bind_port public_ip_mode forward_method
+	local target_ip target_port keepalive_interval keepalive_server notify_script retry_target exit_when_changed
+	local upnp verbose qb_enabled qb_forward qb_target_ip qb_target_port qb_forward_method
+	local stun_servers slug log_file notify_env notify_wrapper status_file resolved_bind
+
+	config_get_bool enabled "$section" enabled 0
+	[ "$enabled" = "1" ] || return 0
+
+	config_get label "$section" label "$section"
+	config_get protocol "$section" protocol "tcp"
+	config_get network "$section" network "wan"
+	config_get bind_value "$section" bind_value ""
+	config_get bind_port "$section" bind_port "0"
+	config_get public_ip_mode "$section" public_ip_mode "detected"
+	config_get forward_method "$section" forward_method "auto"
+	config_get target_ip "$section" target_ip "0.0.0.0"
+	config_get target_port "$section" target_port "0"
+	config_get keepalive_interval "$section" keepalive_interval "15"
+	config_get keepalive_server "$section" keepalive_server ""
+	config_get notify_script "$section" notify_script ""
+	config_get_bool retry_target "$section" retry_target 0
+	config_get_bool exit_when_changed "$section" exit_when_changed 0
+	config_get_bool upnp "$section" upnp 0
+	config_get_bool verbose "$section" verbose 0
+	config_get_bool qb_enabled "$section" qbittorrent_enabled 0
+	config_get_bool qb_forward "$section" qbittorrent_forward 0
+	config_get qb_target_ip "$section" qbittorrent_target_ip ""
+	config_get qb_target_port "$section" qbittorrent_target_port "0"
+	config_get qb_forward_method "$section" qbittorrent_forward_method "nftables"
+	stun_servers=""
+	config_list_foreach "$section" stun_server natter_add_stun_server
+
+	slug="$(natter_slug "$section")"
+	mkdir -p "$RUN_DIR" "$LOG_DIR"
+	log_file="${LOG_DIR}/${slug}.log"
+	notify_env="${RUN_DIR}/${slug}.env"
+	notify_wrapper="${RUN_DIR}/${slug}.notify"
+	status_file="${RUN_DIR}/${slug}.json"
+	resolved_bind="$(natter_resolve_bind_value "$network" "$bind_value")"
+
+	NATTER_PROTOCOL="$protocol"
+	NATTER_VERBOSE="$verbose"
+	NATTER_EXIT_WHEN_CHANGED="$exit_when_changed"
+	NATTER_UPNP="$upnp"
+	NATTER_KEEPALIVE_INTERVAL="$keepalive_interval"
+	NATTER_STUN_SERVERS="$stun_servers"
+	NATTER_KEEPALIVE_SERVER="$keepalive_server"
+	NATTER_BIND_VALUE="$resolved_bind"
+	NATTER_BIND_PORT="$bind_port"
+	NATTER_FORWARD_METHOD="$forward_method"
+	NATTER_TARGET_IP="$target_ip"
+	NATTER_TARGET_PORT="$target_port"
+	NATTER_RETRY_TARGET="$retry_target"
+	natter_write_notify_env "$section" "$notify_env" "$status_file"
+	cat > "$notify_wrapper" <<-EOF
+		#!/bin/sh
+		export NATTER_NOTIFY_ENV='$notify_env'
+		exec /usr/share/natter/natter-notify "\$@"
+	EOF
+	chmod 0700 "$notify_wrapper"
+	NATTER_NOTIFY_PATH="$notify_wrapper"
+
+	# Optional qBittorrent forwarding reuses Natter's native forwarding: target
+	# port 0 means Natter forwards to the mapped internal port after punching.
+	if [ "$qb_forward" = "1" ] && [ -n "$qb_target_ip" ]; then
+		NATTER_FORWARD_METHOD="$qb_forward_method"
+		NATTER_TARGET_IP="$qb_target_ip"
+		NATTER_TARGET_PORT="$qb_target_port"
+	fi
+
+	natter_build_args
+
+	procd_open_instance "$section"
+	procd_set_param command "$RUNNER" "$log_file"
+	local arg
+	while IFS= read -r arg; do
+		[ -n "$arg" ] || continue
+		procd_append_param command "$arg"
+	done <<-EOF
+		$NATTER_ARGS
+	EOF
+	procd_set_param respawn 3600 5 5
+	procd_set_param file /etc/config/natter
+	procd_set_param env NATTER_INSTANCE="$section"
+	procd_set_param limits nofile="4096 4096"
+	procd_set_param user root
+	procd_set_param term_timeout 10
+	procd_set_param nice 0
+	procd_close_instance
+
+	echo "$(date '+%Y-%m-%d %H:%M:%S') starting ${label}: bind=${resolved_bind} public_ip=${public_ip_mode}" >> "$log_file"
+}
+
+start_service() {
+	local enabled
+
+	config_load "$CONF"
+	config_get_bool enabled global enabled 0
+	[ "$enabled" = "1" ] || return 0
+	config_foreach natter_start_instance instance
+}
+
+reload_service() {
+	stop
+	start
+}

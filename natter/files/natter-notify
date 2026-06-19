@@ -1,0 +1,98 @@
+#!/bin/sh
+
+set -u
+
+. /usr/share/natter/natter-qbittorrent.sh
+. /usr/share/natter/natter-common.sh
+
+protocol="${1:-}"
+inner_ip="${2:-}"
+inner_port="${3:-}"
+outer_ip="${4:-}"
+outer_port="${5:-}"
+
+env_file="${NATTER_NOTIFY_ENV:-}"
+if [ -n "$env_file" ] && [ -r "$env_file" ]; then
+	# shellcheck disable=SC1090
+	. "$env_file"
+fi
+
+log() {
+	logger -t natter-notify "$*"
+}
+
+status_file="${NATTER_STATUS_FILE:-/var/run/natter/${NATTER_INSTANCE:-default}.json}"
+natter_write_status_json "$status_file" "${NATTER_INSTANCE:-default}" "$protocol" "$inner_ip" "$inner_port" "$outer_ip" "$outer_port" "mapped"
+
+run_user_notify() {
+	local script="${NATTER_USER_NOTIFY:-}"
+
+	[ -n "$script" ] || return 0
+	if [ ! -x "$script" ]; then
+		log "notify script is not executable for ${NATTER_INSTANCE:-default}: $script"
+		return 1
+	fi
+
+	if ! "$script" "$protocol" "$inner_ip" "$inner_port" "$outer_ip" "$outer_port"; then
+		log "notify script failed for ${NATTER_INSTANCE:-default}: $script"
+		return 1
+	fi
+
+	return 0
+}
+
+enabled="${QBITTORRENT_ENABLED:-0}"
+if [ "$enabled" != "1" ]; then
+	run_user_notify
+	exit 0
+fi
+
+url="$(natter_qb_normalize_url "${QBITTORRENT_URL:-}")"
+username="${QBITTORRENT_USERNAME:-}"
+password="${QBITTORRENT_PASSWORD:-}"
+configured_port="${QBITTORRENT_TARGET_PORT:-0}"
+listen_port="$(natter_qb_select_listen_port "$inner_port" "$outer_port" "$configured_port")"
+cookie="/tmp/natter-qbittorrent-$(natter_slug "${NATTER_INSTANCE:-default}").cookie"
+json="$(natter_qb_preferences_json "$listen_port")"
+
+if [ -z "$url" ] || [ -z "$username" ]; then
+	log "qBittorrent is enabled but URL or username is empty for ${NATTER_INSTANCE:-default}"
+	natter_write_status_json "$status_file" "${NATTER_INSTANCE:-default}" "$protocol" "$inner_ip" "$inner_port" "$outer_ip" "$outer_port" "qBittorrent URL or username is empty"
+	run_user_notify
+	exit 0
+fi
+
+if ! natter_qb_valid_port "$listen_port"; then
+	log "qBittorrent listen_port is invalid for ${NATTER_INSTANCE:-default}: $listen_port"
+	natter_write_status_json "$status_file" "${NATTER_INSTANCE:-default}" "$protocol" "$inner_ip" "$inner_port" "$outer_ip" "$outer_port" "qBittorrent listen_port is invalid"
+	run_user_notify
+	exit 0
+fi
+
+rm -f "$cookie"
+if ! curl -fsS -m "${QBITTORRENT_TIMEOUT:-8}" -c "$cookie" \
+	--data-urlencode "username=$username" \
+	--data-urlencode "password=$password" \
+	"$url/api/v2/auth/login" >/dev/null; then
+	log "qBittorrent login failed for ${NATTER_INSTANCE:-default} at $url"
+	natter_write_status_json "$status_file" "${NATTER_INSTANCE:-default}" "$protocol" "$inner_ip" "$inner_port" "$outer_ip" "$outer_port" "qBittorrent login failed"
+	rm -f "$cookie"
+	run_user_notify
+	exit 0
+fi
+
+if ! curl -fsS -m "${QBITTORRENT_TIMEOUT:-8}" -b "$cookie" \
+	--data-urlencode "json=$json" \
+	"$url/api/v2/app/setPreferences" >/dev/null; then
+	log "qBittorrent listen_port update failed for ${NATTER_INSTANCE:-default}: $listen_port"
+	natter_write_status_json "$status_file" "${NATTER_INSTANCE:-default}" "$protocol" "$inner_ip" "$inner_port" "$outer_ip" "$outer_port" "qBittorrent update failed"
+	rm -f "$cookie"
+	run_user_notify
+	exit 0
+fi
+
+rm -f "$cookie"
+log "qBittorrent listen_port set to $listen_port for ${NATTER_INSTANCE:-default}; ${protocol} ${inner_ip}:${inner_port} -> ${outer_ip}:${outer_port}"
+natter_write_status_json "$status_file" "${NATTER_INSTANCE:-default}" "$protocol" "$inner_ip" "$inner_port" "$outer_ip" "$outer_port" "qBittorrent listen_port set to $listen_port"
+run_user_notify
+exit 0

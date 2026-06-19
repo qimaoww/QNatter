@@ -1,0 +1,42 @@
+#!/bin/sh
+
+json_arg_string() {
+	local key="$1"
+	local input="$2"
+	printf '%s' "$input" | sed -n 's/.*"'"$key"'"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -n 1
+}
+
+json_arg_number() {
+	local key="$1"
+	local input="$2"
+	printf '%s' "$input" | sed -n 's/.*"'"$key"'"[[:space:]]*:[[:space:]]*\([0-9][0-9]*\).*/\1/p' | head -n 1
+}
+
+json_escape_stream() {
+	sed 's/\\/\\\\/g; s/"/\\"/g; s/$/\\n/' | tr -d '\n' | sed 's/\\n$//'
+}
+
+case "$1" in
+	list)
+		printf '{"status":{},"log":{"instance":"String","lines":"Integer"},"clear_log":{"instance":"String"}}\n'
+		;;
+	call)
+		read -r input
+		case "$2" in
+			status)
+				exec /usr/libexec/natter-status
+				;;
+			log)
+				instance="$(json_arg_string instance "$input")"
+				lines="$(json_arg_number lines "$input")"
+				printf '{"log":"'
+				/usr/libexec/natter-log read "${instance:-default}" "${lines:-200}" | json_escape_stream
+				printf '"}\n'
+				;;
+			clear_log)
+				instance="$(json_arg_string instance "$input")"
+				exec /usr/libexec/natter-log clear "${instance:-default}" 200
+				;;
+		esac
+		;;
+esac

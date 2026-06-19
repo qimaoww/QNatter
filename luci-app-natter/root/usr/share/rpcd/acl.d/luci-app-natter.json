@@ -1,0 +1,18 @@
+{
+	"luci-app-natter": {
+		"description": "Grant access to Natter LuCI application",
+		"read": {
+			"uci": [ "natter", "network" ],
+			"ubus": {
+				"luci.natter": [ "status", "log" ],
+				"service": [ "list" ]
+			}
+		},
+		"write": {
+			"uci": [ "natter" ],
+			"ubus": {
+				"luci.natter": [ "clear_log" ]
+			}
+		}
+	}
+}

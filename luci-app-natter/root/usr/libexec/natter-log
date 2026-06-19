@@ -1,0 +1,31 @@
+#!/bin/sh
+
+. /usr/share/natter/natter-common.sh
+
+action="${1:-read}"
+instance="${2:-default}"
+lines="${3:-200}"
+slug="$(natter_slug "$instance")"
+log_file="/var/log/natter/${slug}.log"
+
+case "$lines" in
+	''|*[!0-9]*) lines=200 ;;
+esac
+
+if [ "$lines" -lt 20 ]; then
+	lines=20
+elif [ "$lines" -gt 1000 ]; then
+	lines=1000
+fi
+
+mkdir -p /var/log/natter
+
+case "$action" in
+	clear)
+		: > "$log_file"
+		printf '{"ok":true}\n'
+		;;
+	*)
+		tail -n "$lines" "$log_file" 2>/dev/null
+		;;
+esac
