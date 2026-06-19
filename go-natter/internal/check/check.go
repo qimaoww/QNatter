@@ -153,9 +153,12 @@ type TCPFullConeListenRequest struct {
 }
 
 type TCPFullConeMappingRequest struct {
-	Source    netip.AddrPort
-	Interface string
-	Reuse     bool
+	Source          netip.AddrPort
+	Interface       string
+	Reuse           bool
+	KeepAliveServer netip.AddrPort
+	STUNServers     []netip.AddrPort
+	TxID            func() ([16]byte, error)
 }
 
 type TCPFullConePortCheckRequest struct {
@@ -169,13 +172,16 @@ type TCPFullConeMapping func(context.Context, TCPFullConeMappingRequest) (STUNTe
 type TCPFullConePortCheck func(context.Context, TCPFullConePortCheckRequest) (portcheck.Result, error)
 
 type TCPFullConeOptions struct {
-	SourceAddr netip.Addr
-	SourcePort int
-	Interface  string
-	Reuse      bool
-	Listen     TCPFullConeListen
-	GetMapping TCPFullConeMapping
-	CheckPort  TCPFullConePortCheck
+	SourceAddr      netip.Addr
+	SourcePort      int
+	Interface       string
+	Reuse           bool
+	KeepAliveServer netip.AddrPort
+	STUNServers     []netip.AddrPort
+	TxID            func() ([16]byte, error)
+	Listen          TCPFullConeListen
+	GetMapping      TCPFullConeMapping
+	CheckPort       TCPFullConePortCheck
 }
 
 type UDPNATOptions struct {
@@ -368,12 +374,15 @@ func CheckTCPFullCone(ctx context.Context, options TCPFullConeOptions) (int, err
 
 	getMapping := options.GetMapping
 	if getMapping == nil {
-		return tcpFullConeUnknown, nil
+		getMapping = defaultTCPFullConeMapping
 	}
 	mapping, keepAlive, err := getMapping(ctx, TCPFullConeMappingRequest{
-		Source:    source,
-		Interface: options.Interface,
-		Reuse:     options.Reuse,
+		Source:          source,
+		Interface:       options.Interface,
+		Reuse:           options.Reuse,
+		KeepAliveServer: options.KeepAliveServer,
+		STUNServers:     options.STUNServers,
+		TxID:            options.TxID,
 	})
 	if err != nil {
 		return tcpFullConeUnknown, nil
@@ -414,6 +423,52 @@ func defaultTCPFullConeListen(ctx context.Context, request TCPFullConeListenRequ
 		Reuse:     request.Reuse,
 	})}
 	return listenConfig.Listen(ctx, "tcp", listenAddress(request.Source))
+}
+
+func defaultTCPFullConeMapping(ctx context.Context, request TCPFullConeMappingRequest) (STUNTestResult, io.Closer, error) {
+	if !request.KeepAliveServer.IsValid() || len(request.STUNServers) == 0 {
+		return STUNTestResult{}, nil, errors.New("missing TCP full-cone mapping endpoints")
+	}
+
+	timeout := 3 * time.Second
+	dialer := net.Dialer{
+		Timeout:   timeout,
+		LocalAddr: tcpAddrPort(request.Source),
+		Control: socketopts.Control(socketopts.Options{
+			Interface: request.Interface,
+			Reuse:     request.Reuse,
+		}),
+	}
+	ctx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+
+	keepAlive, err := dialer.DialContext(ctx, "tcp", request.KeepAliveServer.String())
+	if err != nil {
+		return STUNTestResult{}, nil, err
+	}
+	if deadline, ok := ctx.Deadline(); ok {
+		_ = keepAlive.SetDeadline(deadline)
+	}
+	host := request.KeepAliveServer.String()
+	keepAliveRequest := fmt.Sprintf("GET /~ HTTP/1.1\r\nHost: %s\r\nConnection: keep-alive\r\n\r\n", host)
+	if _, err := keepAlive.Write([]byte(keepAliveRequest)); err != nil {
+		_ = keepAlive.Close()
+		return STUNTestResult{}, nil, err
+	}
+
+	mapping, err := TCPSTUNTest(ctx, TCPSTUNOptions{
+		Server:    request.STUNServers[0],
+		Source:    request.Source,
+		Interface: request.Interface,
+		Reuse:     request.Reuse,
+		Timeout:   timeout,
+		TxID:      request.TxID,
+	})
+	if err != nil {
+		_ = keepAlive.Close()
+		return STUNTestResult{}, nil, err
+	}
+	return mapping, keepAlive, nil
 }
 
 func CheckUDPNATType(ctx context.Context, options UDPNATOptions) (NATType, error) {
@@ -840,6 +895,16 @@ func udpAddrFromAddrPort(addr netip.AddrPort) *net.UDPAddr {
 		return nil
 	}
 	return &net.UDPAddr{
+		IP:   net.IP(addr.Addr().AsSlice()),
+		Port: int(addr.Port()),
+	}
+}
+
+func tcpAddrPort(addr netip.AddrPort) *net.TCPAddr {
+	if !addr.IsValid() {
+		return nil
+	}
+	return &net.TCPAddr{
 		IP:   net.IP(addr.Addr().AsSlice()),
 		Port: int(addr.Port()),
 	}

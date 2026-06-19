@@ -431,6 +431,44 @@ func TestCheckTCPFullConeUsesDefaultListener(t *testing.T) {
 	}
 }
 
+func TestCheckTCPFullConeUsesDefaultMapping(t *testing.T) {
+	txid := [16]byte{0x21, 0x12, 0xa4, 0x42, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9}
+	mapped := netip.MustParseAddrPort("198.51.100.40:54000")
+	stunServer, _, stopSTUN := startLocalTCPCheckSTUN(t, txid, mapped)
+	defer stopSTUN()
+	keepAliveServer, keepAliveRequestCh, stopKeepAlive := startLocalCheckKeepAlive(t)
+	defer stopKeepAlive()
+
+	got, err := CheckTCPFullCone(context.Background(), TCPFullConeOptions{
+		SourceAddr:      netip.MustParseAddr("127.0.0.1"),
+		SourcePort:      0,
+		Reuse:           true,
+		KeepAliveServer: keepAliveServer,
+		STUNServers:     []netip.AddrPort{stunServer},
+		TxID:            func() ([16]byte, error) { return txid, nil },
+		CheckPort: func(ctx context.Context, request TCPFullConePortCheckRequest) (portcheck.Result, error) {
+			if request.Port != int(mapped.Port()) {
+				t.Fatalf("port check port = %d, want %d", request.Port, mapped.Port())
+			}
+			return portcheck.Open, nil
+		},
+	})
+	if err != nil {
+		t.Fatalf("CheckTCPFullCone returned error: %v", err)
+	}
+	if got != tcpFullConeReachable {
+		t.Fatalf("CheckTCPFullCone = %d, want reachable", got)
+	}
+
+	request := <-keepAliveRequestCh
+	if !strings.Contains(request, "GET /~ HTTP/1.1\r\n") {
+		t.Fatalf("keepalive request = %q, want HTTP keepalive request", request)
+	}
+	if !strings.Contains(request, "Connection: keep-alive\r\n") {
+		t.Fatalf("keepalive request = %q, want keep-alive header", request)
+	}
+}
+
 func TestCheckUDPNATTypeMatchesPythonDecisionTree(t *testing.T) {
 	source := netip.MustParseAddrPort("192.0.2.10:40000")
 	mapped := netip.MustParseAddrPort("198.51.100.10:50000")
@@ -887,6 +925,36 @@ func startLocalTCPCheckSTUN(t *testing.T, txid [16]byte, mapped netip.AddrPort) 
 		}
 		requestCh <- request
 		_, _ = conn.Write(stunResponse(txid, stunAttrXORMappedAddress, xorMappedAddressAttr(mapped)))
+	}()
+
+	addr := listener.Addr().(*net.TCPAddr)
+	server := netip.AddrPortFrom(netip.MustParseAddr("127.0.0.1"), uint16(addr.Port))
+	return server, requestCh, func() {
+		_ = listener.Close()
+		<-done
+	}
+}
+
+func startLocalCheckKeepAlive(t *testing.T) (netip.AddrPort, <-chan string, func()) {
+	t.Helper()
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("listen keepalive tcp: %v", err)
+	}
+	requestCh := make(chan string, 1)
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		conn, err := listener.Accept()
+		if err != nil {
+			return
+		}
+		defer conn.Close()
+		buf := make([]byte, 512)
+		n, _ := conn.Read(buf)
+		requestCh <- string(buf[:n])
+		_, _ = conn.Write([]byte("HTTP/1.1 200 OK\r\nConnection: keep-alive\r\n\r\n"))
+		time.Sleep(50 * time.Millisecond)
 	}()
 
 	addr := listener.Addr().(*net.TCPAddr)
