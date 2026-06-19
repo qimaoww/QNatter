@@ -111,6 +111,27 @@ func TestNetworkTransportExchangesTCP(t *testing.T) {
 	}
 }
 
+func TestNetworkTransportCanBindInterface(t *testing.T) {
+	txid := [12]byte{'N', 'A', 'T', 'R', 3, 3, 3, 3, 3, 3, 3, 3}
+	server, stop := startLocalTCPStun(t, txid, netip.MustParseAddrPort("203.0.113.22:53002"))
+	defer stop()
+
+	transport := NetworkTransport{Timeout: time.Second, Interface: "lo", Reuse: true}
+	inner, _, err := transport.Exchange(
+		context.Background(),
+		"tcp",
+		server,
+		netip.MustParseAddrPort("127.0.0.1:0"),
+		BuildBindingRequest(txid),
+	)
+	if err != nil {
+		t.Fatalf("Exchange returned error: %v", err)
+	}
+	if !inner.Addr().IsLoopback() {
+		t.Fatalf("inner = %s, want loopback address", inner)
+	}
+}
+
 func TestNetworkTransportExchangesUDP(t *testing.T) {
 	txid := [12]byte{'N', 'A', 'T', 'R', 2, 2, 2, 2, 2, 2, 2, 2}
 	server, stop := startLocalUDPStun(t, txid, netip.MustParseAddrPort("203.0.113.21:53001"))

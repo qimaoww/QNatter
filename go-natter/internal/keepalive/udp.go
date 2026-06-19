@@ -5,14 +5,19 @@ import (
 	"encoding/binary"
 	"fmt"
 	"net"
+	"net/netip"
 	"time"
+
+	"natter-openwrt/go-natter/internal/socketopts"
 )
 
 type UDPClient struct {
-	Host    string
-	Port    int
-	Timeout time.Duration
-	conn    net.Conn
+	Host      string
+	Port      int
+	Source    netip.AddrPort
+	Interface string
+	Timeout   time.Duration
+	conn      net.Conn
 }
 
 func (c *UDPClient) KeepAlive() error {
@@ -57,6 +62,15 @@ func (c *UDPClient) Close() error {
 
 func (c *UDPClient) dial() (net.Conn, error) {
 	dialer := net.Dialer{Timeout: c.timeout()}
+	localAddr, err := socketopts.LocalAddr("udp", c.Source)
+	if err != nil {
+		return nil, err
+	}
+	dialer.LocalAddr = localAddr
+	dialer.Control = socketopts.Control(socketopts.Options{
+		Interface: c.Interface,
+		Reuse:     true,
+	})
 	return dialer.Dial("udp", fmt.Sprintf("%s:%d", c.Host, c.Port))
 }
 

@@ -9,6 +9,8 @@ import (
 	"net/netip"
 	"strconv"
 	"time"
+
+	"natter-openwrt/go-natter/internal/socketopts"
 )
 
 type Server struct {
@@ -99,7 +101,9 @@ func NewTransactionID() ([12]byte, error) {
 }
 
 type NetworkTransport struct {
-	Timeout time.Duration
+	Timeout   time.Duration
+	Interface string
+	Reuse     bool
 }
 
 func (t NetworkTransport) Exchange(ctx context.Context, network string, server Server, source netip.AddrPort, request []byte) (netip.AddrPort, []byte, error) {
@@ -111,11 +115,15 @@ func (t NetworkTransport) Exchange(ctx context.Context, network string, server S
 	defer cancel()
 
 	dialer := net.Dialer{Timeout: timeout}
-	localAddr, err := localNetAddr(network, source)
+	localAddr, err := socketopts.LocalAddr(network, source)
 	if err != nil {
 		return netip.AddrPort{}, nil, err
 	}
 	dialer.LocalAddr = localAddr
+	dialer.Control = socketopts.Control(socketopts.Options{
+		Interface: t.Interface,
+		Reuse:     t.Reuse,
+	})
 
 	conn, err := dialer.DialContext(ctx, network, net.JoinHostPort(server.Host, strconv.Itoa(server.Port)))
 	if err != nil {
@@ -139,20 +147,6 @@ func (t NetworkTransport) Exchange(ctx context.Context, network string, server S
 		return netip.AddrPort{}, nil, err
 	}
 	return inner, buf[:n], nil
-}
-
-func localNetAddr(network string, source netip.AddrPort) (net.Addr, error) {
-	if !source.IsValid() {
-		return nil, nil
-	}
-	addr := net.TCPAddr{IP: net.IP(source.Addr().AsSlice()), Port: int(source.Port())}
-	if network == "udp" {
-		return &net.UDPAddr{IP: addr.IP, Port: addr.Port}, nil
-	}
-	if network == "tcp" {
-		return &addr, nil
-	}
-	return nil, fmt.Errorf("unsupported STUN network %q", network)
 }
 
 func parseNetAddr(addr net.Addr) (netip.AddrPort, error) {

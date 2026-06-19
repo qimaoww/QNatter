@@ -2,6 +2,7 @@ package keepalive
 
 import (
 	"net"
+	"net/netip"
 	"testing"
 	"time"
 )
@@ -26,9 +27,11 @@ func TestUDPKeepAliveSendsDNSQuery(t *testing.T) {
 
 	addr := conn.LocalAddr().(*net.UDPAddr)
 	client := UDPClient{
-		Host:    "127.0.0.1",
-		Port:    addr.Port,
-		Timeout: 500 * time.Millisecond,
+		Host:      "127.0.0.1",
+		Port:      addr.Port,
+		Source:    netip.MustParseAddrPort("127.0.0.1:0"),
+		Interface: "lo",
+		Timeout:   500 * time.Millisecond,
 	}
 	if err := client.KeepAlive(); err != nil {
 		t.Fatalf("KeepAlive returned error: %v", err)

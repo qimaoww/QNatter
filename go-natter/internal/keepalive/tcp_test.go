@@ -3,6 +3,7 @@ package keepalive
 import (
 	"bufio"
 	"net"
+	"net/netip"
 	"strings"
 	"testing"
 	"time"
@@ -23,9 +24,11 @@ func TestTCPKeepAliveSendsNatterHeadRequest(t *testing.T) {
 	})
 
 	client := TCPClient{
-		Host:    "127.0.0.1",
-		Port:    ln.Addr().(*net.TCPAddr).Port,
-		Timeout: 500 * time.Millisecond,
+		Host:      "127.0.0.1",
+		Port:      ln.Addr().(*net.TCPAddr).Port,
+		Source:    netip.MustParseAddrPort("127.0.0.1:0"),
+		Interface: "lo",
+		Timeout:   500 * time.Millisecond,
 	}
 	if err := client.KeepAlive(); err != nil {
 		t.Fatalf("KeepAlive returned error: %v", err)

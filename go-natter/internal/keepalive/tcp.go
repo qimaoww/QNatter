@@ -4,14 +4,19 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"net/netip"
 	"time"
+
+	"natter-openwrt/go-natter/internal/socketopts"
 )
 
 type TCPClient struct {
-	Host    string
-	Port    int
-	Timeout time.Duration
-	conn    net.Conn
+	Host      string
+	Port      int
+	Source    netip.AddrPort
+	Interface string
+	Timeout   time.Duration
+	conn      net.Conn
 }
 
 func (c *TCPClient) KeepAlive() error {
@@ -75,6 +80,15 @@ func (c *TCPClient) Close() error {
 
 func (c *TCPClient) dial() (net.Conn, error) {
 	dialer := net.Dialer{Timeout: c.timeout()}
+	localAddr, err := socketopts.LocalAddr("tcp", c.Source)
+	if err != nil {
+		return nil, err
+	}
+	dialer.LocalAddr = localAddr
+	dialer.Control = socketopts.Control(socketopts.Options{
+		Interface: c.Interface,
+		Reuse:     true,
+	})
 	return dialer.Dial("tcp", fmt.Sprintf("%s:%d", c.Host, c.Port))
 }
 
