@@ -91,7 +91,7 @@ natter_start_instance() {
 	[ "$enabled" = "1" ] || return 0
 
 	config_get label "$section" label "$section"
-	config_get runtime "$section" runtime "python"
+	config_get runtime "$section" runtime "go"
 	config_get protocol "$section" protocol "tcp"
 	config_get network "$section" network "wan"
 	config_get bind_value "$section" bind_value ""
