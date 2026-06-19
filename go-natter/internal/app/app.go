@@ -92,6 +92,13 @@ func runEngine(ctx context.Context, cfg config.Config) error {
 			return err
 		},
 	}
+	if cfg.UPnP {
+		upnpMapper, err := engine.NewUPnPMapperFromConfig(cfg)
+		if err != nil {
+			return err
+		}
+		deps.UPnP = upnpMapper
+	}
 	return engine.RunWithRetry(ctx, cfg, func(ctx context.Context) error {
 		return engine.RunLoop(ctx, cfg, deps, engine.LoopOptions{})
 	}, engine.RetryOptions{})

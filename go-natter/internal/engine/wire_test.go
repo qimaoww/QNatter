@@ -1,12 +1,19 @@
 package engine
 
 import (
+	"context"
+	"fmt"
+	"io"
+	"net/http"
+	"net/http/httptest"
 	"net/netip"
+	"strings"
 	"testing"
 
 	"natter-openwrt/go-natter/internal/config"
 	"natter-openwrt/go-natter/internal/keepalive"
 	"natter-openwrt/go-natter/internal/stun"
+	"natter-openwrt/go-natter/internal/upnp"
 )
 
 func TestBindFromConfigSeparatesIPAndInterface(t *testing.T) {
@@ -99,5 +106,93 @@ func TestNewKeepAliveFromConfigUsesMappingSourceAndDefaultPorts(t *testing.T) {
 	}
 	if udp.Source != netip.MustParseAddrPort("10.0.0.2:42000") {
 		t.Fatalf("udp source = %s, want mapping inner", udp.Source)
+	}
+}
+
+func TestNewUPnPMapperFromConfigUsesBindInterface(t *testing.T) {
+	mapper, err := NewUPnPMapperFromConfig(config.Config{
+		BindValue: "pppoe-wan_cmcc",
+	})
+	if err != nil {
+		t.Fatalf("NewUPnPMapperFromConfig returned error: %v", err)
+	}
+	client, ok := mapper.(*UPnPClient)
+	if !ok {
+		t.Fatalf("mapper = %T, want *UPnPClient", mapper)
+	}
+	if client.Client.Interface != "pppoe-wan_cmcc" {
+		t.Fatalf("UPnP interface = %q, want pppoe-wan_cmcc", client.Client.Interface)
+	}
+	if client.Client.Timeout <= 0 {
+		t.Fatalf("UPnP timeout = %s, want positive", client.Client.Timeout)
+	}
+}
+
+func TestUPnPClientForwardDiscoversAddsAndRenewsMapping(t *testing.T) {
+	var bodies []string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("SOAPAction") != `"urn:schemas-upnp-org:service:WANIPConnection:1#AddPortMapping"` {
+			t.Fatalf("SOAPAction = %q", r.Header.Get("SOAPAction"))
+		}
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			t.Fatalf("ReadAll returned error: %v", err)
+		}
+		bodies = append(bodies, string(body))
+		fmt.Fprint(w, `<s:Envelope><s:Body></s:Body></s:Envelope>`)
+	}))
+	defer server.Close()
+
+	mapper := &UPnPClient{
+		Client: upnp.Client{
+			Interface:  "pppoe-wan_cmcc",
+			HTTPClient: server.Client(),
+		},
+		DiscoverRouter: func(ctx context.Context, client upnp.Client) (*upnp.Device, error) {
+			if client.BindIP != "10.10.10.3" {
+				t.Fatalf("discovery BindIP = %q, want 10.10.10.3", client.BindIP)
+			}
+			if client.Interface != "pppoe-wan_cmcc" {
+				t.Fatalf("discovery interface = %q, want pppoe-wan_cmcc", client.Interface)
+			}
+			return &upnp.Device{
+				IP: "192.168.1.1",
+				ForwardService: &upnp.Service{
+					ServiceType: "urn:schemas-upnp-org:service:WANIPConnection:1",
+					ServiceID:   "urn:upnp-org:serviceId:WANIPConn1",
+					ControlURL:  server.URL + "/control",
+				},
+			}, nil
+		},
+	}
+
+	err := mapper.Forward(context.Background(), UPnPMapping{
+		ExternalPort:   51413,
+		InternalPort:   51413,
+		InternalClient: "10.10.10.3",
+		UDP:            true,
+		LeaseDuration:  45,
+	})
+	if err != nil {
+		t.Fatalf("Forward returned error: %v", err)
+	}
+	if err := mapper.Renew(context.Background()); err != nil {
+		t.Fatalf("Renew returned error: %v", err)
+	}
+	if len(bodies) != 2 {
+		t.Fatalf("request count = %d, want 2", len(bodies))
+	}
+	for _, body := range bodies {
+		for _, want := range []string{
+			"<NewExternalPort>51413</NewExternalPort>",
+			"<NewProtocol>UDP</NewProtocol>",
+			"<NewInternalPort>51413</NewInternalPort>",
+			"<NewInternalClient>10.10.10.3</NewInternalClient>",
+			"<NewLeaseDuration>45</NewLeaseDuration>",
+		} {
+			if !strings.Contains(body, want) {
+				t.Fatalf("body missing %q:\n%s", want, body)
+			}
+		}
 	}
 }
