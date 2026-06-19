@@ -23,6 +23,7 @@ type KeepAlive interface {
 
 type UPnPMapper interface {
 	Forward(context.Context, UPnPMapping) error
+	Renew(context.Context) error
 }
 
 type UPnPMapping struct {

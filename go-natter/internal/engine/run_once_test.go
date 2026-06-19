@@ -234,9 +234,10 @@ func (f *fakeForwarder) Stop() error {
 }
 
 type fakeUPnP struct {
-	mapping UPnPMapping
-	events  *[]string
-	err     error
+	mapping  UPnPMapping
+	events   *[]string
+	err      error
+	renewErr error
 }
 
 func (u *fakeUPnP) Forward(_ context.Context, mapping UPnPMapping) error {
@@ -245,4 +246,11 @@ func (u *fakeUPnP) Forward(_ context.Context, mapping UPnPMapping) error {
 	}
 	u.mapping = mapping
 	return u.err
+}
+
+func (u *fakeUPnP) Renew(context.Context) error {
+	if u.events != nil {
+		*u.events = append(*u.events, "upnp-renew")
+	}
+	return u.renewErr
 }

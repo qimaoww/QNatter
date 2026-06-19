@@ -52,6 +52,9 @@ func RunLoop(ctx context.Context, cfg config.Config, deps Dependencies, options 
 			if err := session.KeepAlive.KeepAlive(); err != nil {
 				return fmt.Errorf("%w: %v", ErrKeepAliveFailed, err)
 			}
+			if session.UPnP != nil {
+				_ = session.UPnP.Renew(ctx)
+			}
 			count++
 			if count >= recheckEvery {
 				count = 0

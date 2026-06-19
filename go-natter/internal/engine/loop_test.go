@@ -226,6 +226,98 @@ func TestRunLoopUDPAlwaysUsesSTUNRecheck(t *testing.T) {
 	}
 }
 
+func TestRunLoopRenewsActiveUPnPMappingOnTicks(t *testing.T) {
+	events := []string{}
+	upnp := &fakeUPnP{events: &events}
+	ticks := make(chan time.Time)
+	ctx, cancel := context.WithCancel(context.Background())
+
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- RunLoop(ctx, config.Config{
+			UPnP:              true,
+			BindPort:          51413,
+			ForwardMethod:     "none",
+			KeepAliveInterval: 15,
+		}, Dependencies{
+			STUN: &fakeSTUN{
+				mappings: []stun.Mapping{
+					{
+						Inner: netip.MustParseAddrPort("10.10.10.3:51413"),
+						Outer: netip.MustParseAddrPort("203.0.113.11:62010"),
+					},
+					{
+						Inner: netip.MustParseAddrPort("10.10.10.3:51413"),
+						Outer: netip.MustParseAddrPort("203.0.113.11:62010"),
+					},
+				},
+				events: &events,
+			},
+			KeepAlive: &fakeKeepAlive{events: &events},
+			NewForwarder: func(method string) (forward.Forwarder, error) {
+				return &fakeForwarder{events: &events}, nil
+			},
+			UPnP: upnp,
+		}, LoopOptions{Ticks: ticks})
+	}()
+
+	ticks <- time.Now()
+	cancel()
+
+	if err := <-errCh; err != nil {
+		t.Fatalf("RunLoop returned error: %v", err)
+	}
+	if !containsEvent(events, "upnp-renew") {
+		t.Fatalf("events = %#v, want upnp-renew", events)
+	}
+}
+
+func TestRunLoopContinuesWhenUPnPRenewFails(t *testing.T) {
+	events := []string{}
+	upnp := &fakeUPnP{events: &events, renewErr: errors.New("renew failed")}
+	ticks := make(chan time.Time)
+	ctx, cancel := context.WithCancel(context.Background())
+
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- RunLoop(ctx, config.Config{
+			UPnP:              true,
+			BindPort:          51413,
+			ForwardMethod:     "none",
+			KeepAliveInterval: 15,
+		}, Dependencies{
+			STUN: &fakeSTUN{
+				mappings: []stun.Mapping{
+					{
+						Inner: netip.MustParseAddrPort("10.10.10.3:51413"),
+						Outer: netip.MustParseAddrPort("203.0.113.11:62010"),
+					},
+					{
+						Inner: netip.MustParseAddrPort("10.10.10.3:51413"),
+						Outer: netip.MustParseAddrPort("203.0.113.11:62010"),
+					},
+				},
+				events: &events,
+			},
+			KeepAlive: &fakeKeepAlive{events: &events},
+			NewForwarder: func(method string) (forward.Forwarder, error) {
+				return &fakeForwarder{events: &events}, nil
+			},
+			UPnP: upnp,
+		}, LoopOptions{Ticks: ticks})
+	}()
+
+	ticks <- time.Now()
+	cancel()
+
+	if err := <-errCh; err != nil {
+		t.Fatalf("RunLoop returned error: %v", err)
+	}
+	if !containsEvent(events, "upnp-renew") {
+		t.Fatalf("events = %#v, want upnp-renew", events)
+	}
+}
+
 type fakePortCheck struct {
 	result PortResult
 	events *[]string
