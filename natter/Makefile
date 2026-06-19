@@ -15,6 +15,7 @@ PKG_MIRROR_HASH:=skip
 PKG_LICENSE:=GPL-3.0-or-later
 PKG_LICENSE_FILES:=LICENSE
 PKG_MAINTAINER:=qimaoww
+PKG_BUILD_DEPENDS:=golang/host
 
 include $(INCLUDE_DIR)/package.mk
 
@@ -37,11 +38,13 @@ define Package/natter/conffiles
 endef
 
 define Build/Compile
+	cd $(CURDIR)/../go-natter && CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o $(PKG_BUILD_DIR)/natter-go ./cmd/natter
 endef
 
 define Package/natter/install
 	$(INSTALL_DIR) $(1)/usr/bin
 	$(INSTALL_BIN) $(PKG_BUILD_DIR)/natter.py $(1)/usr/bin/natter.py
+	$(INSTALL_BIN) $(PKG_BUILD_DIR)/natter-go $(1)/usr/bin/natter-go
 	$(INSTALL_BIN) ./files/Natter $(1)/usr/bin/Natter
 
 	$(INSTALL_DIR) $(1)/usr/share/natter

@@ -137,6 +137,8 @@ assert_contains natter/Makefile 'DEPENDS:=.*\+curl'
 assert_contains natter/Makefile 'DEPENDS:=.*\+nftables'
 assert_contains natter/Makefile 'DEPENDS:=.*\+firewall4'
 assert_contains natter/Makefile 'DEPENDS:=.*\+kmod-nft-nat'
+assert_contains natter/Makefile 'go build .* -o \$\(PKG_BUILD_DIR\)/natter-go ./cmd/natter'
+assert_contains natter/Makefile '\$\(INSTALL_BIN\) \$\(PKG_BUILD_DIR\)/natter-go \$\(1\)/usr/bin/natter-go'
 assert_not_contains natter/Makefile '\+iptables-nft'
 assert_not_contains natter/Makefile '\+socat'
 assert_not_contains natter/Makefile '\+gost'
@@ -209,10 +211,14 @@ sh -n "$ROOT/luci-app-natter/root/usr/libexec/rpcd/luci.natter"
 (cd "$ROOT/go-natter" && go test ./...)
 
 dummy_natter="$tmp/natter.py"
+dummy_natter_go="$tmp/natter-go"
 archive="$tmp/natter-openwrt-direct.tar.gz"
 printf '#!/usr/bin/env python3\n' > "$dummy_natter"
+printf '#!/bin/sh\n' > "$dummy_natter_go"
 chmod 0755 "$dummy_natter"
+chmod 0755 "$dummy_natter_go"
 tar -tvzf "$archive" | awk '$6 == "usr/bin/Natter" { print $1 }' | grep -q '^-rwxr-xr-x$' || \
+tar -tvzf "$archive" | awk '$6 == "usr/bin/natter-go" { print $1 }' | grep -q '^-rwxr-xr-x$' || \
 if tar -tzf "$archive" | grep -Eq '^\./?$'; then
 fi
 tar -tvzf "$archive" | awk '$6 ~ /^(etc|usr|www)\/?$/ { print $1 }' | grep -q '^drwxr-xr-x' || \
