@@ -83,6 +83,52 @@ func TestNftablesForwarderCreatesTableWhenMissing(t *testing.T) {
 	}
 }
 
+func TestNftablesForwarderRejectsCrossIPForwardWhenIPForwardDisabled(t *testing.T) {
+	options := nftTestOptions()
+	runner := &fakeNftRunner{}
+	f := &NftablesForwarder{
+		Runner: runner,
+		ReadIPForward: func() (string, error) {
+			return "0\n", nil
+		},
+	}
+
+	err := f.Start(options)
+	if err == nil {
+		t.Fatalf("Start returned nil error")
+	}
+	if !strings.Contains(err.Error(), "IP forwarding is not allowed") {
+		t.Fatalf("error = %v", err)
+	}
+	if len(runner.calls) != 0 {
+		t.Fatalf("nft calls = %#v, want none before ip_forward passes", runner.calls)
+	}
+}
+
+func TestNftablesForwarderSkipsIPForwardCheckForSameIPForward(t *testing.T) {
+	options := nftTestOptions()
+	options.TargetIP = options.IP
+	runner := &fakeNftRunner{
+		outputs: map[string]string{
+			NftablesDNATRule(options): "insert rule ip natter natter_dnat # handle 42\n",
+		},
+	}
+	f := &NftablesForwarder{
+		Runner: runner,
+		ReadIPForward: func() (string, error) {
+			t.Fatalf("ReadIPForward should not be called when source and target IP match")
+			return "", nil
+		},
+	}
+
+	if err := f.Start(options); err != nil {
+		t.Fatalf("Start returned error: %v", err)
+	}
+	if f.DNATHandle != 42 {
+		t.Fatalf("DNATHandle = %d, want 42", f.DNATHandle)
+	}
+}
+
 func TestNftablesForwarderRollsBackDNATWhenSNATFails(t *testing.T) {
 	options := nftTestOptions()
 	runner := &fakeNftRunner{

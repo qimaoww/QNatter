@@ -2,7 +2,9 @@ package forward
 
 import (
 	"fmt"
+	"os"
 	"os/exec"
+	"strings"
 )
 
 type Runner interface {
@@ -17,15 +19,19 @@ func (NftRunner) Run(command string) (string, error) {
 }
 
 type NftablesForwarder struct {
-	Runner     Runner
-	SNAT       bool
-	DNATHandle int
-	SNATHandle int
+	Runner        Runner
+	SNAT          bool
+	DNATHandle    int
+	SNATHandle    int
+	ReadIPForward func() (string, error)
 }
 
 func (f *NftablesForwarder) Start(options StartOptions) error {
 	if options.IP == options.TargetIP && options.Port == options.TargetPort {
 		return fmt.Errorf("cannot forward to the same address %s:%d", options.IP, options.Port)
+	}
+	if err := f.checkIPForward(options); err != nil {
+		return err
 	}
 
 	runner := f.runner()
@@ -89,4 +95,27 @@ func (f *NftablesForwarder) runner() Runner {
 		return f.Runner
 	}
 	return NftRunner{}
+}
+
+func (f *NftablesForwarder) checkIPForward(options StartOptions) error {
+	if options.IP == options.TargetIP {
+		return nil
+	}
+	read := f.ReadIPForward
+	if read == nil {
+		read = readSystemIPForward
+	}
+	value, err := read()
+	if err != nil {
+		return nil
+	}
+	if strings.TrimSpace(value) != "1" {
+		return fmt.Errorf("IP forwarding is not allowed. Please do `sysctl net.ipv4.ip_forward=1`")
+	}
+	return nil
+}
+
+func readSystemIPForward() (string, error) {
+	raw, err := os.ReadFile("/proc/sys/net/ipv4/ip_forward")
+	return string(raw), err
 }
