@@ -72,18 +72,24 @@ func TestRunCheckParsesExistingOpenWrtArguments(t *testing.T) {
 	}
 }
 
-func TestRunCheckDefaultDoesNotReportFakeSuccess(t *testing.T) {
+func TestRunCheckDefaultPrintsReportWithoutFakeSuccess(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 	code := Run([]string{"--check"}, &stdout, &stderr)
 
-	if code == 0 {
-		t.Fatal("Run returned success for unimplemented Go check")
+	if code != 0 {
+		t.Fatalf("Run returned code %d, want 0", code)
 	}
 	if strings.Contains(stdout.String(), "check: ok") {
 		t.Fatalf("stdout = %q, must not report fake check success", stdout.String())
 	}
-	if !strings.Contains(stderr.String(), "not implemented") {
-		t.Fatalf("stderr = %q, want not implemented message", stderr.String())
+	if !strings.Contains(stdout.String(), "> NatterCheck v2.2.1-go") {
+		t.Fatalf("stdout = %q, want NatterCheck report", stdout.String())
+	}
+	if !strings.Contains(stdout.String(), "[  FAIL  ] ... Go TCP NAT check is not implemented yet") {
+		t.Fatalf("stdout = %q, want TCP not implemented line", stdout.String())
+	}
+	if stderr.Len() != 0 {
+		t.Fatalf("stderr = %q, want empty stderr", stderr.String())
 	}
 }
 
