@@ -46,6 +46,7 @@ assert_file natter/files/natter-common.sh
 assert_file natter/files/natter-qbittorrent.sh
 assert_file natter/files/natter-notify
 assert_file natter/files/natter-run
+assert_file natter/files/natter-python-wrapper.py
 assert_file natter/files/Natter
 assert_file natter/files/natter.config
 
@@ -136,7 +137,9 @@ assert_contains natter/files/natter.init 'qbittorrent_target_ip'
 assert_contains natter/files/natter-run 'exec /usr/bin/Natter "\$@"'
 assert_contains natter/files/natter-run 'NATTER_RUNTIME'
 assert_contains natter/files/natter-run 'exec /usr/bin/natter-go "\$@"'
-assert_contains natter/files/Natter 'exec -a Natter /usr/bin/python3 /usr/bin/natter.py'
+assert_contains natter/files/Natter 'exec -a Natter /usr/bin/python3 /usr/share/natter/natter-python-wrapper.py'
+assert_contains natter/files/natter-python-wrapper.py 'PR_SET_NAME = 15'
+assert_contains natter/files/natter-python-wrapper.py 'set_process_name\("Natter"\)'
 assert_contains natter/files/natter-qbittorrent.sh 'natter_qb_select_listen_port'
 assert_contains natter/files/natter-notify 'api/v2/auth/login'
 assert_contains natter/files/natter-notify 'api/v2/app/setPreferences'
@@ -152,6 +155,7 @@ assert_not_contains natter/Makefile '\+socat'
 assert_not_contains natter/Makefile '\+gost'
 assert_not_contains natter/Makefile '\+python3-light'
 assert_contains natter/Makefile '\$\(INSTALL_BIN\) ./files/Natter \$\(1\)/usr/bin/Natter'
+assert_contains natter/Makefile '\$\(INSTALL_BIN\) ./files/natter-python-wrapper.py \$\(1\)/usr/share/natter/natter-python-wrapper.py'
 assert_contains luci-app-natter/Makefile 'LUCI_DEPENDS:=.*\+natter'
 assert_contains luci-app-natter/Makefile 'LUCI_DEPENDS:=.*\+luci-base'
 assert_contains luci-app-natter/Makefile 'LUCI_DEPENDS:=.*\+rpcd'

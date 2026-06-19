@@ -49,6 +49,7 @@ define Package/natter/install
 
 	$(INSTALL_DIR) $(1)/usr/share/natter
 	$(INSTALL_BIN) ./files/natter-common.sh $(1)/usr/share/natter/natter-common.sh
+	$(INSTALL_BIN) ./files/natter-python-wrapper.py $(1)/usr/share/natter/natter-python-wrapper.py
 	$(INSTALL_BIN) ./files/natter-qbittorrent.sh $(1)/usr/share/natter/natter-qbittorrent.sh
 	$(INSTALL_BIN) ./files/natter-notify $(1)/usr/share/natter/natter-notify
 	$(INSTALL_BIN) ./files/natter-run $(1)/usr/share/natter/natter-run

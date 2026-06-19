@@ -1,3 +1,3 @@
 #!/bin/sh
 
-exec -a Natter /usr/bin/python3 /usr/bin/natter.py "$@"
+exec -a Natter /usr/bin/python3 /usr/share/natter/natter-python-wrapper.py "$@"
