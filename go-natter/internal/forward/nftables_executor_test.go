@@ -12,7 +12,7 @@ func TestNftablesForwarderStartAndStopDNAT(t *testing.T) {
 			NftablesDNATRule(nftTestOptions()): "insert rule ip natter natter_dnat # handle 42\n",
 		},
 	}
-	f := &NftablesForwarder{Runner: runner}
+	f := testNftablesForwarder(runner)
 
 	if err := f.Start(nftTestOptions()); err != nil {
 		t.Fatalf("Start returned error: %v", err)
@@ -40,7 +40,8 @@ func TestNftablesForwarderStartAndStopSNAT(t *testing.T) {
 			NftablesSNATRule(options): "insert rule ip natter natter_snat # handle 77\n",
 		},
 	}
-	f := &NftablesForwarder{Runner: runner, SNAT: true}
+	f := testNftablesForwarder(runner)
+	f.SNAT = true
 
 	if err := f.Start(options); err != nil {
 		t.Fatalf("Start returned error: %v", err)
@@ -72,7 +73,7 @@ func TestNftablesForwarderCreatesTableWhenMissing(t *testing.T) {
 			NftablesDNATRule(options): "insert rule ip natter natter_dnat # handle 42\n",
 		},
 	}
-	f := &NftablesForwarder{Runner: runner}
+	f := testNftablesForwarder(runner)
 
 	if err := f.Start(options); err != nil {
 		t.Fatalf("Start returned error: %v", err)
@@ -83,11 +84,60 @@ func TestNftablesForwarderCreatesTableWhenMissing(t *testing.T) {
 	}
 }
 
+func TestNftablesForwarderChecksVersionBeforeRules(t *testing.T) {
+	runner := &fakeNftRunner{}
+	f := &NftablesForwarder{
+		Runner: runner,
+		CheckVersion: func() error {
+			return errors.New("nftables >= (0, 9, 6) not available")
+		},
+	}
+
+	err := f.Start(nftTestOptions())
+	if err == nil {
+		t.Fatalf("Start returned nil error")
+	}
+	if !strings.Contains(err.Error(), "0, 9, 6") {
+		t.Fatalf("error = %v", err)
+	}
+	if len(runner.calls) != 0 {
+		t.Fatalf("nft calls = %#v, want none before version check passes", runner.calls)
+	}
+}
+
+func TestDefaultNftablesVersionCheckerParsesSupportedVersion(t *testing.T) {
+	checker := DefaultNftablesVersionChecker{
+		Output: func(name string, args ...string) (string, error) {
+			if name != "nft" || len(args) != 1 || args[0] != "--version" {
+				t.Fatalf("command = %s %v, want nft --version", name, args)
+			}
+			return "nftables v1.0.8 (Old Doc Yak #3)\n", nil
+		},
+	}
+
+	if err := checker.Check(); err != nil {
+		t.Fatalf("Check returned error: %v", err)
+	}
+}
+
+func TestDefaultNftablesVersionCheckerRejectsOldVersion(t *testing.T) {
+	checker := DefaultNftablesVersionChecker{
+		Output: func(name string, args ...string) (string, error) {
+			return "nftables v0.9.5 (Topsy)\n", nil
+		},
+	}
+
+	if err := checker.Check(); err == nil {
+		t.Fatalf("old nftables version accepted")
+	}
+}
+
 func TestNftablesForwarderRejectsCrossIPForwardWhenIPForwardDisabled(t *testing.T) {
 	options := nftTestOptions()
 	runner := &fakeNftRunner{}
 	f := &NftablesForwarder{
-		Runner: runner,
+		Runner:       runner,
+		CheckVersion: func() error { return nil },
 		ReadIPForward: func() (string, error) {
 			return "0\n", nil
 		},
@@ -114,7 +164,8 @@ func TestNftablesForwarderSkipsIPForwardCheckForSameIPForward(t *testing.T) {
 		},
 	}
 	f := &NftablesForwarder{
-		Runner: runner,
+		Runner:       runner,
+		CheckVersion: func() error { return nil },
 		ReadIPForward: func() (string, error) {
 			t.Fatalf("ReadIPForward should not be called when source and target IP match")
 			return "", nil
@@ -139,7 +190,8 @@ func TestNftablesForwarderRollsBackDNATWhenSNATFails(t *testing.T) {
 			NftablesDNATRule(options): "insert rule ip natter natter_dnat # handle 42\n",
 		},
 	}
-	f := &NftablesForwarder{Runner: runner, SNAT: true}
+	f := testNftablesForwarder(runner)
+	f.SNAT = true
 
 	if err := f.Start(options); err == nil {
 		t.Fatal("Start returned nil when SNAT insertion failed")
@@ -160,6 +212,13 @@ func nftTestOptions() StartOptions {
 		Port:       8931,
 		TargetIP:   "10.10.10.10",
 		TargetPort: 51413,
+	}
+}
+
+func testNftablesForwarder(runner Runner) *NftablesForwarder {
+	return &NftablesForwarder{
+		Runner:       runner,
+		CheckVersion: func() error { return nil },
 	}
 }
 

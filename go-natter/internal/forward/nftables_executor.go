@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"regexp"
+	"strconv"
 	"strings"
 )
 
@@ -24,11 +26,15 @@ type NftablesForwarder struct {
 	DNATHandle    int
 	SNATHandle    int
 	ReadIPForward func() (string, error)
+	CheckVersion  func() error
 }
 
 func (f *NftablesForwarder) Start(options StartOptions) error {
 	if options.IP == options.TargetIP && options.Port == options.TargetPort {
 		return fmt.Errorf("cannot forward to the same address %s:%d", options.IP, options.Port)
+	}
+	if err := f.checkVersion(); err != nil {
+		return err
 	}
 	if err := f.checkIPForward(options); err != nil {
 		return err
@@ -97,6 +103,14 @@ func (f *NftablesForwarder) runner() Runner {
 	return NftRunner{}
 }
 
+func (f *NftablesForwarder) checkVersion() error {
+	check := f.CheckVersion
+	if check == nil {
+		check = DefaultNftablesVersionChecker{}.Check
+	}
+	return check()
+}
+
 func (f *NftablesForwarder) checkIPForward(options StartOptions) error {
 	if options.IP == options.TargetIP {
 		return nil
@@ -118,4 +132,40 @@ func (f *NftablesForwarder) checkIPForward(options StartOptions) error {
 func readSystemIPForward() (string, error) {
 	raw, err := os.ReadFile("/proc/sys/net/ipv4/ip_forward")
 	return string(raw), err
+}
+
+type DefaultNftablesVersionChecker struct {
+	Output func(name string, args ...string) (string, error)
+}
+
+func (c DefaultNftablesVersionChecker) Check() error {
+	output := c.Output
+	if output == nil {
+		output = nftCommandOutput
+	}
+	text, err := output("nft", "--version")
+	if err != nil {
+		return fmt.Errorf("nftables >= (0, 9, 6) not available")
+	}
+	match := regexp.MustCompile(`nftables v([0-9]+)\.([0-9]+)\.([0-9]+)`).FindStringSubmatch(text)
+	if match == nil {
+		return fmt.Errorf("nftables >= (0, 9, 6) not available")
+	}
+	version := make([]int, 0, 3)
+	for _, part := range match[1:] {
+		value, err := strconv.Atoi(part)
+		if err != nil {
+			return fmt.Errorf("nftables >= (0, 9, 6) not available")
+		}
+		version = append(version, value)
+	}
+	if compareVersion(version, []int{0, 9, 6}) < 0 {
+		return fmt.Errorf("nftables >= (0, 9, 6) not available")
+	}
+	return nil
+}
+
+func nftCommandOutput(name string, args ...string) (string, error) {
+	output, err := exec.Command(name, args...).CombinedOutput()
+	return string(output), err
 }
