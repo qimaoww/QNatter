@@ -35,6 +35,26 @@ func TestLocalAddrForTCPAndUDP(t *testing.T) {
 	}
 }
 
+func TestNetworkForSourceForcesIPv4WhenBindingIPv4Source(t *testing.T) {
+	source := netip.MustParseAddrPort("0.0.0.0:0")
+
+	if got := NetworkForSource("tcp", source); got != "tcp4" {
+		t.Fatalf("tcp network = %q, want tcp4", got)
+	}
+	if got := NetworkForSource("udp", source); got != "udp4" {
+		t.Fatalf("udp network = %q, want udp4", got)
+	}
+}
+
+func TestNetworkForSourceKeepsBaseNetworkWithoutIPv4Source(t *testing.T) {
+	if got := NetworkForSource("tcp", netip.AddrPort{}); got != "tcp" {
+		t.Fatalf("invalid source network = %q, want tcp", got)
+	}
+	if got := NetworkForSource("tcp", netip.MustParseAddrPort("[2001:db8::1]:5000")); got != "tcp" {
+		t.Fatalf("IPv6 source network = %q, want tcp", got)
+	}
+}
+
 func TestControlAppliesInterfaceAndReuseOptions(t *testing.T) {
 	raw := fakeRawConn{fd: 99}
 	var intCalls []intCall

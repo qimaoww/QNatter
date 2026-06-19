@@ -61,8 +61,9 @@ func (c *UDPClient) Close() error {
 }
 
 func (c *UDPClient) dial() (net.Conn, error) {
+	network := socketopts.NetworkForSource("udp", c.Source)
 	dialer := net.Dialer{Timeout: c.timeout()}
-	localAddr, err := socketopts.LocalAddr("udp", c.Source)
+	localAddr, err := socketopts.LocalAddr(network, c.Source)
 	if err != nil {
 		return nil, err
 	}
@@ -71,7 +72,7 @@ func (c *UDPClient) dial() (net.Conn, error) {
 		Interface: c.Interface,
 		Reuse:     true,
 	})
-	return dialer.Dial("udp", fmt.Sprintf("%s:%d", c.Host, c.Port))
+	return dialer.Dial(network, fmt.Sprintf("%s:%d", c.Host, c.Port))
 }
 
 func (c *UDPClient) disconnect() {

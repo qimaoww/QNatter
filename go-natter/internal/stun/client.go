@@ -117,8 +117,9 @@ func (t NetworkTransport) Exchange(ctx context.Context, network string, server S
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 
+	dialNetwork := socketopts.NetworkForSource(network, source)
 	dialer := net.Dialer{Timeout: timeout}
-	localAddr, err := socketopts.LocalAddr(network, source)
+	localAddr, err := socketopts.LocalAddr(dialNetwork, source)
 	if err != nil {
 		return netip.AddrPort{}, nil, err
 	}
@@ -128,7 +129,7 @@ func (t NetworkTransport) Exchange(ctx context.Context, network string, server S
 		Reuse:     t.Reuse,
 	})
 
-	conn, err := dialer.DialContext(ctx, network, net.JoinHostPort(server.Host, strconv.Itoa(server.Port)))
+	conn, err := dialer.DialContext(ctx, dialNetwork, net.JoinHostPort(server.Host, strconv.Itoa(server.Port)))
 	if err != nil {
 		return netip.AddrPort{}, nil, err
 	}

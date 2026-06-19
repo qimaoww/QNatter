@@ -442,7 +442,7 @@ func defaultTCPFullConeListen(ctx context.Context, request TCPFullConeListenRequ
 		Interface: request.Interface,
 		Reuse:     request.Reuse,
 	})}
-	return listenConfig.Listen(ctx, "tcp", listenAddress(request.Source))
+	return listenConfig.Listen(ctx, socketopts.NetworkForSource("tcp", request.Source), listenAddress(request.Source))
 }
 
 func defaultTCPFullConeMapping(ctx context.Context, request TCPFullConeMappingRequest) (STUNTestResult, io.Closer, error) {
@@ -462,7 +462,7 @@ func defaultTCPFullConeMapping(ctx context.Context, request TCPFullConeMappingRe
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 
-	keepAlive, err := dialer.DialContext(ctx, "tcp", request.KeepAliveServer.String())
+	keepAlive, err := dialer.DialContext(ctx, socketopts.NetworkForSource("tcp", request.Source), request.KeepAliveServer.String())
 	if err != nil {
 		return STUNTestResult{}, nil, err
 	}
@@ -887,8 +887,9 @@ func TCPSTUNTest(ctx context.Context, options TCPSTUNOptions) (STUNTestResult, e
 		return STUNTestResult{}, err
 	}
 
+	network := socketopts.NetworkForSource("tcp", options.Source)
 	dialer := net.Dialer{Timeout: timeout}
-	localAddr, err := socketopts.LocalAddr("tcp", options.Source)
+	localAddr, err := socketopts.LocalAddr(network, options.Source)
 	if err != nil {
 		return STUNTestResult{}, err
 	}
@@ -897,7 +898,7 @@ func TCPSTUNTest(ctx context.Context, options TCPSTUNOptions) (STUNTestResult, e
 		Interface: options.Interface,
 		Reuse:     options.Reuse,
 	})
-	conn, err := dialer.DialContext(ctx, "tcp", net.JoinHostPort(options.Server.Addr().String(), strconv.Itoa(int(options.Server.Port()))))
+	conn, err := dialer.DialContext(ctx, network, net.JoinHostPort(options.Server.Addr().String(), strconv.Itoa(int(options.Server.Port()))))
 	if err != nil {
 		return STUNTestResult{}, err
 	}
@@ -948,7 +949,7 @@ func UDPSTUNTest(ctx context.Context, options UDPSTUNOptions) (STUNTestResult, e
 		Interface: options.Interface,
 		Reuse:     options.Reuse,
 	})}
-	conn, err := listenConfig.ListenPacket(ctx, "udp", listenAddress(options.Source))
+	conn, err := listenConfig.ListenPacket(ctx, socketopts.NetworkForSource("udp", options.Source), listenAddress(options.Source))
 	if err != nil {
 		return STUNTestResult{}, err
 	}

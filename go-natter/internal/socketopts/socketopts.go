@@ -38,6 +38,20 @@ func LocalAddr(network string, source netip.AddrPort) (net.Addr, error) {
 	}
 }
 
+func NetworkForSource(network string, source netip.AddrPort) string {
+	if !source.IsValid() || !source.Addr().Is4() {
+		return network
+	}
+	switch network {
+	case "tcp":
+		return "tcp4"
+	case "udp":
+		return "udp4"
+	default:
+		return network
+	}
+}
+
 func Control(options Options) func(network string, address string, conn syscall.RawConn) error {
 	return ControlWith(options, Setters{
 		Int: func(fd uintptr, level int, opt int, value int) error {
