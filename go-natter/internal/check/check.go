@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"natter-openwrt/go-natter/internal/config"
+	"natter-openwrt/go-natter/internal/portcheck"
 	"natter-openwrt/go-natter/internal/socketopts"
 )
 
@@ -143,6 +144,38 @@ type TCPConeOptions struct {
 	Interface  string
 	Reuse      bool
 	Probe      TCPProbe
+}
+
+type TCPFullConeListenRequest struct {
+	Source    netip.AddrPort
+	Interface string
+	Reuse     bool
+}
+
+type TCPFullConeMappingRequest struct {
+	Source    netip.AddrPort
+	Interface string
+	Reuse     bool
+}
+
+type TCPFullConePortCheckRequest struct {
+	Port       int
+	SourceAddr netip.Addr
+	Interface  string
+}
+
+type TCPFullConeListen func(context.Context, TCPFullConeListenRequest) (io.Closer, error)
+type TCPFullConeMapping func(context.Context, TCPFullConeMappingRequest) (STUNTestResult, io.Closer, error)
+type TCPFullConePortCheck func(context.Context, TCPFullConePortCheckRequest) (portcheck.Result, error)
+
+type TCPFullConeOptions struct {
+	SourceAddr netip.Addr
+	SourcePort int
+	Interface  string
+	Reuse      bool
+	Listen     TCPFullConeListen
+	GetMapping TCPFullConeMapping
+	CheckPort  TCPFullConePortCheck
 }
 
 type UDPNATOptions struct {
@@ -308,6 +341,64 @@ func CheckTCPCone(ctx context.Context, options TCPConeOptions) (int, error) {
 		return tcpConeStable, nil
 	}
 	return tcpConeUnknown, nil
+}
+
+func CheckTCPFullCone(ctx context.Context, options TCPFullConeOptions) (int, error) {
+	source := tcpSourceAddrPort(options.SourceAddr, options.SourcePort)
+	listen := options.Listen
+	if listen == nil {
+		return tcpFullConeUnknown, nil
+	}
+	listener, err := listen(ctx, TCPFullConeListenRequest{
+		Source:    source,
+		Interface: options.Interface,
+		Reuse:     options.Reuse,
+	})
+	if err != nil {
+		return tcpFullConeUnknown, nil
+	}
+	defer listener.Close()
+
+	getMapping := options.GetMapping
+	if getMapping == nil {
+		return tcpFullConeUnknown, nil
+	}
+	mapping, keepAlive, err := getMapping(ctx, TCPFullConeMappingRequest{
+		Source:    source,
+		Interface: options.Interface,
+		Reuse:     options.Reuse,
+	})
+	if err != nil {
+		return tcpFullConeUnknown, nil
+	}
+	if keepAlive != nil {
+		defer keepAlive.Close()
+	}
+
+	if mapping.Source == mapping.Mapped {
+		return tcpFullConeOpenInternet, nil
+	}
+
+	checkPort := options.CheckPort
+	if checkPort == nil {
+		return tcpFullConeUnknown, nil
+	}
+	result, err := checkPort(ctx, TCPFullConePortCheckRequest{
+		Port:       int(mapping.Mapped.Port()),
+		SourceAddr: options.SourceAddr,
+		Interface:  options.Interface,
+	})
+	if err != nil {
+		return tcpFullConeUnknown, nil
+	}
+	switch result {
+	case portcheck.Open:
+		return tcpFullConeReachable, nil
+	case portcheck.Closed:
+		return tcpFullConeBlocked, nil
+	default:
+		return tcpFullConeUnknown, nil
+	}
 }
 
 func CheckUDPNATType(ctx context.Context, options UDPNATOptions) (NATType, error) {

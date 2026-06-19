@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"natter-openwrt/go-natter/internal/config"
+	"natter-openwrt/go-natter/internal/portcheck"
 )
 
 func TestRunPrintsNatterCheckReport(t *testing.T) {
@@ -264,6 +265,134 @@ func TestCheckTCPConePassesBindOptionsToProbe(t *testing.T) {
 	}
 	if !request.Reuse {
 		t.Fatal("reuse = false, want true")
+	}
+}
+
+func TestCheckTCPFullConeMatchesPythonDecisionTree(t *testing.T) {
+	source := netip.MustParseAddr("192.0.2.10")
+	inner := netip.MustParseAddrPort("192.0.2.10:40000")
+	mapped := netip.MustParseAddrPort("198.51.100.10:50000")
+
+	tests := []struct {
+		name       string
+		mapping    STUNTestResult
+		portResult portcheck.Result
+		want       int
+	}{
+		{
+			name:    "open internet when source equals mapped",
+			mapping: STUNTestResult{Source: inner, Mapped: inner},
+			want:    tcpFullConeOpenInternet,
+		},
+		{
+			name:       "reachable full cone when public port is open",
+			mapping:    STUNTestResult{Source: inner, Mapped: mapped},
+			portResult: portcheck.Open,
+			want:       tcpFullConeReachable,
+		},
+		{
+			name:       "blocked when public port is closed",
+			mapping:    STUNTestResult{Source: inner, Mapped: mapped},
+			portResult: portcheck.Closed,
+			want:       tcpFullConeBlocked,
+		},
+		{
+			name:       "unknown when public port check is inconclusive",
+			mapping:    STUNTestResult{Source: inner, Mapped: mapped},
+			portResult: portcheck.Unknown,
+			want:       tcpFullConeUnknown,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := CheckTCPFullCone(context.Background(), TCPFullConeOptions{
+				SourceAddr: source,
+				SourcePort: int(inner.Port()),
+				Interface:  "pppoe-wan_cmcc",
+				Reuse:      true,
+				Listen: func(ctx context.Context, request TCPFullConeListenRequest) (io.Closer, error) {
+					return noopCloser{}, nil
+				},
+				GetMapping: func(ctx context.Context, request TCPFullConeMappingRequest) (STUNTestResult, io.Closer, error) {
+					return tt.mapping, noopCloser{}, nil
+				},
+				CheckPort: func(ctx context.Context, request TCPFullConePortCheckRequest) (portcheck.Result, error) {
+					if request.Port != int(mapped.Port()) && tt.mapping.Mapped != inner {
+						t.Fatalf("port check port = %d, want %d", request.Port, mapped.Port())
+					}
+					if request.SourceAddr != source {
+						t.Fatalf("port check source = %s, want %s", request.SourceAddr, source)
+					}
+					return tt.portResult, nil
+				},
+			})
+			if err != nil {
+				t.Fatalf("CheckTCPFullCone returned error: %v", err)
+			}
+			if got != tt.want {
+				t.Fatalf("CheckTCPFullCone = %d, want %d", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestCheckTCPFullConeReturnsUnknownOnSetupFailure(t *testing.T) {
+	mappingCalled, portCalled := false, false
+	got, err := CheckTCPFullCone(context.Background(), TCPFullConeOptions{
+		SourceAddr: netip.MustParseAddr("192.0.2.10"),
+		SourcePort: 40000,
+		Listen: func(context.Context, TCPFullConeListenRequest) (io.Closer, error) {
+			return nil, errors.New("listen failed")
+		},
+		GetMapping: func(context.Context, TCPFullConeMappingRequest) (STUNTestResult, io.Closer, error) {
+			mappingCalled = true
+			return STUNTestResult{}, nil, nil
+		},
+		CheckPort: func(context.Context, TCPFullConePortCheckRequest) (portcheck.Result, error) {
+			portCalled = true
+			return portcheck.Open, nil
+		},
+	})
+	if err != nil {
+		t.Fatalf("CheckTCPFullCone returned error: %v", err)
+	}
+	if got != tcpFullConeUnknown {
+		t.Fatalf("CheckTCPFullCone = %d, want unknown", got)
+	}
+	if mappingCalled || portCalled {
+		t.Fatalf("mappingCalled=%v portCalled=%v, want both false", mappingCalled, portCalled)
+	}
+}
+
+func TestCheckTCPFullConeClosesResources(t *testing.T) {
+	listener := &trackingCloser{}
+	keepAlive := &trackingCloser{}
+
+	got, err := CheckTCPFullCone(context.Background(), TCPFullConeOptions{
+		SourceAddr: netip.MustParseAddr("192.0.2.10"),
+		SourcePort: 40000,
+		Listen: func(context.Context, TCPFullConeListenRequest) (io.Closer, error) {
+			return listener, nil
+		},
+		GetMapping: func(context.Context, TCPFullConeMappingRequest) (STUNTestResult, io.Closer, error) {
+			return STUNTestResult{
+				Source: netip.MustParseAddrPort("192.0.2.10:40000"),
+				Mapped: netip.MustParseAddrPort("198.51.100.10:50000"),
+			}, keepAlive, nil
+		},
+		CheckPort: func(context.Context, TCPFullConePortCheckRequest) (portcheck.Result, error) {
+			return portcheck.Open, nil
+		},
+	})
+	if err != nil {
+		t.Fatalf("CheckTCPFullCone returned error: %v", err)
+	}
+	if got != tcpFullConeReachable {
+		t.Fatalf("CheckTCPFullCone = %d, want reachable", got)
+	}
+	if !listener.closed || !keepAlive.closed {
+		t.Fatalf("listener closed=%v keepAlive closed=%v, want both true", listener.closed, keepAlive.closed)
 	}
 }
 
@@ -825,6 +954,21 @@ func fakeTCPProbe(responses map[netip.AddrPort]tcpProbeResponse, calls *[]TCPPro
 		}
 		return response.result, nil
 	}
+}
+
+type noopCloser struct{}
+
+func (noopCloser) Close() error {
+	return nil
+}
+
+type trackingCloser struct {
+	closed bool
+}
+
+func (c *trackingCloser) Close() error {
+	c.closed = true
+	return nil
 }
 
 func TestCheckDockerNetworkRejectsDockerBridgeNetwork(t *testing.T) {
