@@ -138,6 +138,46 @@ func TestRunOnceNoneForwardTargetsNatterAddressForUDP(t *testing.T) {
 	}
 }
 
+func TestRunOnceCanBuildKeepAliveAfterFirstSTUNMapping(t *testing.T) {
+	events := []string{}
+	first := stun.Mapping{
+		Inner: netip.MustParseAddrPort("10.10.10.3:41000"),
+		Outer: netip.MustParseAddrPort("203.0.113.11:62010"),
+	}
+	stunClient := &fakeSTUN{
+		mappings: []stun.Mapping{
+			first,
+			first,
+		},
+		events: &events,
+	}
+	fwd := &fakeForwarder{}
+
+	_, err := RunOnce(context.Background(), config.Config{
+		ForwardMethod: "none",
+	}, Dependencies{
+		STUN: stunClient,
+		NewKeepAlive: func(mapping stun.Mapping) (KeepAlive, error) {
+			events = append(events, "keepalive-factory")
+			if mapping != first {
+				t.Fatalf("keepalive mapping = %+v, want first mapping %+v", mapping, first)
+			}
+			return &fakeKeepAlive{events: &events}, nil
+		},
+		NewForwarder: func(string) (forward.Forwarder, error) {
+			return fwd, nil
+		},
+	})
+	if err != nil {
+		t.Fatalf("RunOnce returned error: %v", err)
+	}
+
+	wantEvents := []string{"stun", "keepalive-factory", "keepalive", "stun"}
+	if !reflect.DeepEqual(events, wantEvents) {
+		t.Fatalf("events = %#v, want %#v", events, wantEvents)
+	}
+}
+
 type fakeSTUN struct {
 	mappings []stun.Mapping
 	events   *[]string

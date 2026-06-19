@@ -23,6 +23,7 @@ type KeepAlive interface {
 type Dependencies struct {
 	STUN         STUNClient
 	KeepAlive    KeepAlive
+	NewKeepAlive func(stun.Mapping) (KeepAlive, error)
 	NewForwarder func(string) (forward.Forwarder, error)
 	Notify       func(status.Mapping) error
 }
@@ -37,15 +38,22 @@ func RunOnce(ctx context.Context, cfg config.Config, deps Dependencies) (Result,
 	if deps.STUN == nil {
 		return Result{}, fmt.Errorf("missing STUN client")
 	}
-	if deps.KeepAlive == nil {
-		return Result{}, fmt.Errorf("missing keep-alive client")
-	}
 
 	first, err := deps.STUN.GetMapping(ctx)
 	if err != nil {
 		return Result{}, err
 	}
-	if err := deps.KeepAlive.KeepAlive(); err != nil {
+	keepAlive := deps.KeepAlive
+	if keepAlive == nil && deps.NewKeepAlive != nil {
+		keepAlive, err = deps.NewKeepAlive(first)
+		if err != nil {
+			return Result{}, err
+		}
+	}
+	if keepAlive == nil {
+		return Result{}, fmt.Errorf("missing keep-alive client")
+	}
+	if err := keepAlive.KeepAlive(); err != nil {
 		return Result{}, err
 	}
 	mapping, err := deps.STUN.GetMapping(ctx)

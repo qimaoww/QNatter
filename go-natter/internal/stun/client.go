@@ -27,11 +27,12 @@ type Mapping struct {
 type ExchangeFunc func(context.Context, string, Server, netip.AddrPort, []byte) (netip.AddrPort, []byte, error)
 
 type Client struct {
-	Servers []Server
-	Source  netip.AddrPort
-	UDP     bool
-	TxID    func() ([12]byte, error)
-	Do      ExchangeFunc
+	Servers   []Server
+	Source    netip.AddrPort
+	UDP       bool
+	TxID      func() ([12]byte, error)
+	Do        ExchangeFunc
+	Transport NetworkTransport
 }
 
 func (c *Client) GetMapping(ctx context.Context) (Mapping, error) {
@@ -79,7 +80,7 @@ func (c *Client) exchange() ExchangeFunc {
 	if c.Do != nil {
 		return c.Do
 	}
-	return NetworkTransport{}.Exchange
+	return c.Transport.Exchange
 }
 
 func (c *Client) rotateServer() {
