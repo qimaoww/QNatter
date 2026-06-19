@@ -72,6 +72,16 @@ const (
 
 type Probe func(context.Context, config.Config) (Result, error)
 
+type Resolver func(context.Context, string) ([]netip.Addr, error)
+
+type UDPChecker func(context.Context, UDPNATOptions) (NATType, error)
+
+type Dependencies struct {
+	Docker   DockerEnv
+	Resolve  Resolver
+	CheckUDP UDPChecker
+}
+
 type Runner struct {
 	Docker DockerEnv
 	TCP    Probe
@@ -118,6 +128,7 @@ type UDPProbe func(context.Context, UDPProbeRequest) (STUNTestResult, error)
 
 type UDPNATOptions struct {
 	Servers    []netip.AddrPort
+	SourceAddr netip.Addr
 	SourcePort int
 	Interface  string
 	Reuse      bool
@@ -138,9 +149,15 @@ type TCPNATOptions struct {
 }
 
 func Run(ctx context.Context, cfg config.Config, stdout io.Writer, stderr io.Writer) error {
+	return runWithDependencies(ctx, cfg, stdout, stderr, Dependencies{})
+}
+
+func runWithDependencies(ctx context.Context, cfg config.Config, stdout io.Writer, stderr io.Writer, deps Dependencies) error {
+	deps = deps.withDefaults()
 	return Runner{
-		TCP: unimplementedTCP,
-		UDP: unimplementedUDP,
+		Docker: deps.Docker,
+		TCP:    unimplementedTCP,
+		UDP:    deps.udpProbe(),
 	}.Run(ctx, cfg, stdout)
 }
 
@@ -236,7 +253,7 @@ func CheckUDPNATType(ctx context.Context, options UDPNATOptions) (NATType, error
 		probe = func(ctx context.Context, request UDPProbeRequest) (STUNTestResult, error) {
 			return UDPSTUNTest(ctx, UDPSTUNOptions{
 				Server:     request.Server,
-				Source:     netip.AddrPortFrom(netip.IPv4Unspecified(), uint16(request.SourcePort)),
+				Source:     udpSourceAddrPort(options.SourceAddr, request.SourcePort),
 				Interface:  options.Interface,
 				Reuse:      options.Reuse,
 				ChangeIP:   request.ChangeIP,
@@ -316,6 +333,87 @@ func CheckUDPNATType(ctx context.Context, options UDPNATOptions) (NATType, error
 		return NATRestricted, nil
 	}
 	return NATPortRestricted, nil
+}
+
+func (deps Dependencies) withDefaults() Dependencies {
+	if deps.Resolve == nil {
+		deps.Resolve = defaultResolve
+	}
+	if deps.CheckUDP == nil {
+		deps.CheckUDP = CheckUDPNATType
+	}
+	return deps
+}
+
+func (deps Dependencies) udpProbe() Probe {
+	return func(ctx context.Context, cfg config.Config) (Result, error) {
+		servers, err := resolveUDPServers(ctx, deps.Resolve, cfg.STUNServers)
+		if err != nil {
+			return Result{}, err
+		}
+		sourceAddr, bindInterface := bindFromConfig(cfg)
+		natType, err := deps.CheckUDP(ctx, UDPNATOptions{
+			Servers:    servers,
+			SourceAddr: sourceAddr,
+			SourcePort: cfg.BindPort,
+			Interface:  bindInterface,
+			Reuse:      true,
+		})
+		if err != nil {
+			return Result{}, err
+		}
+		return ResultFromNATType(natType), nil
+	}
+}
+
+func defaultResolve(ctx context.Context, host string) ([]netip.Addr, error) {
+	if addr, err := netip.ParseAddr(host); err == nil {
+		return []netip.Addr{addr}, nil
+	}
+	return net.DefaultResolver.LookupNetIP(ctx, "ip4", host)
+}
+
+func resolveUDPServers(ctx context.Context, resolve Resolver, servers []config.STUNServer) ([]netip.AddrPort, error) {
+	resolved := make([]netip.AddrPort, 0, len(servers))
+	for _, server := range servers {
+		if addr, err := netip.ParseAddr(server.Host); err == nil {
+			if addr.Is4() {
+				resolved = append(resolved, netip.AddrPortFrom(addr, uint16(server.Port)))
+			}
+			continue
+		}
+		addrs, err := resolve(ctx, server.Host)
+		if err != nil {
+			continue
+		}
+		for _, addr := range addrs {
+			if addr.Is4() {
+				resolved = append(resolved, netip.AddrPortFrom(addr, uint16(server.Port)))
+			}
+		}
+	}
+	if len(resolved) == 0 {
+		return nil, errors.New("no UDP STUN server address is available")
+	}
+	return resolved, nil
+}
+
+func bindFromConfig(cfg config.Config) (netip.Addr, string) {
+	value := cfg.BindValue
+	if value == "" {
+		value = "0.0.0.0"
+	}
+	if addr, err := netip.ParseAddr(value); err == nil {
+		return addr, ""
+	}
+	return netip.IPv4Unspecified(), value
+}
+
+func udpSourceAddrPort(addr netip.Addr, port int) netip.AddrPort {
+	if !addr.IsValid() {
+		addr = netip.IPv4Unspecified()
+	}
+	return netip.AddrPortFrom(addr, uint16(port))
 }
 
 func udpProbeMaybe(ctx context.Context, probe UDPProbe, request UDPProbeRequest) (STUNTestResult, bool, error) {

@@ -72,9 +72,18 @@ func TestRunCheckParsesExistingOpenWrtArguments(t *testing.T) {
 	}
 }
 
-func TestRunCheckDefaultPrintsReportWithoutFakeSuccess(t *testing.T) {
+func TestRunCheckPrintsReportWithoutFakeSuccess(t *testing.T) {
 	var stdout, stderr bytes.Buffer
-	code := Run([]string{"--check"}, &stdout, &stderr)
+	code := runWithContext(context.Background(), []string{"--check"}, &stdout, &stderr,
+		func(context.Context, config.Config) error {
+			t.Fatal("--check started the mapping engine")
+			return nil
+		},
+		func(_ context.Context, _ config.Config, out io.Writer, _ io.Writer) error {
+			fmt.Fprintln(out, "> NatterCheck v2.2.1-go")
+			fmt.Fprintln(out, "Checking TCP NAT...                  [  FAIL  ] ... Go TCP NAT check is not implemented yet")
+			return nil
+		})
 
 	if code != 0 {
 		t.Fatalf("Run returned code %d, want 0", code)

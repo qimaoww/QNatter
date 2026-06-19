@@ -475,10 +475,30 @@ func TestUDPSTUNTestCanBindInterface(t *testing.T) {
 	}
 }
 
-func TestDefaultRunReportsUnimplementedChecksWithoutFakeSuccess(t *testing.T) {
+func TestRunWithDependenciesPerformsUDPCheckFromConfig(t *testing.T) {
 	var stdout, stderr bytes.Buffer
+	var gotOptions UDPNATOptions
 
-	err := Run(context.Background(), config.Config{}, &stdout, &stderr)
+	err := runWithDependencies(context.Background(), config.Config{
+		STUNServers: []config.STUNServer{
+			{Host: "stun.example", Port: 3478},
+			{Host: "198.51.100.7", Port: 1234},
+		},
+		BindValue: "pppoe-wan_cmcc",
+		BindPort:  40000,
+	}, &stdout, &stderr, Dependencies{
+		Docker: DockerEnv{GOOS: "darwin"},
+		Resolve: func(ctx context.Context, host string) ([]netip.Addr, error) {
+			if host != "stun.example" {
+				t.Fatalf("resolver host = %q, want stun.example", host)
+			}
+			return []netip.Addr{netip.MustParseAddr("203.0.113.9")}, nil
+		},
+		CheckUDP: func(ctx context.Context, options UDPNATOptions) (NATType, error) {
+			gotOptions = options
+			return NATFullCone, nil
+		},
+	})
 	if err != nil {
 		t.Fatalf("Run returned error: %v", err)
 	}
@@ -490,11 +510,53 @@ func TestDefaultRunReportsUnimplementedChecksWithoutFakeSuccess(t *testing.T) {
 	if !strings.Contains(out, "[  FAIL  ] ... Go TCP NAT check is not implemented yet") {
 		t.Fatalf("output = %q, want TCP not implemented line", out)
 	}
-	if !strings.Contains(out, "[  FAIL  ] ... Go UDP NAT check is not implemented yet") {
-		t.Fatalf("output = %q, want UDP not implemented line", out)
+	if !strings.Contains(out, "[   OK   ] ... NAT Type: 1") {
+		t.Fatalf("output = %q, want UDP NAT result line", out)
 	}
 	if stderr.Len() != 0 {
 		t.Fatalf("stderr = %q, want empty stderr", stderr.String())
+	}
+	wantServers := []netip.AddrPort{
+		netip.MustParseAddrPort("203.0.113.9:3478"),
+		netip.MustParseAddrPort("198.51.100.7:1234"),
+	}
+	if len(gotOptions.Servers) != len(wantServers) {
+		t.Fatalf("UDP servers = %#v, want %#v", gotOptions.Servers, wantServers)
+	}
+	for i := range wantServers {
+		if gotOptions.Servers[i] != wantServers[i] {
+			t.Fatalf("UDP servers = %#v, want %#v", gotOptions.Servers, wantServers)
+		}
+	}
+	if gotOptions.SourcePort != 40000 {
+		t.Fatalf("UDP source port = %d, want 40000", gotOptions.SourcePort)
+	}
+	if gotOptions.Interface != "pppoe-wan_cmcc" {
+		t.Fatalf("UDP interface = %q, want pppoe-wan_cmcc", gotOptions.Interface)
+	}
+	if !gotOptions.Reuse {
+		t.Fatal("UDP Reuse = false, want true")
+	}
+}
+
+func TestRunWithDependenciesReportsUDPResolutionFailure(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+
+	err := runWithDependencies(context.Background(), config.Config{
+		STUNServers: []config.STUNServer{{Host: "stun.example", Port: 3478}},
+	}, &stdout, &stderr, Dependencies{
+		Docker: DockerEnv{GOOS: "darwin"},
+		Resolve: func(context.Context, string) ([]netip.Addr, error) {
+			return nil, errors.New("dns failed")
+		},
+	})
+	if err != nil {
+		t.Fatalf("Run returned error: %v", err)
+	}
+
+	out := stdout.String()
+	if !strings.Contains(out, "[  FAIL  ] ... no UDP STUN server address is available") {
+		t.Fatalf("output = %q, want UDP resolution failure", out)
 	}
 }
 
