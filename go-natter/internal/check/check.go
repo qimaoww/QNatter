@@ -347,7 +347,9 @@ func CheckTCPFullCone(ctx context.Context, options TCPFullConeOptions) (int, err
 	source := tcpSourceAddrPort(options.SourceAddr, options.SourcePort)
 	listen := options.Listen
 	if listen == nil {
-		return tcpFullConeUnknown, nil
+		listen = func(ctx context.Context, request TCPFullConeListenRequest) (io.Closer, error) {
+			return defaultTCPFullConeListen(ctx, request)
+		}
 	}
 	listener, err := listen(ctx, TCPFullConeListenRequest{
 		Source:    source,
@@ -358,6 +360,11 @@ func CheckTCPFullCone(ctx context.Context, options TCPFullConeOptions) (int, err
 		return tcpFullConeUnknown, nil
 	}
 	defer listener.Close()
+	if addrProvider, ok := listener.(interface{ Addr() net.Addr }); ok {
+		if listenerAddr, err := addrPortFromNetAddr(addrProvider.Addr()); err == nil {
+			source = listenerAddr
+		}
+	}
 
 	getMapping := options.GetMapping
 	if getMapping == nil {
@@ -399,6 +406,14 @@ func CheckTCPFullCone(ctx context.Context, options TCPFullConeOptions) (int, err
 	default:
 		return tcpFullConeUnknown, nil
 	}
+}
+
+func defaultTCPFullConeListen(ctx context.Context, request TCPFullConeListenRequest) (net.Listener, error) {
+	listenConfig := net.ListenConfig{Control: socketopts.Control(socketopts.Options{
+		Interface: request.Interface,
+		Reuse:     request.Reuse,
+	})}
+	return listenConfig.Listen(ctx, "tcp", listenAddress(request.Source))
 }
 
 func CheckUDPNATType(ctx context.Context, options UDPNATOptions) (NATType, error) {

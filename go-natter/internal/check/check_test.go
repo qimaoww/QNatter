@@ -396,6 +396,41 @@ func TestCheckTCPFullConeClosesResources(t *testing.T) {
 	}
 }
 
+func TestDefaultTCPFullConeListenBindsSourceAddress(t *testing.T) {
+	listener, err := defaultTCPFullConeListen(context.Background(), TCPFullConeListenRequest{
+		Source: netip.MustParseAddrPort("127.0.0.1:0"),
+		Reuse:  true,
+	})
+	if err != nil {
+		t.Fatalf("defaultTCPFullConeListen returned error: %v", err)
+	}
+	defer listener.Close()
+
+	addr := listener.Addr().(*net.TCPAddr)
+	if !addr.IP.IsLoopback() || addr.Port == 0 {
+		t.Fatalf("listener addr = %s, want allocated loopback port", listener.Addr())
+	}
+}
+
+func TestCheckTCPFullConeUsesDefaultListener(t *testing.T) {
+	got, err := CheckTCPFullCone(context.Background(), TCPFullConeOptions{
+		SourceAddr: netip.MustParseAddr("127.0.0.1"),
+		SourcePort: 0,
+		GetMapping: func(ctx context.Context, request TCPFullConeMappingRequest) (STUNTestResult, io.Closer, error) {
+			if !request.Source.Addr().IsLoopback() || request.Source.Port() == 0 {
+				t.Fatalf("mapping source = %s, want allocated loopback port", request.Source)
+			}
+			return STUNTestResult{Source: request.Source, Mapped: request.Source}, noopCloser{}, nil
+		},
+	})
+	if err != nil {
+		t.Fatalf("CheckTCPFullCone returned error: %v", err)
+	}
+	if got != tcpFullConeOpenInternet {
+		t.Fatalf("CheckTCPFullCone = %d, want open internet", got)
+	}
+}
+
 func TestCheckUDPNATTypeMatchesPythonDecisionTree(t *testing.T) {
 	source := netip.MustParseAddrPort("192.0.2.10:40000")
 	mapped := netip.MustParseAddrPort("198.51.100.10:50000")
