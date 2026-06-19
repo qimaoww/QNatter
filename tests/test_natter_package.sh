@@ -137,6 +137,7 @@ assert_contains natter/files/natter-common.sh '\[ "\$forward_method" != "auto" \
 assert_contains natter/files/natter.init 'NATTER_STATUS_FILE'
 assert_contains natter/files/natter.init 'config_get runtime "\$section" runtime "go"'
 assert_contains natter/files/natter.init 'NATTER_RUNTIME="\$runtime"'
+assert_not_contains natter/files/natter.init 'PROG="/usr/bin/natter.py"'
 assert_contains natter/files/natter.init 'qbittorrent_target_ip'
 assert_contains natter/files/natter-run 'NATTER_PY_BIN:-/usr/bin/Natter'
 assert_contains natter/files/natter-run 'NATTER_RUNTIME'
