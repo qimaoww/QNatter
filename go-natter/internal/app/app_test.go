@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -32,7 +34,9 @@ func TestRunCheckParsesExistingOpenWrtArguments(t *testing.T) {
 		t.Fatalf("WriteFile returned error: %v", err)
 	}
 
-	code := Run([]string{
+	var got config.Config
+	engineCalled := false
+	code := runWithContext(context.Background(), []string{
 		"--check",
 		"-k", "15",
 		"-s", "turn.cloud-rtc.com:80",
@@ -42,21 +46,44 @@ func TestRunCheckParsesExistingOpenWrtArguments(t *testing.T) {
 		"-t", "0.0.0.0",
 		"-p", "0",
 		"-e", notifyPath,
-	}, &stdout, &bytes.Buffer{})
+	}, &stdout, &bytes.Buffer{}, func(context.Context, config.Config) error {
+		engineCalled = true
+		return nil
+	}, func(_ context.Context, cfg config.Config, out io.Writer, _ io.Writer) error {
+		got = cfg
+		fmt.Fprintln(out, "> NatterCheck Go")
+		return nil
+	})
 
 	if code != 0 {
 		t.Fatalf("Run returned code %d, want 0", code)
 	}
-	out := stdout.String()
-	for _, want := range []string{
-		"check: ok",
-		"bind=pppoe-wan_cmcc:0",
-		"stun=turn.cloud-rtc.com:80",
-		"method=none",
-	} {
-		if !strings.Contains(out, want) {
-			t.Fatalf("check output = %q, missing %q", out, want)
-		}
+	if engineCalled {
+		t.Fatal("--check started the mapping engine")
+	}
+	if got.BindValue != "pppoe-wan_cmcc" || got.BindPort != 0 || got.ForwardMethod != "none" {
+		t.Fatalf("checker config = %+v", got)
+	}
+	if len(got.STUNServers) != 1 || got.STUNServers[0].Host != "turn.cloud-rtc.com" || got.STUNServers[0].Port != 80 {
+		t.Fatalf("checker STUN servers = %+v", got.STUNServers)
+	}
+	if !strings.Contains(stdout.String(), "NatterCheck Go") {
+		t.Fatalf("check output = %q, want checker output", stdout.String())
+	}
+}
+
+func TestRunCheckDefaultDoesNotReportFakeSuccess(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	code := Run([]string{"--check"}, &stdout, &stderr)
+
+	if code == 0 {
+		t.Fatal("Run returned success for unimplemented Go check")
+	}
+	if strings.Contains(stdout.String(), "check: ok") {
+		t.Fatalf("stdout = %q, must not report fake check success", stdout.String())
+	}
+	if !strings.Contains(stderr.String(), "not implemented") {
+		t.Fatalf("stderr = %q, want not implemented message", stderr.String())
 	}
 }
 

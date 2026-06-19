@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"strings"
 
+	"natter-openwrt/go-natter/internal/check"
 	"natter-openwrt/go-natter/internal/config"
 	"natter-openwrt/go-natter/internal/engine"
 	"natter-openwrt/go-natter/internal/forward"
@@ -17,6 +17,9 @@ import (
 )
 
 const Version = "2.2.1-go"
+
+type EngineRunner func(context.Context, config.Config) error
+type CheckRunner func(context.Context, config.Config, io.Writer, io.Writer) error
 
 func Run(args []string, stdout io.Writer, stderr io.Writer) int {
 	return RunContext(context.Background(), args, stdout, stderr)
@@ -32,7 +35,11 @@ func RunWith(args []string, stdout io.Writer, stderr io.Writer, run func(config.
 	})
 }
 
-func RunWithContext(ctx context.Context, args []string, stdout io.Writer, stderr io.Writer, run func(context.Context, config.Config) error) int {
+func RunWithContext(ctx context.Context, args []string, stdout io.Writer, stderr io.Writer, run EngineRunner) int {
+	return runWithContext(ctx, args, stdout, stderr, run, check.Run)
+}
+
+func runWithContext(ctx context.Context, args []string, stdout io.Writer, stderr io.Writer, run EngineRunner, checkRun CheckRunner) int {
 	for _, arg := range args {
 		if arg == "--version" || arg == "-V" {
 			fmt.Fprintf(stdout, "Natter Go %s\n", Version)
@@ -47,10 +54,10 @@ func RunWithContext(ctx context.Context, args []string, stdout io.Writer, stderr
 	}
 
 	if cfg.Check {
-		fmt.Fprintln(stdout, "check: ok")
-		fmt.Fprintf(stdout, "bind=%s:%d\n", cfg.BindValue, cfg.BindPort)
-		fmt.Fprintf(stdout, "stun=%s\n", formatSTUNServers(cfg.STUNServers))
-		fmt.Fprintf(stdout, "method=%s\n", cfg.ForwardMethod)
+		if err := checkRun(ctx, cfg, stdout, stderr); err != nil {
+			fmt.Fprintf(stderr, "natter: %v\n", err)
+			return 1
+		}
 		return 0
 	}
 
@@ -62,14 +69,6 @@ func RunWithContext(ctx context.Context, args []string, stdout io.Writer, stderr
 		return 1
 	}
 	return 0
-}
-
-func formatSTUNServers(servers []config.STUNServer) string {
-	items := make([]string, 0, len(servers))
-	for _, server := range servers {
-		items = append(items, fmt.Sprintf("%s:%d", server.Host, server.Port))
-	}
-	return strings.Join(items, ",")
 }
 
 func runEngine(ctx context.Context, cfg config.Config) error {
