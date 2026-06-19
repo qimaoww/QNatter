@@ -42,7 +42,7 @@ endef
 define Package/natter/install
 	$(INSTALL_DIR) $(1)/usr/bin
 	$(INSTALL_BIN) $(PKG_BUILD_DIR)/natter.py $(1)/usr/bin/natter.py
-	$(LN) python3 $(1)/usr/bin/Natter
+	$(INSTALL_BIN) ./files/Natter $(1)/usr/bin/Natter
 
 	$(INSTALL_DIR) $(1)/usr/share/natter
 	$(INSTALL_BIN) ./files/natter-common.sh $(1)/usr/share/natter/natter-common.sh

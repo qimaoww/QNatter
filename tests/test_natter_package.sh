@@ -46,6 +46,7 @@ assert_file natter/files/natter-common.sh
 assert_file natter/files/natter-qbittorrent.sh
 assert_file natter/files/natter-notify
 assert_file natter/files/natter-run
+assert_file natter/files/Natter
 assert_file natter/files/natter.config
 
 assert_file luci-app-natter/Makefile
@@ -126,7 +127,8 @@ assert_contains natter/files/natter-common.sh 'natter_forward_method_or_auto'
 assert_contains natter/files/natter-common.sh '\[ "\$forward_method" != "auto" \]'
 assert_contains natter/files/natter.init 'NATTER_STATUS_FILE'
 assert_contains natter/files/natter.init 'qbittorrent_target_ip'
-assert_contains natter/files/natter-run 'exec /usr/bin/Natter /usr/bin/natter.py'
+assert_contains natter/files/natter-run 'exec /usr/bin/Natter "\$@"'
+assert_contains natter/files/Natter 'exec -a Natter /usr/bin/python3 /usr/bin/natter.py'
 assert_contains natter/files/natter-qbittorrent.sh 'natter_qb_select_listen_port'
 assert_contains natter/files/natter-notify 'api/v2/auth/login'
 assert_contains natter/files/natter-notify 'api/v2/app/setPreferences'
@@ -139,7 +141,7 @@ assert_not_contains natter/Makefile '\+iptables-nft'
 assert_not_contains natter/Makefile '\+socat'
 assert_not_contains natter/Makefile '\+gost'
 assert_not_contains natter/Makefile '\+python3-light'
-assert_contains natter/Makefile '\$\(LN\) python3 \$\(1\)/usr/bin/Natter'
+assert_contains natter/Makefile '\$\(INSTALL_BIN\) ./files/Natter \$\(1\)/usr/bin/Natter'
 assert_contains luci-app-natter/Makefile 'LUCI_DEPENDS:=.*\+natter'
 assert_contains luci-app-natter/Makefile 'LUCI_DEPENDS:=.*\+luci-base'
 assert_contains luci-app-natter/Makefile 'LUCI_DEPENDS:=.*\+rpcd'
@@ -198,6 +200,7 @@ sh -n "$ROOT/natter/files/natter-common.sh"
 sh -n "$ROOT/natter/files/natter-qbittorrent.sh"
 sh -n "$ROOT/natter/files/natter-notify"
 sh -n "$ROOT/natter/files/natter-run"
+sh -n "$ROOT/natter/files/Natter"
 sh -n "$ROOT/natter/files/natter.init"
 sh -n "$ROOT/luci-app-natter/root/usr/libexec/natter-status"
 sh -n "$ROOT/luci-app-natter/root/usr/libexec/natter-log"
@@ -209,6 +212,7 @@ dummy_natter="$tmp/natter.py"
 archive="$tmp/natter-openwrt-direct.tar.gz"
 printf '#!/usr/bin/env python3\n' > "$dummy_natter"
 chmod 0755 "$dummy_natter"
+tar -tvzf "$archive" | awk '$6 == "usr/bin/Natter" { print $1 }' | grep -q '^-rwxr-xr-x$' || \
 if tar -tzf "$archive" | grep -Eq '^\./?$'; then
 fi
 tar -tvzf "$archive" | awk '$6 ~ /^(etc|usr|www)\/?$/ { print $1 }' | grep -q '^drwxr-xr-x' || \
