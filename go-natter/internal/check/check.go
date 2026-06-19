@@ -4,6 +4,11 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"net"
+	"net/netip"
+	"os"
+	"runtime"
+	"strings"
 
 	"natter-openwrt/go-natter/internal/config"
 )
@@ -27,8 +32,17 @@ type Result struct {
 type Probe func(context.Context, config.Config) (Result, error)
 
 type Runner struct {
-	TCP Probe
-	UDP Probe
+	Docker DockerEnv
+	TCP    Probe
+	UDP    Probe
+}
+
+type DockerEnv struct {
+	GOOS          string
+	DockerEnvPath string
+	Eth0MACPath   string
+	Hostname      func() (string, error)
+	LookupIPv4    func(string) (string, error)
 }
 
 func Run(ctx context.Context, cfg config.Config, stdout io.Writer, stderr io.Writer) error {
@@ -39,6 +53,9 @@ func Run(ctx context.Context, cfg config.Config, stdout io.Writer, stderr io.Wri
 }
 
 func (r Runner) Run(ctx context.Context, cfg config.Config, stdout io.Writer) error {
+	if err := CheckDockerNetwork(r.Docker); err != nil {
+		return err
+	}
 	fmt.Fprintf(stdout, "> NatterCheck v%s\n\n", Version)
 	r.printInfo(ctx, cfg, stdout, "Checking TCP NAT...", r.TCP)
 	r.printInfo(ctx, cfg, stdout, "Checking UDP NAT...", r.UDP)
@@ -75,4 +92,80 @@ func unimplementedTCP(context.Context, config.Config) (Result, error) {
 
 func unimplementedUDP(context.Context, config.Config) (Result, error) {
 	return Result{}, fmt.Errorf("Go UDP NAT check is not implemented yet")
+}
+
+func CheckDockerNetwork(env DockerEnv) error {
+	env = env.withDefaults()
+	if env.GOOS != "linux" {
+		return nil
+	}
+	if !fileExists(env.DockerEnvPath) || !fileExists(env.Eth0MACPath) {
+		return nil
+	}
+	rawMAC, err := os.ReadFile(env.Eth0MACPath)
+	if err != nil {
+		return nil
+	}
+	hostname, err := env.Hostname()
+	if err != nil {
+		return nil
+	}
+	ip, err := env.LookupIPv4(hostname)
+	if err != nil {
+		return nil
+	}
+	dockerMAC, err := dockerMACForIPv4(ip)
+	if err != nil {
+		return nil
+	}
+	if strings.EqualFold(strings.TrimSpace(string(rawMAC)), dockerMAC) {
+		return fmt.Errorf("Docker's `--net=host` option is required")
+	}
+	return nil
+}
+
+func (env DockerEnv) withDefaults() DockerEnv {
+	if env.GOOS == "" {
+		env.GOOS = runtime.GOOS
+	}
+	if env.DockerEnvPath == "" {
+		env.DockerEnvPath = "/.dockerenv"
+	}
+	if env.Eth0MACPath == "" {
+		env.Eth0MACPath = "/sys/class/net/eth0/address"
+	}
+	if env.Hostname == nil {
+		env.Hostname = os.Hostname
+	}
+	if env.LookupIPv4 == nil {
+		env.LookupIPv4 = lookupIPv4
+	}
+	return env
+}
+
+func fileExists(path string) bool {
+	info, err := os.Stat(path)
+	return err == nil && !info.IsDir()
+}
+
+func lookupIPv4(host string) (string, error) {
+	ips, err := net.LookupIP(host)
+	if err != nil {
+		return "", err
+	}
+	for _, ip := range ips {
+		if v4 := ip.To4(); v4 != nil {
+			return net.IP(v4).String(), nil
+		}
+	}
+	return "", fmt.Errorf("no IPv4 address for %s", host)
+}
+
+func dockerMACForIPv4(ip string) (string, error) {
+	addr, err := netip.ParseAddr(ip)
+	if err != nil || !addr.Is4() {
+		return "", fmt.Errorf("invalid IPv4 address: %s", ip)
+	}
+	raw := addr.As4()
+	return fmt.Sprintf("02:42:%02x:%02x:%02x:%02x", raw[0], raw[1], raw[2], raw[3]), nil
 }

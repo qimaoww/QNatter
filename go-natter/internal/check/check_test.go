@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -13,6 +15,7 @@ import (
 func TestRunPrintsNatterCheckReport(t *testing.T) {
 	var stdout bytes.Buffer
 	runner := Runner{
+		Docker: DockerEnv{GOOS: "darwin"},
 		TCP: func(context.Context, config.Config) (Result, error) {
 			return Result{Status: OK, Info: "NAT Type: Full Cone"}, nil
 		},
@@ -43,6 +46,7 @@ func TestRunPrintsNatterCheckReport(t *testing.T) {
 func TestRunConvertsCheckErrorToFailLine(t *testing.T) {
 	var stdout bytes.Buffer
 	runner := Runner{
+		Docker: DockerEnv{GOOS: "darwin"},
 		TCP: func(context.Context, config.Config) (Result, error) {
 			return Result{}, errors.New("tcp probe failed")
 		},
@@ -85,5 +89,85 @@ func TestDefaultRunReportsUnimplementedChecksWithoutFakeSuccess(t *testing.T) {
 	}
 	if stderr.Len() != 0 {
 		t.Fatalf("stderr = %q, want empty stderr", stderr.String())
+	}
+}
+
+func TestCheckDockerNetworkRejectsDockerBridgeNetwork(t *testing.T) {
+	root := t.TempDir()
+	dockerEnv := filepath.Join(root, ".dockerenv")
+	eth0MAC := filepath.Join(root, "eth0", "address")
+	if err := os.WriteFile(dockerEnv, nil, 0o644); err != nil {
+		t.Fatalf("WriteFile returned error: %v", err)
+	}
+	if err := os.MkdirAll(filepath.Dir(eth0MAC), 0o755); err != nil {
+		t.Fatalf("MkdirAll returned error: %v", err)
+	}
+	if err := os.WriteFile(eth0MAC, []byte("02:42:ac:11:00:02\n"), 0o644); err != nil {
+		t.Fatalf("WriteFile returned error: %v", err)
+	}
+
+	err := CheckDockerNetwork(DockerEnv{
+		GOOS:          "linux",
+		DockerEnvPath: dockerEnv,
+		Eth0MACPath:   eth0MAC,
+		Hostname:      func() (string, error) { return "container", nil },
+		LookupIPv4:    func(string) (string, error) { return "172.17.0.2", nil },
+	})
+	if err == nil {
+		t.Fatal("CheckDockerNetwork returned nil, want Docker host network error")
+	}
+	if !strings.Contains(err.Error(), "Docker's `--net=host` option is required") {
+		t.Fatalf("error = %v, want --net=host message", err)
+	}
+}
+
+func TestCheckDockerNetworkSkipsWhenNotDocker(t *testing.T) {
+	called := false
+	err := CheckDockerNetwork(DockerEnv{
+		GOOS:          "linux",
+		DockerEnvPath: filepath.Join(t.TempDir(), ".dockerenv"),
+		Hostname: func() (string, error) {
+			called = true
+			return "container", nil
+		},
+	})
+	if err != nil {
+		t.Fatalf("CheckDockerNetwork returned error: %v", err)
+	}
+	if called {
+		t.Fatal("CheckDockerNetwork resolved hostname outside Docker")
+	}
+}
+
+func TestRunnerStopsBeforeReportOnDockerBridgeNetwork(t *testing.T) {
+	root := t.TempDir()
+	dockerEnv := filepath.Join(root, ".dockerenv")
+	eth0MAC := filepath.Join(root, "eth0", "address")
+	if err := os.WriteFile(dockerEnv, nil, 0o644); err != nil {
+		t.Fatalf("WriteFile returned error: %v", err)
+	}
+	if err := os.MkdirAll(filepath.Dir(eth0MAC), 0o755); err != nil {
+		t.Fatalf("MkdirAll returned error: %v", err)
+	}
+	if err := os.WriteFile(eth0MAC, []byte("02:42:ac:11:00:02\n"), 0o644); err != nil {
+		t.Fatalf("WriteFile returned error: %v", err)
+	}
+
+	var stdout bytes.Buffer
+	runner := Runner{
+		Docker: DockerEnv{
+			GOOS:          "linux",
+			DockerEnvPath: dockerEnv,
+			Eth0MACPath:   eth0MAC,
+			Hostname:      func() (string, error) { return "container", nil },
+			LookupIPv4:    func(string) (string, error) { return "172.17.0.2", nil },
+		},
+	}
+	err := runner.Run(context.Background(), config.Config{}, &stdout)
+	if err == nil {
+		t.Fatal("Run returned nil, want Docker host network error")
+	}
+	if stdout.Len() != 0 {
+		t.Fatalf("stdout = %q, want no report before Docker error", stdout.String())
 	}
 }
