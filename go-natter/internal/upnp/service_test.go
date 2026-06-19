@@ -1,7 +1,11 @@
 package upnp
 
 import (
+	"context"
+	"fmt"
 	"io"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 )
@@ -119,5 +123,75 @@ func TestAddPortMappingRequestRejectsUnsupportedService(t *testing.T) {
 		InternalClient: "10.10.10.9",
 	}); err == nil {
 		t.Fatalf("NewAddPortMappingRequest returned nil error")
+	}
+}
+
+func TestAddPortMappingSendsSOAPRequest(t *testing.T) {
+	var gotSOAPAction string
+	var gotBody string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotSOAPAction = r.Header.Get("SOAPAction")
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			t.Fatalf("ReadAll returned error: %v", err)
+		}
+		gotBody = string(body)
+		fmt.Fprint(w, `<?xml version="1.0"?><s:Envelope><s:Body></s:Body></s:Envelope>`)
+	}))
+	defer server.Close()
+
+	service := Service{
+		ServiceType: "urn:schemas-upnp-org:service:WANIPConnection:1",
+		ServiceID:   "urn:upnp-org:serviceId:WANIPConn1",
+		ControlURL:  server.URL + "/upnp/control/WANIPConn1",
+	}
+
+	err := service.AddPortMapping(context.Background(), server.Client(), PortMapping{
+		ExternalPort:   62000,
+		Protocol:       "tcp",
+		InternalPort:   51413,
+		InternalClient: "10.10.10.9",
+		LeaseDuration:  45,
+	})
+	if err != nil {
+		t.Fatalf("AddPortMapping returned error: %v", err)
+	}
+	if gotSOAPAction != `"urn:schemas-upnp-org:service:WANIPConnection:1#AddPortMapping"` {
+		t.Fatalf("SOAPAction = %q", gotSOAPAction)
+	}
+	if !strings.Contains(gotBody, "<NewProtocol>TCP</NewProtocol>") {
+		t.Fatalf("body missing TCP protocol:\n%s", gotBody)
+	}
+	if !strings.Contains(gotBody, "<NewPortMappingDescription>Natter</NewPortMappingDescription>") {
+		t.Fatalf("body missing default description:\n%s", gotBody)
+	}
+}
+
+func TestAddPortMappingReturnsIGDErrors(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprint(w, `<s:Envelope><s:Body><s:Fault><detail><UPnPError>
+<errorCode>718</errorCode>
+<errorDescription>ConflictInMappingEntry</errorDescription>
+</UPnPError></detail></s:Fault></s:Body></s:Envelope>`)
+	}))
+	defer server.Close()
+
+	service := Service{
+		ServiceType: "urn:schemas-upnp-org:service:WANIPConnection:1",
+		ServiceID:   "urn:upnp-org:serviceId:WANIPConn1",
+		ControlURL:  server.URL + "/upnp/control/WANIPConn1",
+	}
+
+	err := service.AddPortMapping(context.Background(), server.Client(), PortMapping{
+		ExternalPort:   62000,
+		Protocol:       "tcp",
+		InternalPort:   51413,
+		InternalClient: "10.10.10.9",
+	})
+	if err == nil {
+		t.Fatalf("AddPortMapping returned nil error")
+	}
+	if !strings.Contains(err.Error(), "718") || !strings.Contains(err.Error(), "ConflictInMappingEntry") {
+		t.Fatalf("error = %v", err)
 	}
 }

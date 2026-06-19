@@ -2,6 +2,7 @@ package upnp
 
 import (
 	"bytes"
+	"context"
 	"encoding/xml"
 	"fmt"
 	"html"
@@ -113,6 +114,33 @@ func (s Service) NewAddPortMappingRequest(mapping PortMapping) (*http.Request, e
 	return req, nil
 }
 
+func (s Service) AddPortMapping(ctx context.Context, client *http.Client, mapping PortMapping) error {
+	if client == nil {
+		client = http.DefaultClient
+	}
+	req, err := s.NewAddPortMappingRequest(mapping)
+	if err != nil {
+		return err
+	}
+	req = req.WithContext(ctx)
+	resp, err := client.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return err
+	}
+	if code, description := parseUPnPError(body); code != "" || description != "" {
+		return fmt.Errorf("upnp AddPortMapping failed: [%s] %s", code, description)
+	}
+	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
+		return fmt.Errorf("upnp AddPortMapping returned HTTP %d", resp.StatusCode)
+	}
+	return nil
+}
+
 func resolveURL(value string, baseURL string) string {
 	if value == "" {
 		return ""
@@ -130,6 +158,42 @@ func resolveURL(value string, baseURL string) string {
 		return value
 	}
 	return base.ResolveReference(ref).String()
+}
+
+func parseUPnPError(body []byte) (string, string) {
+	decoder := xml.NewDecoder(bytes.NewReader(body))
+	var current string
+	var code string
+	var description string
+	for {
+		token, err := decoder.Token()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return "", ""
+		}
+		switch item := token.(type) {
+		case xml.StartElement:
+			current = item.Name.Local
+		case xml.CharData:
+			value := strings.TrimSpace(string(item))
+			if value == "" {
+				continue
+			}
+			switch current {
+			case "errorCode":
+				code = value
+			case "errorDescription":
+				description = value
+			}
+		case xml.EndElement:
+			if current == item.Name.Local {
+				current = ""
+			}
+		}
+	}
+	return code, description
 }
 
 func addPortMappingBody(serviceType string, mapping PortMapping, protocol string, description string) string {
