@@ -179,6 +179,7 @@ type TCPFullConeOptions struct {
 	KeepAliveServer netip.AddrPort
 	STUNServers     []netip.AddrPort
 	TxID            func() ([16]byte, error)
+	PortChecker     portcheck.Checker
 	Listen          TCPFullConeListen
 	GetMapping      TCPFullConeMapping
 	CheckPort       TCPFullConePortCheck
@@ -397,7 +398,13 @@ func CheckTCPFullCone(ctx context.Context, options TCPFullConeOptions) (int, err
 
 	checkPort := options.CheckPort
 	if checkPort == nil {
-		return tcpFullConeUnknown, nil
+		checker := options.PortChecker
+		if checker.Interface == "" {
+			checker.Interface = options.Interface
+		}
+		checkPort = func(ctx context.Context, request TCPFullConePortCheckRequest) (portcheck.Result, error) {
+			return checker.TestWAN(ctx, request.Port, request.SourceAddr), nil
+		}
 	}
 	result, err := checkPort(ctx, TCPFullConePortCheckRequest{
 		Port:       int(mapping.Mapped.Port()),

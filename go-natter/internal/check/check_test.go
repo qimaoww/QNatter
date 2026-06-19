@@ -469,6 +469,47 @@ func TestCheckTCPFullConeUsesDefaultMapping(t *testing.T) {
 	}
 }
 
+func TestCheckTCPFullConeUsesDefaultPortChecker(t *testing.T) {
+	source := netip.MustParseAddr("192.0.2.10")
+	mapped := netip.MustParseAddrPort("198.51.100.10:50000")
+	var gotPort int
+	var gotSource netip.Addr
+
+	got, err := CheckTCPFullCone(context.Background(), TCPFullConeOptions{
+		SourceAddr: source,
+		SourcePort: 40000,
+		Listen: func(context.Context, TCPFullConeListenRequest) (io.Closer, error) {
+			return noopCloser{}, nil
+		},
+		GetMapping: func(context.Context, TCPFullConeMappingRequest) (STUNTestResult, io.Closer, error) {
+			return STUNTestResult{
+				Source: netip.MustParseAddrPort("192.0.2.10:40000"),
+				Mapped: mapped,
+			}, noopCloser{}, nil
+		},
+		PortChecker: portcheck.Checker{
+			IfconfigProbe: func(ctx context.Context, port int, source netip.Addr) (portcheck.Result, error) {
+				gotPort = port
+				gotSource = source
+				return portcheck.Open, nil
+			},
+			TransmissionProbe: fixedPortProbe(portcheck.Unknown, nil),
+		},
+	})
+	if err != nil {
+		t.Fatalf("CheckTCPFullCone returned error: %v", err)
+	}
+	if got != tcpFullConeReachable {
+		t.Fatalf("CheckTCPFullCone = %d, want reachable", got)
+	}
+	if gotPort != int(mapped.Port()) {
+		t.Fatalf("port checker port = %d, want %d", gotPort, mapped.Port())
+	}
+	if gotSource != source {
+		t.Fatalf("port checker source = %s, want %s", gotSource, source)
+	}
+}
+
 func TestCheckUDPNATTypeMatchesPythonDecisionTree(t *testing.T) {
 	source := netip.MustParseAddrPort("192.0.2.10:40000")
 	mapped := netip.MustParseAddrPort("198.51.100.10:50000")
@@ -1056,6 +1097,12 @@ func fakeTCPProbe(responses map[netip.AddrPort]tcpProbeResponse, calls *[]TCPPro
 			return STUNTestResult{}, response.err
 		}
 		return response.result, nil
+	}
+}
+
+func fixedPortProbe(result portcheck.Result, err error) portcheck.Probe {
+	return func(context.Context, int, netip.Addr) (portcheck.Result, error) {
+		return result, err
 	}
 }
 
