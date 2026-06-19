@@ -1,0 +1,7 @@
+#!/bin/sh
+
+[ -e /etc/config/natter ] && exit 0
+[ -r /etc/config/natter.default ] || exit 0
+
+cp /etc/config/natter.default /etc/config/natter
+exit 0

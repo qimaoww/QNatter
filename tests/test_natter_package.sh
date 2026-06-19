@@ -47,6 +47,7 @@ assert_file natter/files/natter-qbittorrent.sh
 assert_file natter/files/natter-notify
 assert_file natter/files/natter-run
 assert_file natter/files/natter.config
+assert_file natter/files/natter.uci-default
 
 assert_file luci-app-natter/Makefile
 assert_file luci-app-natter/htdocs/luci-static/resources/view/natter/instances.js
@@ -162,6 +163,8 @@ assert_contains luci-app-natter/Makefile 'LUCI_DEPENDS:=.*\+rpcd'
 assert_contains luci-app-natter/Makefile 'LUCI_DEPENDS:=.*\+uhttpd'
 assert_contains luci-app-natter/Makefile 'LUCI_DEPENDS:=.*\+uhttpd-mod-ubus'
 assert_contains luci-app-natter/Makefile 'LUCI_DEPENDS:=.*\+uci'
+assert_contains natter/files/natter.uci-default '\[ -e /etc/config/natter \] && exit 0'
+assert_contains natter/files/natter.uci-default 'cp /etc/config/natter.default /etc/config/natter'
 
 assert_po_translation 'Global Settings' '全局设置'
 assert_po_translation 'Expose ports behind full-cone NAT with optional forwarding and qBittorrent port updates.' '通过全锥形 NAT 暴露端口，并可选转发和更新 qBittorrent 监听端口。'
@@ -246,6 +249,7 @@ fi
 if tar -tzf "$archive" | grep -qx 'usr/share/natter/natter-python-wrapper.py'; then
 fi
 tar -tvzf "$archive" | awk '$6 == "usr/bin/natter-go" { print $1 }' | grep -q '^-rwxr-xr-x$' || \
+tar -tvzf "$archive" | awk '$6 == "etc/uci-defaults/99-natter" { print $1 }' | grep -q '^-rwxr-xr-x$' || \
 if tar -tzf "$archive" | grep -Eq '^\./?$'; then
 fi
 tar -tvzf "$archive" | awk '$6 ~ /^(etc|usr|www)\/?$/ { print $1 }' | grep -q '^drwxr-xr-x' || \
