@@ -5,6 +5,6 @@ shift
 
 mkdir -p "$(dirname "$log_file")"
 if [ "${NATTER_RUNTIME:-go}" = "go" ]; then
-	exec /usr/bin/natter-go "$@" >> "$log_file" 2>&1
+	exec "${NATTER_GO_BIN:-/usr/bin/natter-go}" "$@" >> "$log_file" 2>&1
 fi
-exec /usr/bin/Natter "$@" >> "$log_file" 2>&1
+exec "${NATTER_PY_BIN:-/usr/bin/Natter}" "$@" >> "$log_file" 2>&1

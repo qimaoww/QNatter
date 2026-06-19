@@ -135,10 +135,10 @@ assert_contains natter/files/natter.init 'NATTER_STATUS_FILE'
 assert_contains natter/files/natter.init 'config_get runtime "\$section" runtime "go"'
 assert_contains natter/files/natter.init 'NATTER_RUNTIME="\$runtime"'
 assert_contains natter/files/natter.init 'qbittorrent_target_ip'
-assert_contains natter/files/natter-run 'exec /usr/bin/Natter "\$@"'
+assert_contains natter/files/natter-run 'NATTER_PY_BIN:-/usr/bin/Natter'
 assert_contains natter/files/natter-run 'NATTER_RUNTIME'
 assert_contains natter/files/natter-run 'NATTER_RUNTIME:-go'
-assert_contains natter/files/natter-run 'exec /usr/bin/natter-go "\$@"'
+assert_contains natter/files/natter-run 'NATTER_GO_BIN:-/usr/bin/natter-go'
 assert_contains natter/files/Natter 'exec -a Natter /usr/bin/python3 /usr/share/natter/natter-python-wrapper.py'
 assert_contains natter/files/natter-python-wrapper.py 'PR_SET_NAME = 15'
 assert_contains natter/files/natter-python-wrapper.py '/proc/self/comm'
@@ -223,6 +223,20 @@ sh -n "$ROOT/natter/files/natter.init"
 sh -n "$ROOT/luci-app-natter/root/usr/libexec/natter-status"
 sh -n "$ROOT/luci-app-natter/root/usr/libexec/natter-log"
 sh -n "$ROOT/luci-app-natter/root/usr/libexec/rpcd/luci.natter"
+
+(
+	printf '#!/bin/sh\necho "go:$*"\n' > "$tmp/natter-go-bin"
+	printf '#!/bin/sh\necho "python:$*"\n' > "$tmp/Natter-bin"
+	chmod 0755 "$tmp/natter-go-bin" "$tmp/Natter-bin"
+
+	NATTER_GO_BIN="$tmp/natter-go-bin" NATTER_PY_BIN="$tmp/Natter-bin" \
+		"$ROOT/natter/files/natter-run" "$tmp/default-runtime.log" alpha beta
+	grep -qx 'go:alpha beta' "$tmp/default-runtime.log" || fail "natter-run default runtime must execute natter-go"
+
+	NATTER_RUNTIME=python NATTER_GO_BIN="$tmp/natter-go-bin" NATTER_PY_BIN="$tmp/Natter-bin" \
+		"$ROOT/natter/files/natter-run" "$tmp/python-runtime.log" gamma
+	grep -qx 'python:gamma' "$tmp/python-runtime.log" || fail "natter-run python runtime must execute Python wrapper"
+)
 
 (cd "$ROOT/go-natter" && go test ./...)
 
