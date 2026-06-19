@@ -6,6 +6,7 @@ import (
 	"os/exec"
 	"regexp"
 	"strconv"
+	"time"
 )
 
 type ExternalProcess interface {
@@ -66,11 +67,13 @@ func (p *osProcess) Exited() bool {
 }
 
 type SocatForwarder struct {
-	Starter     ProcessStarter
-	Checker     VersionChecker
-	Process     ExternalProcess
-	UDPTimeout  int
-	MaxChildren int
+	Starter      ProcessStarter
+	Checker      VersionChecker
+	Process      ExternalProcess
+	UDPTimeout   int
+	MaxChildren  int
+	StartupDelay time.Duration
+	Sleep        func(time.Duration)
 }
 
 func (f *SocatForwarder) Start(options StartOptions) error {
@@ -103,10 +106,12 @@ func (f *SocatForwarder) Stop() error {
 }
 
 type GostForwarder struct {
-	Starter    ProcessStarter
-	Checker    VersionChecker
-	Process    ExternalProcess
-	UDPTimeout int
+	Starter      ProcessStarter
+	Checker      VersionChecker
+	Process      ExternalProcess
+	UDPTimeout   int
+	StartupDelay time.Duration
+	Sleep        func(time.Duration)
 }
 
 func (f *GostForwarder) Start(options StartOptions) error {
@@ -136,7 +141,7 @@ func (f *SocatForwarder) start(name string, args ...string) error {
 	if err := checkExternal(f.Checker, name); err != nil {
 		return err
 	}
-	process, err := startExternal(f.Starter, name, args...)
+	process, err := startExternal(f.Starter, f.StartupDelay, f.Sleep, name, args...)
 	if err != nil {
 		return err
 	}
@@ -148,7 +153,7 @@ func (f *GostForwarder) start(name string, args ...string) error {
 	if err := checkExternal(f.Checker, name); err != nil {
 		return err
 	}
-	process, err := startExternal(f.Starter, name, args...)
+	process, err := startExternal(f.Starter, f.StartupDelay, f.Sleep, name, args...)
 	if err != nil {
 		return err
 	}
@@ -156,7 +161,7 @@ func (f *GostForwarder) start(name string, args ...string) error {
 	return nil
 }
 
-func startExternal(starter ProcessStarter, name string, args ...string) (ExternalProcess, error) {
+func startExternal(starter ProcessStarter, startupDelay time.Duration, sleep func(time.Duration), name string, args ...string) (ExternalProcess, error) {
 	if starter == nil {
 		starter = ExecStarter{}
 	}
@@ -164,12 +169,24 @@ func startExternal(starter ProcessStarter, name string, args ...string) (Externa
 	if err != nil {
 		return nil, err
 	}
+	delay := defaultStartupDelay(startupDelay)
+	if sleep == nil {
+		sleep = time.Sleep
+	}
+	sleep(delay)
 	if process.Exited() {
 		_ = process.Kill()
 		_ = process.Wait()
 		return nil, fmt.Errorf("%s exited too quickly", name)
 	}
 	return process, nil
+}
+
+func defaultStartupDelay(delay time.Duration) time.Duration {
+	if delay > 0 {
+		return delay
+	}
+	return time.Second
 }
 
 func checkExternal(checker VersionChecker, name string) error {

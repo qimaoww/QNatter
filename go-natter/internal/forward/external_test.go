@@ -5,11 +5,12 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestSocatForwarderBuildsTCPAndUDPCommands(t *testing.T) {
 	starter := &fakeProcessStarter{}
-	f := &SocatForwarder{Starter: starter, Checker: &fakeVersionChecker{}}
+	f := &SocatForwarder{Starter: starter, Checker: &fakeVersionChecker{}, Sleep: noStartupSleep}
 
 	if err := f.Start(StartOptions{
 		IP:         "10.10.10.3",
@@ -44,7 +45,7 @@ func TestSocatForwarderBuildsTCPAndUDPCommands(t *testing.T) {
 
 func TestGostForwarderBuildsTCPAndUDPCommands(t *testing.T) {
 	starter := &fakeProcessStarter{}
-	f := &GostForwarder{Starter: starter, Checker: &fakeVersionChecker{}}
+	f := &GostForwarder{Starter: starter, Checker: &fakeVersionChecker{}, Sleep: noStartupSleep}
 
 	if err := f.Start(StartOptions{
 		Port:       41000,
@@ -80,7 +81,7 @@ func TestExternalForwarderStopsProcess(t *testing.T) {
 	starter := &fakeProcessStarter{}
 	process := &fakeProcess{}
 	starter.next = process
-	f := &SocatForwarder{Starter: starter, Checker: &fakeVersionChecker{}}
+	f := &SocatForwarder{Starter: starter, Checker: &fakeVersionChecker{}, Sleep: noStartupSleep}
 
 	if err := f.Start(StartOptions{Port: 41000, TargetIP: "10.10.10.10", TargetPort: 62000}); err != nil {
 		t.Fatalf("Start returned error: %v", err)
@@ -94,7 +95,7 @@ func TestExternalForwarderStopsProcess(t *testing.T) {
 }
 
 func TestExternalForwarderRejectsSameAddress(t *testing.T) {
-	f := &GostForwarder{Starter: &fakeProcessStarter{}, Checker: &fakeVersionChecker{}}
+	f := &GostForwarder{Starter: &fakeProcessStarter{}, Checker: &fakeVersionChecker{}, Sleep: noStartupSleep}
 
 	if err := f.Start(StartOptions{
 		IP:         "10.10.10.3",
@@ -127,6 +128,48 @@ func TestExternalForwarderChecksToolBeforeStart(t *testing.T) {
 	}
 	if len(starter.commands) != 0 {
 		t.Fatalf("starter commands = %#v, want none", starter.commands)
+	}
+}
+
+func TestExternalForwarderDetectsQuickExitAfterStartupDelay(t *testing.T) {
+	process := &fakeProcess{}
+	starter := &fakeProcessStarter{next: process}
+	var slept []time.Duration
+	f := &GostForwarder{
+		Starter:      starter,
+		Checker:      &fakeVersionChecker{},
+		StartupDelay: time.Second,
+		Sleep: func(delay time.Duration) {
+			slept = append(slept, delay)
+			process.exited = true
+		},
+	}
+
+	err := f.Start(StartOptions{
+		Port:       41000,
+		TargetIP:   "10.10.10.10",
+		TargetPort: 62000,
+	})
+	if err == nil {
+		t.Fatalf("Start returned nil error")
+	}
+	if !strings.Contains(err.Error(), "gost exited too quickly") {
+		t.Fatalf("error = %v", err)
+	}
+	if !reflect.DeepEqual(slept, []time.Duration{time.Second}) {
+		t.Fatalf("slept = %#v, want 1s", slept)
+	}
+	if !process.terminated || !process.waited {
+		t.Fatalf("process terminated=%v waited=%v, want cleanup after quick exit", process.terminated, process.waited)
+	}
+}
+
+func TestExternalForwarderDefaultStartupDelayMatchesPython(t *testing.T) {
+	if got := defaultStartupDelay(0); got != time.Second {
+		t.Fatalf("default delay = %s, want 1s", got)
+	}
+	if got := defaultStartupDelay(250 * time.Millisecond); got != 250*time.Millisecond {
+		t.Fatalf("custom delay = %s, want 250ms", got)
 	}
 }
 
@@ -193,6 +236,7 @@ func (s *fakeProcessStarter) Start(name string, args ...string) (ExternalProcess
 type fakeProcess struct {
 	terminated bool
 	waited     bool
+	exited     bool
 }
 
 func (p *fakeProcess) Terminate() error {
@@ -211,7 +255,7 @@ func (p *fakeProcess) Wait() error {
 }
 
 func (p *fakeProcess) Exited() bool {
-	return false
+	return p.exited
 }
 
 type fakeVersionChecker struct {
@@ -223,3 +267,5 @@ func (c *fakeVersionChecker) Check(command string) error {
 	c.commands = append(c.commands, command)
 	return c.err
 }
+
+func noStartupSleep(time.Duration) {}
