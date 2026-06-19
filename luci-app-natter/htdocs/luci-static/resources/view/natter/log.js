@@ -8,7 +8,7 @@ var callLog = rpc.declare({
 	object: 'luci.natter',
 	method: 'log',
 	params: [ 'instance', 'lines' ],
-	expect: { log: '' }
+	expect: { '': { log: '' } }
 });
 
 var callClearLog = rpc.declare({
@@ -21,7 +21,7 @@ var callClearLog = rpc.declare({
 var callStatus = rpc.declare({
 	object: 'luci.natter',
 	method: 'status',
-	expect: { instances: [] }
+	expect: { '': { instances: [] } }
 });
 
 function detectThemeClass() {

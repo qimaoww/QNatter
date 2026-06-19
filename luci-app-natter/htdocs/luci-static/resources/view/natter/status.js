@@ -6,7 +6,7 @@
 var callStatus = rpc.declare({
 	object: 'luci.natter',
 	method: 'status',
-	expect: { instances: [] }
+	expect: { '': { instances: [] } }
 });
 
 function detectThemeClass() {

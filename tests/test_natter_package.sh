@@ -91,7 +91,12 @@ assert_contains luci-app-natter/htdocs/luci-static/resources/view/natter/instanc
 assert_contains luci-app-natter/htdocs/luci-static/resources/view/natter/instances.js "hideInGrid\\(s\\.option\\(form\\.Value, 'notify_script'"
 assert_contains luci-app-natter/htdocs/luci-static/resources/view/natter/instances.js "hideInGrid\\(s\\.option\\(form\\.Flag, 'qbittorrent_enabled'"
 assert_contains luci-app-natter/htdocs/luci-static/resources/view/natter/status.js 'natter-theme-aurora'
+assert_contains luci-app-natter/htdocs/luci-static/resources/view/natter/status.js "expect: \\{ '': \\{ instances: \\[\\] \\} \\}"
+assert_contains luci-app-natter/htdocs/luci-static/resources/view/natter/status.js 'data\.instances'
 assert_contains luci-app-natter/htdocs/luci-static/resources/view/natter/log.js 'natter-theme-aurora'
+assert_contains luci-app-natter/htdocs/luci-static/resources/view/natter/log.js "expect: \\{ '': \\{ instances: \\[\\] \\} \\}"
+assert_contains luci-app-natter/htdocs/luci-static/resources/view/natter/log.js "expect: \\{ '': \\{ log: '' \\} \\}"
+assert_contains luci-app-natter/htdocs/luci-static/resources/view/natter/log.js 'data\.log'
 assert_contains luci-app-natter/root/usr/share/luci/menu.d/luci-app-natter.json '"type"[[:space:]]*:[[:space:]]*"view"'
 assert_contains luci-app-natter/root/usr/libexec/rpcd/luci.natter '"instance":"String"'
 assert_contains luci-app-natter/root/usr/libexec/rpcd/luci.natter '"lines":"Integer"'
