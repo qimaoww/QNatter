@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"regexp"
+	"strconv"
 )
 
 type ExternalProcess interface {
@@ -15,6 +17,14 @@ type ExternalProcess interface {
 
 type ProcessStarter interface {
 	Start(name string, args ...string) (ExternalProcess, error)
+}
+
+type VersionChecker interface {
+	Check(command string) error
+}
+
+type DefaultVersionChecker struct {
+	Output func(name string, args ...string) (string, error)
 }
 
 type ExecStarter struct{}
@@ -57,6 +67,7 @@ func (p *osProcess) Exited() bool {
 
 type SocatForwarder struct {
 	Starter     ProcessStarter
+	Checker     VersionChecker
 	Process     ExternalProcess
 	UDPTimeout  int
 	MaxChildren int
@@ -93,6 +104,7 @@ func (f *SocatForwarder) Stop() error {
 
 type GostForwarder struct {
 	Starter    ProcessStarter
+	Checker    VersionChecker
 	Process    ExternalProcess
 	UDPTimeout int
 }
@@ -121,6 +133,9 @@ func (f *GostForwarder) Stop() error {
 }
 
 func (f *SocatForwarder) start(name string, args ...string) error {
+	if err := checkExternal(f.Checker, name); err != nil {
+		return err
+	}
 	process, err := startExternal(f.Starter, name, args...)
 	if err != nil {
 		return err
@@ -130,6 +145,9 @@ func (f *SocatForwarder) start(name string, args ...string) error {
 }
 
 func (f *GostForwarder) start(name string, args ...string) error {
+	if err := checkExternal(f.Checker, name); err != nil {
+		return err
+	}
 	process, err := startExternal(f.Starter, name, args...)
 	if err != nil {
 		return err
@@ -152,6 +170,91 @@ func startExternal(starter ProcessStarter, name string, args ...string) (Externa
 		return nil, fmt.Errorf("%s exited too quickly", name)
 	}
 	return process, nil
+}
+
+func checkExternal(checker VersionChecker, name string) error {
+	if checker == nil {
+		checker = DefaultVersionChecker{}
+	}
+	return checker.Check(name)
+}
+
+func (c DefaultVersionChecker) Check(command string) error {
+	switch command {
+	case "socat":
+		return c.check(command, []string{"-V"}, regexp.MustCompile(`socat version ([0-9]+)\.([0-9]+)\.([0-9]+)`), []int{1, 7, 2})
+	case "gost":
+		return c.check(command, []string{"-V"}, regexp.MustCompile(`gost v?([0-9]+)\.([0-9]+)`), []int{2, 3})
+	default:
+		return nil
+	}
+}
+
+func (c DefaultVersionChecker) check(command string, args []string, pattern *regexp.Regexp, minimum []int) error {
+	output := c.Output
+	if output == nil {
+		output = execCommandOutput
+	}
+	text, err := output(command, args...)
+	if err != nil {
+		return fmt.Errorf("%s >= %s not available", command, versionString(minimum))
+	}
+	match := pattern.FindStringSubmatch(text)
+	if match == nil {
+		return fmt.Errorf("%s >= %s not available", command, versionString(minimum))
+	}
+	version := make([]int, 0, len(match)-1)
+	for _, part := range match[1:] {
+		value, err := strconv.Atoi(part)
+		if err != nil {
+			return fmt.Errorf("%s >= %s not available", command, versionString(minimum))
+		}
+		version = append(version, value)
+	}
+	if compareVersion(version, minimum) < 0 {
+		return fmt.Errorf("%s >= %s not available", command, versionString(minimum))
+	}
+	return nil
+}
+
+func execCommandOutput(name string, args ...string) (string, error) {
+	output, err := exec.Command(name, args...).CombinedOutput()
+	return string(output), err
+}
+
+func compareVersion(version []int, minimum []int) int {
+	maxLen := len(version)
+	if len(minimum) > maxLen {
+		maxLen = len(minimum)
+	}
+	for i := 0; i < maxLen; i++ {
+		var got int
+		if i < len(version) {
+			got = version[i]
+		}
+		var want int
+		if i < len(minimum) {
+			want = minimum[i]
+		}
+		if got < want {
+			return -1
+		}
+		if got > want {
+			return 1
+		}
+	}
+	return 0
+}
+
+func versionString(parts []int) string {
+	if len(parts) == 0 {
+		return "()"
+	}
+	value := fmt.Sprintf("(%d", parts[0])
+	for _, part := range parts[1:] {
+		value += fmt.Sprintf(", %d", part)
+	}
+	return value + ")"
 }
 
 func stopExternal(process *ExternalProcess) error {
