@@ -125,6 +125,44 @@ func TestStartSessionStartsUPnPMappingWhenEnabled(t *testing.T) {
 	}
 }
 
+func TestStartSessionUsesActualLocalPortForUPnPWhenBindPortIsZero(t *testing.T) {
+	events := []string{}
+	upnp := &fakeUPnP{events: &events}
+
+	_, err := StartSession(context.Background(), config.Config{
+		UPnP:              true,
+		BindPort:          0,
+		ForwardMethod:     "none",
+		KeepAliveInterval: 15,
+	}, Dependencies{
+		STUN: &fakeSTUN{
+			mappings: []stun.Mapping{
+				{
+					Inner: netip.MustParseAddrPort("10.10.10.3:41000"),
+					Outer: netip.MustParseAddrPort("203.0.113.11:62010"),
+				},
+				{
+					Inner: netip.MustParseAddrPort("10.10.10.3:41000"),
+					Outer: netip.MustParseAddrPort("203.0.113.11:62010"),
+				},
+			},
+			events: &events,
+		},
+		KeepAlive: &fakeKeepAlive{events: &events},
+		NewForwarder: func(method string) (forward.Forwarder, error) {
+			return &fakeForwarder{events: &events}, nil
+		},
+		UPnP: upnp,
+	})
+	if err != nil {
+		t.Fatalf("StartSession returned error: %v", err)
+	}
+
+	if upnp.mapping.ExternalPort != 41000 || upnp.mapping.InternalPort != 41000 {
+		t.Fatalf("UPnP ports = %d/%d, want actual local port 41000", upnp.mapping.ExternalPort, upnp.mapping.InternalPort)
+	}
+}
+
 func TestStartSessionContinuesWhenUPnPForwardFails(t *testing.T) {
 	events := []string{}
 

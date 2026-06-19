@@ -157,9 +157,10 @@ func StartSession(ctx context.Context, cfg config.Config, deps Dependencies) (*S
 		if deps.UPnP == nil {
 			return nil, fmt.Errorf("missing UPnP mapper")
 		}
+		upnpPort := int(mapping.Inner.Port())
 		if err := deps.UPnP.Forward(ctx, UPnPMapping{
-			ExternalPort:   cfg.BindPort,
-			InternalPort:   cfg.BindPort,
+			ExternalPort:   upnpPort,
+			InternalPort:   upnpPort,
 			InternalClient: mapping.Inner.Addr().String(),
 			UDP:            cfg.UDP,
 			LeaseDuration:  cfg.KeepAliveInterval * 3,
