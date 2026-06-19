@@ -9,11 +9,18 @@ PR_SET_NAME = 15
 
 
 def set_process_name(name):
+    encoded_name = name.encode("ascii")[:15]
+    try:
+        with open("/proc/self/comm", "wb") as proc_comm:
+            proc_comm.write(encoded_name + b"\n")
+    except OSError:
+        pass
+
     try:
         import ctypes
 
         libc = ctypes.CDLL(None)
-        libc.prctl(PR_SET_NAME, ctypes.c_char_p(name.encode("ascii")[:15]), 0, 0, 0)
+        libc.prctl(PR_SET_NAME, ctypes.c_char_p(encoded_name), 0, 0, 0)
     except Exception:
         pass
 
