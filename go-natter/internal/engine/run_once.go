@@ -91,6 +91,7 @@ func RunOnce(ctx context.Context, cfg config.Config, deps Dependencies) (Result,
 	if err != nil {
 		return Result{}, err
 	}
+	defer session.Close()
 	return session.Result, nil
 }
 

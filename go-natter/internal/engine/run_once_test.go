@@ -55,7 +55,7 @@ func TestRunOnceEstablishesSocketForwardAndNotifies(t *testing.T) {
 		t.Fatalf("RunOnce returned error: %v", err)
 	}
 
-	wantEvents := []string{"stun", "keepalive", "stun", "forwarder:socket", "forward", "notify"}
+	wantEvents := []string{"stun", "keepalive", "stun", "forwarder:socket", "forward", "notify", "forward-stop", "keepalive-close"}
 	if !reflect.DeepEqual(events, wantEvents) {
 		t.Fatalf("events = %#v, want %#v", events, wantEvents)
 	}
@@ -172,7 +172,50 @@ func TestRunOnceCanBuildKeepAliveAfterFirstSTUNMapping(t *testing.T) {
 		t.Fatalf("RunOnce returned error: %v", err)
 	}
 
-	wantEvents := []string{"stun", "keepalive-factory", "keepalive", "stun"}
+	wantEvents := []string{"stun", "keepalive-factory", "keepalive", "stun", "keepalive-close"}
+	if !reflect.DeepEqual(events, wantEvents) {
+		t.Fatalf("events = %#v, want %#v", events, wantEvents)
+	}
+}
+
+func TestRunOnceClosesSessionResources(t *testing.T) {
+	events := []string{}
+
+	_, err := RunOnce(context.Background(), config.Config{
+		ForwardMethod: "none",
+	}, Dependencies{
+		STUN: &fakeSTUN{
+			mappings: []stun.Mapping{
+				{
+					Inner: netip.MustParseAddrPort("10.10.10.3:41000"),
+					Outer: netip.MustParseAddrPort("203.0.113.11:62010"),
+				},
+				{
+					Inner: netip.MustParseAddrPort("10.10.10.3:41000"),
+					Outer: netip.MustParseAddrPort("203.0.113.11:62010"),
+				},
+			},
+			events: &events,
+		},
+		KeepAlive: &fakeKeepAlive{events: &events},
+		NewForwarder: func(method string) (forward.Forwarder, error) {
+			events = append(events, "forwarder:"+method)
+			return &fakeForwarder{events: &events}, nil
+		},
+	})
+	if err != nil {
+		t.Fatalf("RunOnce returned error: %v", err)
+	}
+
+	wantEvents := []string{
+		"stun",
+		"keepalive",
+		"stun",
+		"forwarder:none",
+		"forward",
+		"forward-stop",
+		"keepalive-close",
+	}
 	if !reflect.DeepEqual(events, wantEvents) {
 		t.Fatalf("events = %#v, want %#v", events, wantEvents)
 	}
