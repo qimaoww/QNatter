@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -25,6 +27,11 @@ func TestRunVersion(t *testing.T) {
 
 func TestRunCheckParsesExistingOpenWrtArguments(t *testing.T) {
 	var stdout bytes.Buffer
+	notifyPath := filepath.Join(t.TempDir(), "cmcc.notify")
+	if err := os.WriteFile(notifyPath, []byte("#!/bin/sh\n"), 0o755); err != nil {
+		t.Fatalf("WriteFile returned error: %v", err)
+	}
+
 	code := Run([]string{
 		"--check",
 		"-k", "15",
@@ -34,7 +41,7 @@ func TestRunCheckParsesExistingOpenWrtArguments(t *testing.T) {
 		"-m", "none",
 		"-t", "0.0.0.0",
 		"-p", "0",
-		"-e", "/var/run/natter/cmcc_.notify",
+		"-e", notifyPath,
 	}, &stdout, &bytes.Buffer{})
 
 	if code != 0 {

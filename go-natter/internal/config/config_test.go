@@ -1,8 +1,17 @@
 package config
 
-import "testing"
+import (
+	"os"
+	"path/filepath"
+	"testing"
+)
 
 func TestParseArgsMatchesOpenWrtRunnerContract(t *testing.T) {
+	notifyPath := filepath.Join(t.TempDir(), "cmcc.notify")
+	if err := os.WriteFile(notifyPath, []byte("#!/bin/sh\n"), 0o755); err != nil {
+		t.Fatalf("WriteFile returned error: %v", err)
+	}
+
 	cfg, err := ParseArgs([]string{
 		"-k", "15",
 		"-s", "turn.cloud-rtc.com:80",
@@ -12,7 +21,7 @@ func TestParseArgsMatchesOpenWrtRunnerContract(t *testing.T) {
 		"-m", "none",
 		"-t", "0.0.0.0",
 		"-p", "0",
-		"-e", "/var/run/natter/cmcc_.notify",
+		"-e", notifyPath,
 	})
 	if err != nil {
 		t.Fatalf("ParseArgs returned error: %v", err)
@@ -33,7 +42,7 @@ func TestParseArgsMatchesOpenWrtRunnerContract(t *testing.T) {
 	if cfg.TargetIP != "0.0.0.0" || cfg.TargetPort != 0 {
 		t.Fatalf("target = %s:%d, want 0.0.0.0:0", cfg.TargetIP, cfg.TargetPort)
 	}
-	if cfg.NotifyPath != "/var/run/natter/cmcc_.notify" {
+	if cfg.NotifyPath != notifyPath {
 		t.Fatalf("notify path = %q", cfg.NotifyPath)
 	}
 	if len(cfg.STUNServers) != 2 {
@@ -67,5 +76,55 @@ func TestParseArgsDefaults(t *testing.T) {
 	}
 	if cfg.STUNServers[10].Host != "turn.cloud-rtc.com" || cfg.STUNServers[10].Port != 80 {
 		t.Fatalf("last default TCP STUN = %+v, want turn.cloud-rtc.com:80", cfg.STUNServers[10])
+	}
+}
+
+func TestParseArgsNormalizesIPv4LikePython(t *testing.T) {
+	cfg, err := ParseArgs([]string{"-i", "10.1", "-t", "127.1"})
+	if err != nil {
+		t.Fatalf("ParseArgs returned error: %v", err)
+	}
+	if cfg.BindValue != "10.0.0.1" {
+		t.Fatalf("bind value = %q, want 10.0.0.1", cfg.BindValue)
+	}
+	if cfg.TargetIP != "127.0.0.1" {
+		t.Fatalf("target IP = %q, want 127.0.0.1", cfg.TargetIP)
+	}
+}
+
+func TestParseArgsRejectsInvalidValues(t *testing.T) {
+	tests := []struct {
+		name string
+		args []string
+	}{
+		{name: "zero keepalive", args: []string{"-k", "0"}},
+		{name: "negative bind port", args: []string{"-b", "-1"}},
+		{name: "large target port", args: []string{"-p", "65536"}},
+		{name: "invalid target IP", args: []string{"-t", "not-an-ip"}},
+		{name: "invalid keepalive server port", args: []string{"-h", "example.com:bad"}},
+		{name: "missing notify file", args: []string{"-e", filepath.Join(t.TempDir(), "missing")}},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if _, err := ParseArgs(tc.args); err == nil {
+				t.Fatalf("ParseArgs(%v) returned nil error", tc.args)
+			}
+		})
+	}
+}
+
+func TestParseArgsAcceptsExistingNotifyFile(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "notify.sh")
+	if err := os.WriteFile(path, []byte("#!/bin/sh\n"), 0o755); err != nil {
+		t.Fatalf("WriteFile returned error: %v", err)
+	}
+
+	cfg, err := ParseArgs([]string{"-e", path})
+	if err != nil {
+		t.Fatalf("ParseArgs returned error: %v", err)
+	}
+	if cfg.NotifyPath != path {
+		t.Fatalf("notify path = %q, want %q", cfg.NotifyPath, path)
 	}
 }

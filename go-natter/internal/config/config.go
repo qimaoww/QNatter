@@ -1,8 +1,11 @@
 package config
 
 import (
+	"encoding/binary"
 	"flag"
 	"fmt"
+	"net"
+	"os"
 	"strconv"
 	"strings"
 )
@@ -69,6 +72,9 @@ func ParseArgs(args []string) (Config, error) {
 	if err := fs.Parse(args); err != nil {
 		return Config{}, err
 	}
+	if err := validateConfig(&cfg); err != nil {
+		return Config{}, err
+	}
 
 	if len(stunValues) == 0 {
 		stunValues = defaultSTUNServers(cfg.UDP)
@@ -90,9 +96,41 @@ func ParseArgs(args []string) (Config, error) {
 		} else {
 			cfg.KeepAliveServer = "www.baidu.com"
 		}
+	} else if _, _, err := parseHostPortDefault(cfg.KeepAliveServer, 0); err != nil {
+		return Config{}, err
 	}
 
 	return cfg, nil
+}
+
+func validateConfig(cfg *Config) error {
+	if cfg.KeepAliveInterval <= 0 {
+		return fmt.Errorf("not a positive integer: %d", cfg.KeepAliveInterval)
+	}
+	if !validPort(cfg.BindPort) {
+		return fmt.Errorf("invalid port number: %d", cfg.BindPort)
+	}
+	if !validPort(cfg.TargetPort) {
+		return fmt.Errorf("invalid port number: %d", cfg.TargetPort)
+	}
+	if cfg.NotifyPath != "" {
+		if info, err := os.Stat(cfg.NotifyPath); err != nil || info.IsDir() {
+			return fmt.Errorf("file not found: %s", cfg.NotifyPath)
+		}
+	}
+	if normalized, ok := normalizeIPv4(cfg.BindValue); ok {
+		cfg.BindValue = normalized
+	}
+	normalizedTarget, ok := normalizeIPv4(cfg.TargetIP)
+	if !ok {
+		return fmt.Errorf("invalid IP address: %s", cfg.TargetIP)
+	}
+	cfg.TargetIP = normalizedTarget
+	return nil
+}
+
+func validPort(port int) bool {
+	return port >= 0 && port <= 65535
 }
 
 func defaultSTUNServers(udp bool) []string {
@@ -140,4 +178,64 @@ func parseSTUNServer(value string) (STUNServer, error) {
 	}
 
 	return STUNServer{Host: host, Port: port}, nil
+}
+
+func parseHostPortDefault(value string, defaultPort int) (string, int, error) {
+	host := value
+	port := defaultPort
+	if idx := strings.LastIndex(value, ":"); idx >= 0 {
+		host = value[:idx]
+		parsed, err := strconv.Atoi(value[idx+1:])
+		if err != nil || parsed < 1 || parsed > 65535 {
+			return "", 0, fmt.Errorf("invalid port in %q", value)
+		}
+		port = parsed
+	}
+	if host == "" {
+		return "", 0, fmt.Errorf("empty host")
+	}
+	return host, port, nil
+}
+
+func normalizeIPv4(value string) (string, bool) {
+	parts := strings.Split(value, ".")
+	if len(parts) < 1 || len(parts) > 4 {
+		return "", false
+	}
+	var nums [4]uint64
+	for i, part := range parts {
+		if part == "" {
+			return "", false
+		}
+		n, err := strconv.ParseUint(part, 10, 32)
+		if err != nil {
+			return "", false
+		}
+		nums[i] = n
+	}
+	var ip uint32
+	switch len(parts) {
+	case 1:
+		ip = uint32(nums[0])
+	case 2:
+		if nums[0] > 255 || nums[1] > 0xffffff {
+			return "", false
+		}
+		ip = uint32(nums[0]<<24 | nums[1])
+	case 3:
+		if nums[0] > 255 || nums[1] > 255 || nums[2] > 0xffff {
+			return "", false
+		}
+		ip = uint32(nums[0]<<24 | nums[1]<<16 | nums[2])
+	case 4:
+		for _, n := range nums {
+			if n > 255 {
+				return "", false
+			}
+		}
+		ip = uint32(nums[0]<<24 | nums[1]<<16 | nums[2]<<8 | nums[3])
+	}
+	raw := make(net.IP, 4)
+	binary.BigEndian.PutUint32(raw, ip)
+	return raw.String(), true
 }
