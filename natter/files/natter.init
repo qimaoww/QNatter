@@ -81,7 +81,7 @@ natter_add_stun_server() {
 
 natter_start_instance() {
 	local section="$1"
-	local enabled label runtime protocol network bind_value bind_port public_ip_mode forward_method
+	local enabled label protocol network bind_value bind_port public_ip_mode forward_method
 	local target_ip target_port keepalive_interval keepalive_server notify_script retry_target exit_when_changed
 	local upnp verbose qb_enabled qb_forward qb_target_ip qb_target_port qb_forward_method
 	local stun_servers slug log_file notify_env notify_wrapper status_file resolved_bind
@@ -90,7 +90,6 @@ natter_start_instance() {
 	[ "$enabled" = "1" ] || return 0
 
 	config_get label "$section" label "$section"
-	config_get runtime "$section" runtime "go"
 	config_get protocol "$section" protocol "tcp"
 	config_get network "$section" network "wan"
 	config_get bind_value "$section" bind_value ""
@@ -166,7 +165,6 @@ natter_start_instance() {
 	procd_set_param respawn 3600 5 5
 	procd_set_param file /etc/config/natter
 	procd_set_param env NATTER_INSTANCE="$section"
-	procd_append_param env NATTER_RUNTIME="$runtime"
 	procd_set_param limits nofile="4096 4096"
 	procd_set_param user root
 	procd_set_param term_timeout 10

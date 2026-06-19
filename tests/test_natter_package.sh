@@ -46,8 +46,6 @@ assert_file natter/files/natter-common.sh
 assert_file natter/files/natter-qbittorrent.sh
 assert_file natter/files/natter-notify
 assert_file natter/files/natter-run
-assert_file natter/files/natter-python-wrapper.py
-assert_file natter/files/Natter
 assert_file natter/files/natter.config
 
 assert_file luci-app-natter/Makefile
@@ -84,13 +82,10 @@ assert_contains luci-app-natter/htdocs/luci-static/resources/view/natter/instanc
 assert_contains luci-app-natter/htdocs/luci-static/resources/view/natter/instances.js 'hideInGrid'
 assert_contains luci-app-natter/htdocs/luci-static/resources/view/natter/instances.js "hideInGrid\\(s\\.option\\(widgets\\.DeviceSelect, 'bind_value'"
 assert_contains luci-app-natter/htdocs/luci-static/resources/view/natter/instances.js "widgets\\.DeviceSelect, 'bind_value', _\\('WAN interface'\\)"
-assert_contains luci-app-natter/htdocs/luci-static/resources/view/natter/instances.js "form\\.ListValue, 'runtime', _\\('Runtime'\\)"
-assert_contains luci-app-natter/htdocs/luci-static/resources/view/natter/instances.js "fs\\.stat\\('/usr/bin/python3'\\)"
-assert_contains luci-app-natter/htdocs/luci-static/resources/view/natter/instances.js 'tools\.python'
-assert_contains luci-app-natter/htdocs/luci-static/resources/view/natter/instances.js "if \\(tools\\.python\\)"
-assert_contains luci-app-natter/htdocs/luci-static/resources/view/natter/instances.js "o\\.value\\('python', 'Python'\\)"
-assert_contains luci-app-natter/htdocs/luci-static/resources/view/natter/instances.js "o\\.value\\('go', 'Go'\\)"
-assert_contains luci-app-natter/htdocs/luci-static/resources/view/natter/instances.js "o\\.default = 'go'"
+assert_not_contains luci-app-natter/htdocs/luci-static/resources/view/natter/instances.js "form\\.ListValue, 'runtime'"
+assert_not_contains luci-app-natter/htdocs/luci-static/resources/view/natter/instances.js "/usr/bin/python3"
+assert_not_contains luci-app-natter/htdocs/luci-static/resources/view/natter/instances.js 'tools\.python'
+assert_not_contains luci-app-natter/htdocs/luci-static/resources/view/natter/instances.js "o\\.value\\('python'"
 assert_contains luci-app-natter/htdocs/luci-static/resources/view/natter/instances.js 'o\.rmempty = true'
 assert_contains luci-app-natter/htdocs/luci-static/resources/view/natter/instances.js 'o\.nocreate = true'
 assert_not_contains luci-app-natter/htdocs/luci-static/resources/view/natter/instances.js "s\\.option\\(form\\.ListValue, 'network'"
@@ -131,21 +126,19 @@ assert_contains natter/files/natter.init 'bind=\$\{resolved_bind:-default route\
 assert_contains natter/files/natter.hotplug 'config_get bind_value "\$section" bind_value'
 assert_contains natter/files/natter.hotplug '\[ -n "\$bind_value" \] && \[ "\$bind_value" = "\$DEVICE" \]'
 assert_contains natter/files/natter.config "option forward_method 'auto'"
-assert_contains natter/files/natter.config "option runtime 'go'"
 assert_contains natter/files/natter-common.sh 'natter_forward_method_or_auto'
 assert_contains natter/files/natter-common.sh '\[ "\$forward_method" != "auto" \]'
 assert_contains natter/files/natter.init 'NATTER_STATUS_FILE'
-assert_contains natter/files/natter.init 'config_get runtime "\$section" runtime "go"'
-assert_contains natter/files/natter.init 'NATTER_RUNTIME="\$runtime"'
+assert_not_contains natter/files/natter.config 'option runtime'
+assert_not_contains natter/files/natter.init 'config_get runtime'
+assert_not_contains natter/files/natter.init 'NATTER_RUNTIME'
 assert_not_contains natter/files/natter.init 'PROG="/usr/bin/natter.py"'
 assert_contains natter/files/natter.init 'qbittorrent_target_ip'
 assert_not_contains natter/files/natter-run 'NATTER_PY_BIN'
 assert_not_contains natter/files/natter-run 'NATTER_RUNTIME'
 assert_contains natter/files/natter-run 'NATTER_GO_BIN:-/usr/bin/natter-go'
-assert_contains natter/files/Natter 'exec -a Natter /usr/bin/python3 /usr/share/natter/natter-python-wrapper.py'
-assert_contains natter/files/natter-python-wrapper.py 'PR_SET_NAME = 15'
-assert_contains natter/files/natter-python-wrapper.py '/proc/self/comm'
-assert_contains natter/files/natter-python-wrapper.py 'set_process_name\("Natter"\)'
+assert_no_path natter/files/Natter
+assert_no_path natter/files/natter-python-wrapper.py
 assert_contains natter/files/natter-qbittorrent.sh 'natter_qb_select_listen_port'
 assert_contains natter/files/natter-notify 'api/v2/auth/login'
 assert_contains natter/files/natter-notify 'api/v2/app/setPreferences'
@@ -160,8 +153,9 @@ assert_not_contains natter/Makefile '\+iptables-nft'
 assert_not_contains natter/Makefile '\+socat'
 assert_not_contains natter/Makefile '\+gost'
 assert_not_contains natter/Makefile '\+python3-light'
-assert_contains natter/Makefile '\$\(INSTALL_BIN\) ./files/Natter \$\(1\)/usr/bin/Natter'
-assert_contains natter/Makefile '\$\(INSTALL_BIN\) ./files/natter-python-wrapper.py \$\(1\)/usr/share/natter/natter-python-wrapper.py'
+assert_not_contains natter/Makefile 'natter.py'
+assert_not_contains natter/Makefile './files/Natter'
+assert_not_contains natter/Makefile 'natter-python-wrapper.py'
 assert_contains luci-app-natter/Makefile 'LUCI_DEPENDS:=.*\+natter'
 assert_contains luci-app-natter/Makefile 'LUCI_DEPENDS:=.*\+luci-base'
 assert_contains luci-app-natter/Makefile 'LUCI_DEPENDS:=.*\+rpcd'
@@ -221,7 +215,6 @@ sh -n "$ROOT/natter/files/natter-common.sh"
 sh -n "$ROOT/natter/files/natter-qbittorrent.sh"
 sh -n "$ROOT/natter/files/natter-notify"
 sh -n "$ROOT/natter/files/natter-run"
-sh -n "$ROOT/natter/files/Natter"
 sh -n "$ROOT/natter/files/natter.init"
 sh -n "$ROOT/luci-app-natter/root/usr/libexec/natter-status"
 sh -n "$ROOT/luci-app-natter/root/usr/libexec/natter-log"
