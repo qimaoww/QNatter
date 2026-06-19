@@ -18,10 +18,20 @@ import (
 const Version = "2.2.1-go"
 
 func Run(args []string, stdout io.Writer, stderr io.Writer) int {
-	return RunWith(args, stdout, stderr, runEngine)
+	return RunContext(context.Background(), args, stdout, stderr)
+}
+
+func RunContext(ctx context.Context, args []string, stdout io.Writer, stderr io.Writer) int {
+	return RunWithContext(ctx, args, stdout, stderr, runEngine)
 }
 
 func RunWith(args []string, stdout io.Writer, stderr io.Writer, run func(config.Config) error) int {
+	return RunWithContext(context.Background(), args, stdout, stderr, func(ctx context.Context, cfg config.Config) error {
+		return run(cfg)
+	})
+}
+
+func RunWithContext(ctx context.Context, args []string, stdout io.Writer, stderr io.Writer, run func(context.Context, config.Config) error) int {
 	for _, arg := range args {
 		if arg == "--version" || arg == "-V" {
 			fmt.Fprintf(stdout, "Natter Go %s\n", Version)
@@ -43,7 +53,7 @@ func RunWith(args []string, stdout io.Writer, stderr io.Writer, run func(config.
 		return 0
 	}
 
-	if err := run(cfg); err != nil {
+	if err := run(ctx, cfg); err != nil {
 		fmt.Fprintf(stderr, "natter: %v\n", err)
 		return 1
 	}
@@ -58,7 +68,7 @@ func formatSTUNServers(servers []config.STUNServer) string {
 	return strings.Join(items, ",")
 }
 
-func runEngine(cfg config.Config) error {
+func runEngine(ctx context.Context, cfg config.Config) error {
 	stunClient, err := engine.NewSTUNClientFromConfig(cfg)
 	if err != nil {
 		return err
@@ -78,7 +88,7 @@ func runEngine(cfg config.Config) error {
 			return err
 		},
 	}
-	return engine.RunWithRetry(context.Background(), cfg, func(ctx context.Context) error {
+	return engine.RunWithRetry(ctx, cfg, func(ctx context.Context) error {
 		return engine.RunLoop(ctx, cfg, deps, engine.LoopOptions{})
 	}, engine.RetryOptions{})
 }

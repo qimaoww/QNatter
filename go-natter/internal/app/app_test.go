@@ -2,6 +2,7 @@ package app
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"strings"
 	"testing"
@@ -88,5 +89,23 @@ func TestRunWithReportsEngineError(t *testing.T) {
 	}
 	if !strings.Contains(stderr.String(), "mapping failed") {
 		t.Fatalf("stderr = %q, want mapping failed", stderr.String())
+	}
+}
+
+func TestRunWithContextPassesContextToEngine(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	var gotCanceled bool
+	code := RunWithContext(ctx, []string{"-m", "none"}, &bytes.Buffer{}, &bytes.Buffer{}, func(ctx context.Context, cfg config.Config) error {
+		gotCanceled = ctx.Err() != nil
+		return nil
+	})
+
+	if code != 0 {
+		t.Fatalf("RunWithContext returned code %d, want 0", code)
+	}
+	if !gotCanceled {
+		t.Fatal("runner did not receive canceled context")
 	}
 }
