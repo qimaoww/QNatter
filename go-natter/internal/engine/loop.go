@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"natter-openwrt/go-natter/internal/config"
+	"natter-openwrt/go-natter/internal/portcheck"
 )
 
 type LoopOptions struct {
@@ -54,6 +55,9 @@ func RunLoop(ctx context.Context, cfg config.Config, deps Dependencies, options 
 			count++
 			if count >= recheckEvery {
 				count = 0
+				if !cfg.UDP && lanPortOpen(ctx, deps, session) {
+					continue
+				}
 				mapping, err := deps.STUN.GetMapping(ctx)
 				if err != nil {
 					return err
@@ -64,4 +68,12 @@ func RunLoop(ctx context.Context, cfg config.Config, deps Dependencies, options 
 			}
 		}
 	}
+}
+
+func lanPortOpen(ctx context.Context, deps Dependencies, session *Session) bool {
+	checker := deps.PortCheck
+	if checker == nil {
+		checker = portcheck.Checker{}
+	}
+	return checker.TestLAN(ctx, session.Result.Mapping.Outer, session.Result.Mapping.Inner.Addr()) != PortClosed
 }

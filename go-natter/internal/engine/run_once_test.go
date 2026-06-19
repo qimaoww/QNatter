@@ -187,6 +187,9 @@ func (s *fakeSTUN) GetMapping(context.Context) (stun.Mapping, error) {
 	if s.events != nil {
 		*s.events = append(*s.events, "stun")
 	}
+	if len(s.mappings) == 0 {
+		return stun.Mapping{}, errNoSTUNMapping
+	}
 	mapping := s.mappings[0]
 	s.mappings = s.mappings[1:]
 	return mapping, nil

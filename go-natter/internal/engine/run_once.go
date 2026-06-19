@@ -7,6 +7,7 @@ import (
 
 	"natter-openwrt/go-natter/internal/config"
 	"natter-openwrt/go-natter/internal/forward"
+	"natter-openwrt/go-natter/internal/portcheck"
 	"natter-openwrt/go-natter/internal/status"
 	"natter-openwrt/go-natter/internal/stun"
 )
@@ -20,11 +21,24 @@ type KeepAlive interface {
 	Close() error
 }
 
+type PortResult = portcheck.Result
+
+const (
+	PortClosed  = portcheck.Closed
+	PortUnknown = portcheck.Unknown
+	PortOpen    = portcheck.Open
+)
+
+type PortChecker interface {
+	TestLAN(context.Context, netip.AddrPort, netip.Addr) PortResult
+}
+
 type Dependencies struct {
 	STUN         STUNClient
 	KeepAlive    KeepAlive
 	NewKeepAlive func(stun.Mapping) (KeepAlive, error)
 	NewForwarder func(string) (forward.Forwarder, error)
+	PortCheck    PortChecker
 	Notify       func(status.Mapping) error
 }
 
