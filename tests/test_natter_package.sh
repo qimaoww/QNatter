@@ -83,6 +83,9 @@ assert_contains luci-app-natter/htdocs/luci-static/resources/view/natter/instanc
 assert_contains luci-app-natter/htdocs/luci-static/resources/view/natter/instances.js 'hideInGrid'
 assert_contains luci-app-natter/htdocs/luci-static/resources/view/natter/instances.js "hideInGrid\\(s\\.option\\(widgets\\.DeviceSelect, 'bind_value'"
 assert_contains luci-app-natter/htdocs/luci-static/resources/view/natter/instances.js "widgets\\.DeviceSelect, 'bind_value', _\\('WAN interface'\\)"
+assert_contains luci-app-natter/htdocs/luci-static/resources/view/natter/instances.js "form\\.ListValue, 'runtime', _\\('Runtime'\\)"
+assert_contains luci-app-natter/htdocs/luci-static/resources/view/natter/instances.js "o\\.value\\('python', 'Python'\\)"
+assert_contains luci-app-natter/htdocs/luci-static/resources/view/natter/instances.js "o\\.value\\('go', 'Go'\\)"
 assert_contains luci-app-natter/htdocs/luci-static/resources/view/natter/instances.js 'o\.rmempty = true'
 assert_contains luci-app-natter/htdocs/luci-static/resources/view/natter/instances.js 'o\.nocreate = true'
 assert_not_contains luci-app-natter/htdocs/luci-static/resources/view/natter/instances.js "s\\.option\\(form\\.ListValue, 'network'"
@@ -123,6 +126,7 @@ assert_contains natter/files/natter.init 'bind=\$\{resolved_bind:-default route\
 assert_contains natter/files/natter.hotplug 'config_get bind_value "\$section" bind_value'
 assert_contains natter/files/natter.hotplug '\[ -n "\$bind_value" \] && \[ "\$bind_value" = "\$DEVICE" \]'
 assert_contains natter/files/natter.config "option forward_method 'auto'"
+assert_contains natter/files/natter.config "option runtime 'python'"
 assert_contains natter/files/natter-common.sh 'natter_forward_method_or_auto'
 assert_contains natter/files/natter-common.sh '\[ "\$forward_method" != "auto" \]'
 assert_contains natter/files/natter.init 'NATTER_STATUS_FILE'
@@ -157,6 +161,7 @@ assert_contains luci-app-natter/Makefile 'LUCI_DEPENDS:=.*\+uci'
 
 assert_po_translation 'Global Settings' '全局设置'
 assert_po_translation 'Expose ports behind full-cone NAT with optional forwarding and qBittorrent port updates.' '通过全锥形 NAT 暴露端口，并可选转发和更新 qBittorrent 监听端口。'
+assert_po_translation 'Runtime' '运行时'
 assert_po_translation 'WAN interface' 'WAN 接口'
 assert_po_translation 'Leave empty to bind to the default WAN device.' '留空则自动绑定默认 WAN 设备。'
 assert_po_translation 'Forward method' '转发方式'

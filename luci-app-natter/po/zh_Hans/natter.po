@@ -37,6 +37,9 @@ msgstr "标签"
 msgid "Protocol"
 msgstr "协议"
 
+msgid "Runtime"
+msgstr "运行时"
+
 msgid "WAN network"
 msgstr "WAN 网络"
 

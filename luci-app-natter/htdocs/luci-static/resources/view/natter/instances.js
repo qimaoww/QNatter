@@ -73,6 +73,11 @@ return view.extend({
 		o = s.option(form.Value, 'label', _('Label'));
 		o.placeholder = 'Default';
 
+		o = s.option(form.ListValue, 'runtime', _('Runtime'));
+		o.value('python', 'Python');
+		o.value('go', 'Go');
+		o.default = 'python';
+
 		o = s.option(form.ListValue, 'protocol', _('Protocol'));
 		o.value('tcp', 'TCP');
 		o.value('udp', 'UDP');
