@@ -126,6 +126,25 @@ type UDPProbeRequest struct {
 
 type UDPProbe func(context.Context, UDPProbeRequest) (STUNTestResult, error)
 
+type TCPProbeRequest struct {
+	Server     netip.AddrPort
+	SourceAddr netip.Addr
+	SourcePort int
+	Interface  string
+	Reuse      bool
+}
+
+type TCPProbe func(context.Context, TCPProbeRequest) (STUNTestResult, error)
+
+type TCPConeOptions struct {
+	Servers    []netip.AddrPort
+	SourceAddr netip.Addr
+	SourcePort int
+	Interface  string
+	Reuse      bool
+	Probe      TCPProbe
+}
+
 type UDPNATOptions struct {
 	Servers    []netip.AddrPort
 	SourceAddr netip.Addr
@@ -247,6 +266,50 @@ func CheckTCPNATType(ctx context.Context, options TCPNATOptions) (NATType, error
 	}
 }
 
+func CheckTCPCone(ctx context.Context, options TCPConeOptions) (int, error) {
+	probe := options.Probe
+	if probe == nil {
+		probe = func(ctx context.Context, request TCPProbeRequest) (STUNTestResult, error) {
+			return TCPSTUNTest(ctx, TCPSTUNOptions{
+				Server:    request.Server,
+				Source:    tcpSourceAddrPort(request.SourceAddr, request.SourcePort),
+				Interface: request.Interface,
+				Reuse:     request.Reuse,
+			})
+		}
+	}
+
+	mappedFirst := netip.AddrPort{}
+	count := 0
+	for _, server := range options.Servers {
+		if count >= 3 {
+			return tcpConeStable, nil
+		}
+		result, ok, err := tcpProbeMaybe(ctx, probe, TCPProbeRequest{
+			Server:     server,
+			SourceAddr: options.SourceAddr,
+			SourcePort: options.SourcePort,
+			Interface:  options.Interface,
+			Reuse:      options.Reuse,
+		})
+		if err != nil {
+			return tcpConeUnknown, err
+		}
+		if !ok {
+			continue
+		}
+		if mappedFirst.IsValid() && result.Mapped != mappedFirst {
+			return tcpConeSymmetric, nil
+		}
+		mappedFirst = result.Mapped
+		count++
+	}
+	if count >= 3 {
+		return tcpConeStable, nil
+	}
+	return tcpConeUnknown, nil
+}
+
 func CheckUDPNATType(ctx context.Context, options UDPNATOptions) (NATType, error) {
 	probe := options.Probe
 	if probe == nil {
@@ -335,6 +398,17 @@ func CheckUDPNATType(ctx context.Context, options UDPNATOptions) (NATType, error
 	return NATPortRestricted, nil
 }
 
+func tcpProbeMaybe(ctx context.Context, probe TCPProbe, request TCPProbeRequest) (STUNTestResult, bool, error) {
+	result, err := probe(ctx, request)
+	if err != nil {
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			return STUNTestResult{}, false, ctxErr
+		}
+		return STUNTestResult{}, false, nil
+	}
+	return result, true, nil
+}
+
 func (deps Dependencies) withDefaults() Dependencies {
 	if deps.Resolve == nil {
 		deps.Resolve = defaultResolve
@@ -410,6 +484,13 @@ func bindFromConfig(cfg config.Config) (netip.Addr, string) {
 }
 
 func udpSourceAddrPort(addr netip.Addr, port int) netip.AddrPort {
+	if !addr.IsValid() {
+		addr = netip.IPv4Unspecified()
+	}
+	return netip.AddrPortFrom(addr, uint16(port))
+}
+
+func tcpSourceAddrPort(addr netip.Addr, port int) netip.AddrPort {
 	if !addr.IsValid() {
 		addr = netip.IPv4Unspecified()
 	}

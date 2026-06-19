@@ -157,6 +157,116 @@ func TestCheckTCPNATTypeSkipsConeWhenFullConeIsConclusive(t *testing.T) {
 	}
 }
 
+func TestCheckTCPConeMatchesPythonDecisionTree(t *testing.T) {
+	source := netip.MustParseAddr("192.0.2.10")
+	mapped := netip.MustParseAddrPort("198.51.100.10:50000")
+	servers := []netip.AddrPort{
+		netip.MustParseAddrPort("203.0.113.1:3478"),
+		netip.MustParseAddrPort("203.0.113.2:3478"),
+		netip.MustParseAddrPort("203.0.113.3:3478"),
+		netip.MustParseAddrPort("203.0.113.4:3478"),
+	}
+
+	tests := []struct {
+		name      string
+		responses map[netip.AddrPort]tcpProbeResponse
+		want      int
+	}{
+		{
+			name: "stable after three matching mappings",
+			responses: map[netip.AddrPort]tcpProbeResponse{
+				servers[0]: {result: STUNTestResult{Mapped: mapped}},
+				servers[1]: {result: STUNTestResult{Mapped: mapped}},
+				servers[2]: {result: STUNTestResult{Mapped: mapped}},
+			},
+			want: tcpConeStable,
+		},
+		{
+			name: "symmetric when a later mapping differs",
+			responses: map[netip.AddrPort]tcpProbeResponse{
+				servers[0]: {result: STUNTestResult{Mapped: mapped}},
+				servers[1]: {result: STUNTestResult{Mapped: netip.MustParseAddrPort("198.51.100.10:50001")}},
+			},
+			want: tcpConeSymmetric,
+		},
+		{
+			name: "unknown with fewer than three successful mappings",
+			responses: map[netip.AddrPort]tcpProbeResponse{
+				servers[0]: {result: STUNTestResult{Mapped: mapped}},
+				servers[1]: {result: STUNTestResult{Mapped: mapped}},
+			},
+			want: tcpConeUnknown,
+		},
+		{
+			name: "skips unavailable servers while counting successes",
+			responses: map[netip.AddrPort]tcpProbeResponse{
+				servers[0]: {err: errors.New("timeout")},
+				servers[1]: {result: STUNTestResult{Mapped: mapped}},
+				servers[2]: {result: STUNTestResult{Mapped: mapped}},
+				servers[3]: {result: STUNTestResult{Mapped: mapped}},
+			},
+			want: tcpConeStable,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := CheckTCPCone(context.Background(), TCPConeOptions{
+				Servers:    servers,
+				SourceAddr: source,
+				SourcePort: 40000,
+				Interface:  "pppoe-wan_cmcc",
+				Reuse:      true,
+				Probe:      fakeTCPProbe(tt.responses, nil),
+			})
+			if err != nil {
+				t.Fatalf("CheckTCPCone returned error: %v", err)
+			}
+			if got != tt.want {
+				t.Fatalf("CheckTCPCone = %d, want %d", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestCheckTCPConePassesBindOptionsToProbe(t *testing.T) {
+	server := netip.MustParseAddrPort("203.0.113.1:3478")
+	var got []TCPProbeRequest
+
+	_, err := CheckTCPCone(context.Background(), TCPConeOptions{
+		Servers:    []netip.AddrPort{server},
+		SourceAddr: netip.MustParseAddr("192.0.2.10"),
+		SourcePort: 40000,
+		Interface:  "pppoe-wan_cmcc",
+		Reuse:      true,
+		Probe: fakeTCPProbe(map[netip.AddrPort]tcpProbeResponse{
+			server: {result: STUNTestResult{Mapped: netip.MustParseAddrPort("198.51.100.10:50000")}},
+		}, &got),
+	})
+	if err != nil {
+		t.Fatalf("CheckTCPCone returned error: %v", err)
+	}
+	if len(got) != 1 {
+		t.Fatalf("probe calls = %d, want 1", len(got))
+	}
+	request := got[0]
+	if request.Server != server {
+		t.Fatalf("server = %s, want %s", request.Server, server)
+	}
+	if request.SourceAddr != netip.MustParseAddr("192.0.2.10") {
+		t.Fatalf("source addr = %s, want 192.0.2.10", request.SourceAddr)
+	}
+	if request.SourcePort != 40000 {
+		t.Fatalf("source port = %d, want 40000", request.SourcePort)
+	}
+	if request.Interface != "pppoe-wan_cmcc" {
+		t.Fatalf("interface = %q, want pppoe-wan_cmcc", request.Interface)
+	}
+	if !request.Reuse {
+		t.Fatal("reuse = false, want true")
+	}
+}
+
 func TestCheckUDPNATTypeMatchesPythonDecisionTree(t *testing.T) {
 	source := netip.MustParseAddrPort("192.0.2.10:40000")
 	mapped := netip.MustParseAddrPort("198.51.100.10:50000")
@@ -683,6 +793,30 @@ func fakeUDPProbe(responses map[udpProbeKey]udpProbeResponse) UDPProbe {
 			changeIP:   request.ChangeIP,
 			changePort: request.ChangePort,
 		}]
+		if !ok {
+			return STUNTestResult{}, errors.New("no response")
+		}
+		if response.err != nil {
+			return STUNTestResult{}, response.err
+		}
+		return response.result, nil
+	}
+}
+
+type tcpProbeResponse struct {
+	result STUNTestResult
+	err    error
+}
+
+func fakeTCPProbe(responses map[netip.AddrPort]tcpProbeResponse, calls *[]TCPProbeRequest) TCPProbe {
+	return func(ctx context.Context, request TCPProbeRequest) (STUNTestResult, error) {
+		if err := ctx.Err(); err != nil {
+			return STUNTestResult{}, err
+		}
+		if calls != nil {
+			*calls = append(*calls, request)
+		}
+		response, ok := responses[request.Server]
 		if !ok {
 			return STUNTestResult{}, errors.New("no response")
 		}
