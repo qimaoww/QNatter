@@ -63,7 +63,7 @@ func runEngine(cfg config.Config) error {
 	if err != nil {
 		return err
 	}
-	return engine.RunLoop(context.Background(), cfg, engine.Dependencies{
+	deps := engine.Dependencies{
 		STUN: stunClient,
 		NewKeepAlive: func(mapping stun.Mapping) (engine.KeepAlive, error) {
 			return engine.NewKeepAliveFromConfig(cfg, mapping)
@@ -77,5 +77,8 @@ func runEngine(cfg config.Config) error {
 			}, mapping)
 			return err
 		},
-	}, engine.LoopOptions{})
+	}
+	return engine.RunWithRetry(context.Background(), cfg, func(ctx context.Context) error {
+		return engine.RunLoop(ctx, cfg, deps, engine.LoopOptions{})
+	}, engine.RetryOptions{})
 }

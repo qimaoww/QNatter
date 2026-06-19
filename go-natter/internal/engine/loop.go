@@ -3,6 +3,7 @@ package engine
 import (
 	"context"
 	"errors"
+	"fmt"
 	"time"
 
 	"natter-openwrt/go-natter/internal/config"
@@ -13,7 +14,10 @@ type LoopOptions struct {
 	RecheckEvery int
 }
 
-var ErrMappingChanged = errors.New("mapped address changed")
+var (
+	ErrMappingChanged  = errors.New("mapped address changed")
+	ErrKeepAliveFailed = errors.New("keep-alive failed")
+)
 
 func RunLoop(ctx context.Context, cfg config.Config, deps Dependencies, options LoopOptions) error {
 	session, err := StartSession(ctx, cfg, deps)
@@ -45,7 +49,7 @@ func RunLoop(ctx context.Context, cfg config.Config, deps Dependencies, options 
 			return nil
 		case <-ticks:
 			if err := session.KeepAlive.KeepAlive(); err != nil {
-				return err
+				return fmt.Errorf("%w: %v", ErrKeepAliveFailed, err)
 			}
 			count++
 			if count >= recheckEvery {
