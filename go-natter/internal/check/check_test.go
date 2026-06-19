@@ -385,6 +385,28 @@ func TestTCPSTUNTestReturnsSourceAndMappedAddress(t *testing.T) {
 	}
 }
 
+func TestTCPSTUNTestCanBindInterface(t *testing.T) {
+	txid := [16]byte{0x21, 0x12, 0xa4, 0x42, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2}
+	mapped := netip.MustParseAddrPort("203.0.113.22:62002")
+	server, _, stop := startLocalTCPCheckSTUN(t, txid, mapped)
+	defer stop()
+
+	result, err := TCPSTUNTest(context.Background(), TCPSTUNOptions{
+		Server:    server,
+		Source:    netip.MustParseAddrPort("127.0.0.1:0"),
+		Interface: "lo",
+		Reuse:     true,
+		Timeout:   time.Second,
+		TxID:      func() ([16]byte, error) { return txid, nil },
+	})
+	if err != nil {
+		t.Fatalf("TCPSTUNTest returned error: %v", err)
+	}
+	if result.Mapped != mapped {
+		t.Fatalf("mapped address = %s, want %s", result.Mapped, mapped)
+	}
+}
+
 func TestUDPSTUNTestReturnsMappingAndResponseChangeFlags(t *testing.T) {
 	txid := [16]byte{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}
 	mapped := netip.MustParseAddrPort("198.51.100.30:53000")
@@ -427,6 +449,29 @@ func TestUDPSTUNTestReturnsMappingAndResponseChangeFlags(t *testing.T) {
 	}
 	if !result.PortChanged {
 		t.Fatalf("PortChanged = false, want true from alternate responder port")
+	}
+}
+
+func TestUDPSTUNTestCanBindInterface(t *testing.T) {
+	txid := [16]byte{2, 1, 0, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}
+	mapped := netip.MustParseAddrPort("198.51.100.32:53002")
+	server, _, stop := startLocalUDPCheckSTUN(t, txid, mapped, 1)
+	defer stop()
+
+	result, err := UDPSTUNTest(context.Background(), UDPSTUNOptions{
+		Server:    server,
+		Source:    netip.MustParseAddrPort("127.0.0.1:0"),
+		Interface: "lo",
+		Reuse:     true,
+		Timeout:   time.Second,
+		Repeat:    1,
+		TxID:      func() ([16]byte, error) { return txid, nil },
+	})
+	if err != nil {
+		t.Fatalf("UDPSTUNTest returned error: %v", err)
+	}
+	if result.Mapped != mapped {
+		t.Fatalf("mapped address = %s, want %s", result.Mapped, mapped)
 	}
 }
 

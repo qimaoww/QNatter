@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"natter-openwrt/go-natter/internal/config"
+	"natter-openwrt/go-natter/internal/socketopts"
 )
 
 const Version = "2.2.1-go"
@@ -86,15 +87,19 @@ type DockerEnv struct {
 }
 
 type TCPSTUNOptions struct {
-	Server  netip.AddrPort
-	Source  netip.AddrPort
-	Timeout time.Duration
-	TxID    func() ([16]byte, error)
+	Server    netip.AddrPort
+	Source    netip.AddrPort
+	Interface string
+	Reuse     bool
+	Timeout   time.Duration
+	TxID      func() ([16]byte, error)
 }
 
 type UDPSTUNOptions struct {
 	Server     netip.AddrPort
 	Source     netip.AddrPort
+	Interface  string
+	Reuse      bool
 	Timeout    time.Duration
 	Repeat     int
 	ChangeIP   bool
@@ -114,6 +119,8 @@ type UDPProbe func(context.Context, UDPProbeRequest) (STUNTestResult, error)
 type UDPNATOptions struct {
 	Servers    []netip.AddrPort
 	SourcePort int
+	Interface  string
+	Reuse      bool
 	Probe      UDPProbe
 }
 
@@ -230,6 +237,8 @@ func CheckUDPNATType(ctx context.Context, options UDPNATOptions) (NATType, error
 			return UDPSTUNTest(ctx, UDPSTUNOptions{
 				Server:     request.Server,
 				Source:     netip.AddrPortFrom(netip.IPv4Unspecified(), uint16(request.SourcePort)),
+				Interface:  options.Interface,
+				Reuse:      options.Reuse,
 				ChangeIP:   request.ChangeIP,
 				ChangePort: request.ChangePort,
 			})
@@ -414,9 +423,15 @@ func TCPSTUNTest(ctx context.Context, options TCPSTUNOptions) (STUNTestResult, e
 	}
 
 	dialer := net.Dialer{Timeout: timeout}
-	if options.Source.IsValid() {
-		dialer.LocalAddr = tcpAddrFromAddrPort(options.Source)
+	localAddr, err := socketopts.LocalAddr("tcp", options.Source)
+	if err != nil {
+		return STUNTestResult{}, err
 	}
+	dialer.LocalAddr = localAddr
+	dialer.Control = socketopts.Control(socketopts.Options{
+		Interface: options.Interface,
+		Reuse:     options.Reuse,
+	})
 	conn, err := dialer.DialContext(ctx, "tcp", net.JoinHostPort(options.Server.Addr().String(), strconv.Itoa(int(options.Server.Port()))))
 	if err != nil {
 		return STUNTestResult{}, err
@@ -464,7 +479,11 @@ func UDPSTUNTest(ctx context.Context, options UDPSTUNOptions) (STUNTestResult, e
 		return STUNTestResult{}, err
 	}
 
-	conn, err := net.ListenUDP("udp", udpAddrFromAddrPort(options.Source))
+	listenConfig := net.ListenConfig{Control: socketopts.Control(socketopts.Options{
+		Interface: options.Interface,
+		Reuse:     options.Reuse,
+	})}
+	conn, err := listenConfig.ListenPacket(ctx, "udp", listenAddress(options.Source))
 	if err != nil {
 		return STUNTestResult{}, err
 	}
@@ -476,14 +495,14 @@ func UDPSTUNTest(ctx context.Context, options UDPSTUNOptions) (STUNTestResult, e
 	serverAddr := udpAddrFromAddrPort(options.Server)
 	request := BuildSTUNBindingRequest(txid, options.ChangeIP, options.ChangePort)
 	for i := 0; i < repeat; i++ {
-		if _, err := conn.WriteToUDP(request, serverAddr); err != nil {
+		if _, err := conn.WriteTo(request, serverAddr); err != nil {
 			return STUNTestResult{}, err
 		}
 	}
 
 	buf := make([]byte, 1500)
 	for {
-		n, responseAddr, err := conn.ReadFromUDP(buf)
+		n, responseAddr, err := conn.ReadFrom(buf)
 		if err != nil {
 			return STUNTestResult{}, err
 		}
@@ -531,13 +550,6 @@ func udpSTUNTxID(options UDPSTUNOptions) ([16]byte, error) {
 	return txid, nil
 }
 
-func tcpAddrFromAddrPort(addr netip.AddrPort) *net.TCPAddr {
-	return &net.TCPAddr{
-		IP:   net.IP(addr.Addr().AsSlice()),
-		Port: int(addr.Port()),
-	}
-}
-
 func udpAddrFromAddrPort(addr netip.AddrPort) *net.UDPAddr {
 	if !addr.IsValid() {
 		return nil
@@ -546,6 +558,13 @@ func udpAddrFromAddrPort(addr netip.AddrPort) *net.UDPAddr {
 		IP:   net.IP(addr.Addr().AsSlice()),
 		Port: int(addr.Port()),
 	}
+}
+
+func listenAddress(source netip.AddrPort) string {
+	if !source.IsValid() {
+		return ""
+	}
+	return net.JoinHostPort(source.Addr().String(), strconv.Itoa(int(source.Port())))
 }
 
 func addrPortFromNetAddr(addr net.Addr) (netip.AddrPort, error) {
