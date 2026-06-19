@@ -32,27 +32,11 @@ natter_add_interface_trigger() {
 }
 
 natter_resolve_bind_value() {
-	local network="$1"
 	local configured="$2"
-	local device=""
-	local ipaddr=""
 
 	if [ -n "$configured" ]; then
 		printf '%s\n' "$configured"
 		return 0
-	fi
-
-	if [ -n "$network" ]; then
-		network_get_device device "$network"
-		network_get_ipaddr ipaddr "$network"
-	fi
-
-	if [ -n "$device" ]; then
-		printf '%s\n' "$device"
-	elif [ -n "$ipaddr" ]; then
-		printf '%s\n' "$ipaddr"
-	else
-		printf '%s\n' "0.0.0.0"
 	fi
 }
 
@@ -188,7 +172,7 @@ natter_start_instance() {
 	procd_set_param nice 0
 	procd_close_instance
 
-	echo "$(date '+%Y-%m-%d %H:%M:%S') starting ${label}: bind=${resolved_bind} public_ip=${public_ip_mode}" >> "$log_file"
+	echo "$(date '+%Y-%m-%d %H:%M:%S') starting ${label}: bind=${resolved_bind:-default route} public_ip=${public_ip_mode}" >> "$log_file"
 }
 
 start_service() {

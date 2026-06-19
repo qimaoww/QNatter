@@ -109,7 +109,10 @@ assert_contains luci-app-natter/htdocs/luci-static/resources/natter/natter.css '
 assert_contains luci-app-natter/htdocs/luci-static/resources/natter/natter.css 'overflow-x: auto'
 
 assert_contains natter/files/natter.init 'config_get network "\$section" network "wan"'
-assert_contains natter/files/natter.init 'network_get_device device "\$network"'
+assert_not_contains natter/files/natter.init 'network_get_device device "\$network"'
+assert_not_contains natter/files/natter.init 'network_get_ipaddr ipaddr "\$network"'
+assert_not_contains natter/files/natter.init 'printf .*0\.0\.0\.0'
+assert_contains natter/files/natter.init 'bind=\$\{resolved_bind:-default route\}'
 assert_contains natter/files/natter.hotplug 'config_get bind_value "\$section" bind_value'
 assert_contains natter/files/natter.hotplug '\[ -n "\$bind_value" \] && \[ "\$bind_value" = "\$DEVICE" \]'
 assert_contains natter/files/natter.config "option forward_method 'auto'"
