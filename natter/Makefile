@@ -25,7 +25,7 @@ define Package/natter
   SUBMENU:=Web Servers/Proxies
   TITLE:=Expose ports behind full-cone NAT
   URL:=https://github.com/MikeWang000000/Natter
-  DEPENDS:=+python3 +curl +nftables +firewall4 +kmod-nft-nat
+  DEPENDS:=+curl +nftables +firewall4 +kmod-nft-nat
 endef
 
 define Package/natter/description

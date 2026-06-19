@@ -146,7 +146,7 @@ assert_contains natter/files/natter-python-wrapper.py 'set_process_name\("Natter
 assert_contains natter/files/natter-qbittorrent.sh 'natter_qb_select_listen_port'
 assert_contains natter/files/natter-notify 'api/v2/auth/login'
 assert_contains natter/files/natter-notify 'api/v2/app/setPreferences'
-assert_contains natter/Makefile 'DEPENDS:=.*\+python3'
+assert_not_contains natter/Makefile 'DEPENDS:=.*\+python3'
 assert_contains natter/Makefile 'DEPENDS:=.*\+curl'
 assert_contains natter/Makefile 'DEPENDS:=.*\+nftables'
 assert_contains natter/Makefile 'DEPENDS:=.*\+firewall4'
