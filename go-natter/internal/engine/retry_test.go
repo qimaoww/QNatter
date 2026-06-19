@@ -44,6 +44,25 @@ func TestRunWithRetryReturnsMappingChangeWhenExitWhenChanged(t *testing.T) {
 	}
 }
 
+func TestRunWithRetryReturnsLocalAddressChangeWhenExitWhenChanged(t *testing.T) {
+	calls := 0
+	err := RunWithRetry(context.Background(), config.Config{ExitWhenChanged: true}, func(context.Context) error {
+		calls++
+		return ErrLocalAddressChanged
+	}, RetryOptions{
+		Sleep: func(context.Context, time.Duration) error {
+			t.Fatalf("RunWithRetry slept instead of returning ErrLocalAddressChanged")
+			return nil
+		},
+	})
+	if !errors.Is(err, ErrLocalAddressChanged) {
+		t.Fatalf("RunWithRetry returned %v, want ErrLocalAddressChanged", err)
+	}
+	if calls != 1 {
+		t.Fatalf("loop calls = %d, want 1", calls)
+	}
+}
+
 func TestRunWithRetryRestartsKeepAliveFailures(t *testing.T) {
 	keepAliveErr := errors.New("keepalive failed")
 	calls := 0

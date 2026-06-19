@@ -22,7 +22,7 @@ func RunWithRetry(ctx context.Context, cfg config.Config, run func(context.Conte
 		if ctx.Err() != nil {
 			return nil
 		}
-		if cfg.ExitWhenChanged && errors.Is(err, ErrMappingChanged) {
+		if cfg.ExitWhenChanged && (errors.Is(err, ErrMappingChanged) || errors.Is(err, ErrLocalAddressChanged)) {
 			return err
 		}
 		if !retryable(err, options.Retryable) {
