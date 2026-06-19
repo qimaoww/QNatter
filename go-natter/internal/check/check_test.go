@@ -837,8 +837,9 @@ func TestRunWithDependenciesPerformsUDPCheckFromConfig(t *testing.T) {
 			{Host: "stun.example", Port: 3478},
 			{Host: "198.51.100.7", Port: 1234},
 		},
-		BindValue: "pppoe-wan_cmcc",
-		BindPort:  40000,
+		KeepAliveServer: "203.0.113.10:8080",
+		BindValue:       "pppoe-wan_cmcc",
+		BindPort:        40000,
 	}, &stdout, &stderr, Dependencies{
 		Docker: DockerEnv{GOOS: "darwin"},
 		Resolve: func(ctx context.Context, host string) ([]netip.Addr, error) {
@@ -846,6 +847,9 @@ func TestRunWithDependenciesPerformsUDPCheckFromConfig(t *testing.T) {
 				t.Fatalf("resolver host = %q, want stun.example", host)
 			}
 			return []netip.Addr{netip.MustParseAddr("203.0.113.9")}, nil
+		},
+		CheckTCP: func(context.Context, TCPCheckOptions) (NATType, error) {
+			return NATUnknown, nil
 		},
 		CheckUDP: func(ctx context.Context, options UDPNATOptions) (NATType, error) {
 			gotOptions = options
@@ -859,9 +863,6 @@ func TestRunWithDependenciesPerformsUDPCheckFromConfig(t *testing.T) {
 	out := stdout.String()
 	if strings.Contains(out, "check: ok") {
 		t.Fatalf("output = %q, must not report fake success", out)
-	}
-	if !strings.Contains(out, "[  FAIL  ] ... Go TCP NAT check is not implemented yet") {
-		t.Fatalf("output = %q, want TCP not implemented line", out)
 	}
 	if !strings.Contains(out, "[   OK   ] ... NAT Type: 1") {
 		t.Fatalf("output = %q, want UDP NAT result line", out)
@@ -889,6 +890,76 @@ func TestRunWithDependenciesPerformsUDPCheckFromConfig(t *testing.T) {
 	}
 	if !gotOptions.Reuse {
 		t.Fatal("UDP Reuse = false, want true")
+	}
+}
+
+func TestRunWithDependenciesPerformsTCPCheckFromConfig(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	var gotOptions TCPCheckOptions
+
+	err := runWithDependencies(context.Background(), config.Config{
+		STUNServers: []config.STUNServer{
+			{Host: "stun.example", Port: 3478},
+			{Host: "198.51.100.8", Port: 1234},
+		},
+		KeepAliveServer: "keepalive.example:8080",
+		BindValue:       "pppoe-wan_ct",
+		BindPort:        40000,
+	}, &stdout, &stderr, Dependencies{
+		Docker: DockerEnv{GOOS: "darwin"},
+		Resolve: func(ctx context.Context, host string) ([]netip.Addr, error) {
+			switch host {
+			case "stun.example":
+				return []netip.Addr{netip.MustParseAddr("203.0.113.9")}, nil
+			case "keepalive.example":
+				return []netip.Addr{netip.MustParseAddr("203.0.113.10")}, nil
+			default:
+				t.Fatalf("unexpected resolver host %q", host)
+				return nil, nil
+			}
+		},
+		CheckTCP: func(ctx context.Context, options TCPCheckOptions) (NATType, error) {
+			gotOptions = options
+			return NATFullCone, nil
+		},
+		CheckUDP: func(context.Context, UDPNATOptions) (NATType, error) {
+			return NATUnknown, nil
+		},
+	})
+	if err != nil {
+		t.Fatalf("Run returned error: %v", err)
+	}
+
+	out := stdout.String()
+	if !strings.Contains(out, "Checking TCP NAT...") {
+		t.Fatalf("output = %q, want TCP check line", out)
+	}
+	if !strings.Contains(out, "[   OK   ] ... NAT Type: 1") {
+		t.Fatalf("output = %q, want TCP NAT result line", out)
+	}
+	wantServers := []netip.AddrPort{
+		netip.MustParseAddrPort("203.0.113.9:3478"),
+		netip.MustParseAddrPort("198.51.100.8:1234"),
+	}
+	if len(gotOptions.STUNServers) != len(wantServers) {
+		t.Fatalf("TCP STUN servers = %#v, want %#v", gotOptions.STUNServers, wantServers)
+	}
+	for i := range wantServers {
+		if gotOptions.STUNServers[i] != wantServers[i] {
+			t.Fatalf("TCP STUN servers = %#v, want %#v", gotOptions.STUNServers, wantServers)
+		}
+	}
+	if gotOptions.KeepAliveServer != netip.MustParseAddrPort("203.0.113.10:8080") {
+		t.Fatalf("keepalive server = %s, want 203.0.113.10:8080", gotOptions.KeepAliveServer)
+	}
+	if gotOptions.SourceAddr != netip.IPv4Unspecified() || gotOptions.SourcePort != 40000 {
+		t.Fatalf("source = %s:%d, want 0.0.0.0:40000", gotOptions.SourceAddr, gotOptions.SourcePort)
+	}
+	if gotOptions.Interface != "pppoe-wan_ct" {
+		t.Fatalf("interface = %q, want pppoe-wan_ct", gotOptions.Interface)
+	}
+	if !gotOptions.Reuse {
+		t.Fatal("reuse = false, want true")
 	}
 }
 

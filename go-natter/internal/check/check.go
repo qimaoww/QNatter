@@ -75,11 +75,14 @@ type Probe func(context.Context, config.Config) (Result, error)
 
 type Resolver func(context.Context, string) ([]netip.Addr, error)
 
+type TCPChecker func(context.Context, TCPCheckOptions) (NATType, error)
+
 type UDPChecker func(context.Context, UDPNATOptions) (NATType, error)
 
 type Dependencies struct {
 	Docker   DockerEnv
 	Resolve  Resolver
+	CheckTCP TCPChecker
 	CheckUDP UDPChecker
 }
 
@@ -207,6 +210,16 @@ type TCPNATOptions struct {
 	CheckCone     func(context.Context) (int, error)
 }
 
+type TCPCheckOptions struct {
+	STUNServers     []netip.AddrPort
+	KeepAliveServer netip.AddrPort
+	SourceAddr      netip.Addr
+	SourcePort      int
+	Interface       string
+	Reuse           bool
+	PortChecker     portcheck.Checker
+}
+
 func Run(ctx context.Context, cfg config.Config, stdout io.Writer, stderr io.Writer) error {
 	return runWithDependencies(ctx, cfg, stdout, stderr, Dependencies{})
 }
@@ -215,7 +228,7 @@ func runWithDependencies(ctx context.Context, cfg config.Config, stdout io.Write
 	deps = deps.withDefaults()
 	return Runner{
 		Docker: deps.Docker,
-		TCP:    unimplementedTCP,
+		TCP:    deps.tcpProbe(),
 		UDP:    deps.udpProbe(),
 	}.Run(ctx, cfg, stdout)
 }
@@ -581,15 +594,71 @@ func (deps Dependencies) withDefaults() Dependencies {
 	if deps.Resolve == nil {
 		deps.Resolve = defaultResolve
 	}
+	if deps.CheckTCP == nil {
+		deps.CheckTCP = CheckTCP
+	}
 	if deps.CheckUDP == nil {
 		deps.CheckUDP = CheckUDPNATType
 	}
 	return deps
 }
 
+func (deps Dependencies) tcpProbe() Probe {
+	return func(ctx context.Context, cfg config.Config) (Result, error) {
+		stunServers, err := resolveSTUNServers(ctx, deps.Resolve, cfg.STUNServers, "TCP")
+		if err != nil {
+			return Result{}, err
+		}
+		keepAliveServer, err := resolveHostPort(ctx, deps.Resolve, cfg.KeepAliveServer, 80)
+		if err != nil {
+			return Result{}, err
+		}
+		sourceAddr, bindInterface := bindFromConfig(cfg)
+		natType, err := deps.CheckTCP(ctx, TCPCheckOptions{
+			STUNServers:     stunServers,
+			KeepAliveServer: keepAliveServer,
+			SourceAddr:      sourceAddr,
+			SourcePort:      cfg.BindPort,
+			Interface:       bindInterface,
+			Reuse:           true,
+			PortChecker:     portcheck.Checker{Interface: bindInterface},
+		})
+		if err != nil {
+			return Result{}, err
+		}
+		return ResultFromNATType(natType), nil
+	}
+}
+
+func CheckTCP(ctx context.Context, options TCPCheckOptions) (NATType, error) {
+	return CheckTCPNATType(ctx, TCPNATOptions{
+		SourcePort: options.SourcePort,
+		CheckFullCone: func(ctx context.Context, sourcePort int) (int, error) {
+			return CheckTCPFullCone(ctx, TCPFullConeOptions{
+				SourceAddr:      options.SourceAddr,
+				SourcePort:      sourcePort,
+				Interface:       options.Interface,
+				Reuse:           options.Reuse,
+				KeepAliveServer: options.KeepAliveServer,
+				STUNServers:     options.STUNServers,
+				PortChecker:     options.PortChecker,
+			})
+		},
+		CheckCone: func(ctx context.Context) (int, error) {
+			return CheckTCPCone(ctx, TCPConeOptions{
+				Servers:    options.STUNServers,
+				SourceAddr: options.SourceAddr,
+				SourcePort: 0,
+				Interface:  options.Interface,
+				Reuse:      options.Reuse,
+			})
+		},
+	})
+}
+
 func (deps Dependencies) udpProbe() Probe {
 	return func(ctx context.Context, cfg config.Config) (Result, error) {
-		servers, err := resolveUDPServers(ctx, deps.Resolve, cfg.STUNServers)
+		servers, err := resolveSTUNServers(ctx, deps.Resolve, cfg.STUNServers, "UDP")
 		if err != nil {
 			return Result{}, err
 		}
@@ -615,7 +684,7 @@ func defaultResolve(ctx context.Context, host string) ([]netip.Addr, error) {
 	return net.DefaultResolver.LookupNetIP(ctx, "ip4", host)
 }
 
-func resolveUDPServers(ctx context.Context, resolve Resolver, servers []config.STUNServer) ([]netip.AddrPort, error) {
+func resolveSTUNServers(ctx context.Context, resolve Resolver, servers []config.STUNServer, label string) ([]netip.AddrPort, error) {
 	resolved := make([]netip.AddrPort, 0, len(servers))
 	for _, server := range servers {
 		if addr, err := netip.ParseAddr(server.Host); err == nil {
@@ -635,9 +704,58 @@ func resolveUDPServers(ctx context.Context, resolve Resolver, servers []config.S
 		}
 	}
 	if len(resolved) == 0 {
-		return nil, errors.New("no UDP STUN server address is available")
+		return nil, fmt.Errorf("no %s STUN server address is available", label)
 	}
 	return resolved, nil
+}
+
+func resolveHostPort(ctx context.Context, resolve Resolver, value string, defaultPort int) (netip.AddrPort, error) {
+	host, port, err := splitHostPortDefault(value, defaultPort)
+	if err != nil {
+		return netip.AddrPort{}, err
+	}
+	if addr, err := netip.ParseAddr(host); err == nil {
+		if addr.Is4() {
+			return netip.AddrPortFrom(addr, uint16(port)), nil
+		}
+		return netip.AddrPort{}, fmt.Errorf("no IPv4 address for %s", host)
+	}
+	addrs, err := resolve(ctx, host)
+	if err != nil {
+		return netip.AddrPort{}, err
+	}
+	for _, addr := range addrs {
+		if addr.Is4() {
+			return netip.AddrPortFrom(addr, uint16(port)), nil
+		}
+	}
+	return netip.AddrPort{}, fmt.Errorf("no IPv4 address for %s", host)
+}
+
+func splitHostPortDefault(value string, defaultPort int) (string, int, error) {
+	if value == "" {
+		return "", 0, errors.New("empty host")
+	}
+	host := value
+	port := defaultPort
+	if strings.Contains(value, ":") {
+		parsedHost, parsedPort, err := net.SplitHostPort(value)
+		if err != nil {
+			idx := strings.LastIndex(value, ":")
+			parsedHost = value[:idx]
+			parsedPort = value[idx+1:]
+		}
+		parsed, err := strconv.Atoi(parsedPort)
+		if err != nil || parsed < 1 || parsed > 65535 {
+			return "", 0, fmt.Errorf("invalid port in %q", value)
+		}
+		host = strings.Trim(parsedHost, "[]")
+		port = parsed
+	}
+	if host == "" {
+		return "", 0, errors.New("empty host")
+	}
+	return host, port, nil
 }
 
 func bindFromConfig(cfg config.Config) (netip.Addr, string) {
