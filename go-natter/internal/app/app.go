@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"time"
 
 	"natter-openwrt/go-natter/internal/check"
 	"natter-openwrt/go-natter/internal/config"
@@ -54,7 +55,9 @@ func Run(args []string, stdout io.Writer, stderr io.Writer) int {
 }
 
 func RunContext(ctx context.Context, args []string, stdout io.Writer, stderr io.Writer) int {
-	return RunWithContext(ctx, args, stdout, stderr, runEngine)
+	return runWithContext(ctx, args, stdout, stderr, func(ctx context.Context, cfg config.Config) error {
+		return runEngineWithLog(ctx, cfg, stderr)
+	}, check.Run)
 }
 
 func RunWith(args []string, stdout io.Writer, stderr io.Writer, run func(config.Config) error) int {
@@ -112,6 +115,10 @@ func printStartup(stderr io.Writer, showTip bool) {
 }
 
 func runEngine(ctx context.Context, cfg config.Config) error {
+	return runEngineWithLog(ctx, cfg, io.Discard)
+}
+
+func runEngineWithLog(ctx context.Context, cfg config.Config, log io.Writer) error {
 	stunClient, err := engine.NewSTUNClientFromConfig(cfg)
 	if err != nil {
 		return err
@@ -140,5 +147,9 @@ func runEngine(ctx context.Context, cfg config.Config) error {
 	}
 	return engine.RunWithRetry(ctx, cfg, func(ctx context.Context) error {
 		return engine.RunLoop(ctx, cfg, deps, engine.LoopOptions{})
-	}, engine.RetryOptions{})
+	}, engine.RetryOptions{
+		OnRetry: func(err error, delay time.Duration) {
+			fmt.Fprintf(log, "[W] %v; retrying in %s\n", err, delay)
+		},
+	})
 }

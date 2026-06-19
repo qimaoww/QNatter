@@ -8,6 +8,7 @@ import (
 	"net"
 	"net/netip"
 	"strconv"
+	"strings"
 	"time"
 
 	"natter-openwrt/go-natter/internal/socketopts"
@@ -43,6 +44,7 @@ func (c *Client) GetMapping(ctx context.Context) (Mapping, error) {
 	}
 
 	attempts := len(c.Servers)
+	failures := make([]string, 0, attempts)
 	for i := 0; i < attempts; i++ {
 		txid, err := c.transactionID()
 		if err != nil {
@@ -56,11 +58,13 @@ func (c *Client) GetMapping(ctx context.Context) (Mapping, error) {
 
 		inner, response, err := c.exchange()(ctx, network, server, c.Source, BuildBindingRequest(txid))
 		if err != nil {
+			failures = append(failures, fmt.Sprintf("%s://%s is unavailable: %v", network, server.Address(), err))
 			c.rotateServer()
 			continue
 		}
 		outer, err := ParseMappedAddress(response, txid)
 		if err != nil {
+			failures = append(failures, fmt.Sprintf("%s://%s is unavailable: %v", network, server.Address(), err))
 			c.rotateServer()
 			continue
 		}
@@ -68,7 +72,14 @@ func (c *Client) GetMapping(ctx context.Context) (Mapping, error) {
 		return Mapping{Inner: inner, Outer: outer, Server: server}, nil
 	}
 
-	return Mapping{}, ErrNoServerAvailable
+	if len(failures) == 0 {
+		return Mapping{}, ErrNoServerAvailable
+	}
+	return Mapping{}, fmt.Errorf("%w: %s", ErrNoServerAvailable, strings.Join(failures, "; "))
+}
+
+func (s Server) Address() string {
+	return net.JoinHostPort(s.Host, strconv.Itoa(s.Port))
 }
 
 func (c *Client) transactionID() ([12]byte, error) {

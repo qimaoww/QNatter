@@ -158,3 +158,35 @@ func TestRunWithRetrySleepsBetweenRetries(t *testing.T) {
 		t.Fatalf("sleeps = %#v, want 7s", sleeps)
 	}
 }
+
+func TestRunWithRetryReportsRetryableErrors(t *testing.T) {
+	calls := 0
+	var retriedErr error
+	var retriedDelay time.Duration
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	err := RunWithRetry(ctx, config.Config{KeepAliveInterval: 9}, func(context.Context) error {
+		calls++
+		if calls == 1 {
+			return stun.ErrNoServerAvailable
+		}
+		cancel()
+		return nil
+	}, RetryOptions{
+		Sleep: noRetrySleep,
+		OnRetry: func(err error, delay time.Duration) {
+			retriedErr = err
+			retriedDelay = delay
+		},
+	})
+	if err != nil {
+		t.Fatalf("RunWithRetry returned error: %v", err)
+	}
+	if !errors.Is(retriedErr, stun.ErrNoServerAvailable) {
+		t.Fatalf("retry error = %v, want ErrNoServerAvailable", retriedErr)
+	}
+	if retriedDelay != 9*time.Second {
+		t.Fatalf("retry delay = %s, want 9s", retriedDelay)
+	}
+}

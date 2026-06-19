@@ -12,6 +12,7 @@ import (
 type RetryOptions struct {
 	Sleep     func(context.Context, time.Duration) error
 	Retryable func(error) bool
+	OnRetry   func(error, time.Duration)
 }
 
 func RunWithRetry(ctx context.Context, cfg config.Config, run func(context.Context) error, options RetryOptions) error {
@@ -29,7 +30,11 @@ func RunWithRetry(ctx context.Context, cfg config.Config, run func(context.Conte
 		if !retryable(err, options.Retryable) {
 			return err
 		}
-		if err := sleepRetry(ctx, retryDelay(cfg), options.Sleep); err != nil {
+		delay := retryDelay(cfg)
+		if options.OnRetry != nil {
+			options.OnRetry(err, delay)
+		}
+		if err := sleepRetry(ctx, delay, options.Sleep); err != nil {
 			return nil
 		}
 	}

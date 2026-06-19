@@ -7,6 +7,7 @@ import (
 	"io"
 	"net"
 	"net/netip"
+	"strings"
 	"testing"
 	"time"
 )
@@ -104,6 +105,14 @@ func TestClientGetMappingReturnsTypedErrorWhenAllServersUnavailable(t *testing.T
 	_, err := client.GetMapping(context.Background())
 	if !errors.Is(err, ErrNoServerAvailable) {
 		t.Fatalf("GetMapping error = %v, want ErrNoServerAvailable", err)
+	}
+	for _, want := range []string{
+		"tcp://first.example:3478 is unavailable: first timeout",
+		"tcp://second.example:3478 is unavailable: second timeout",
+	} {
+		if !strings.Contains(err.Error(), want) {
+			t.Fatalf("GetMapping error = %q, missing %q", err.Error(), want)
+		}
 	}
 	if len(transport.servers) != 2 {
 		t.Fatalf("server attempts = %#v, want two attempts", transport.servers)
