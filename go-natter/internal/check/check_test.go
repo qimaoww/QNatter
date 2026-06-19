@@ -208,6 +208,51 @@ func TestTCPSTUNTestReturnsSourceAndMappedAddress(t *testing.T) {
 	}
 }
 
+func TestUDPSTUNTestReturnsMappingAndResponseChangeFlags(t *testing.T) {
+	txid := [16]byte{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}
+	mapped := netip.MustParseAddrPort("198.51.100.30:53000")
+	server, requestsCh, stop := startLocalUDPCheckSTUN(t, txid, mapped, 2)
+	defer stop()
+
+	result, err := UDPSTUNTest(context.Background(), UDPSTUNOptions{
+		Server:     server,
+		Source:     netip.MustParseAddrPort("127.0.0.1:0"),
+		Timeout:    time.Second,
+		Repeat:     2,
+		ChangeIP:   true,
+		ChangePort: true,
+		TxID:       func() ([16]byte, error) { return txid, nil },
+	})
+	if err != nil {
+		t.Fatalf("UDPSTUNTest returned error: %v", err)
+	}
+
+	requests := <-requestsCh
+	if len(requests) != 2 {
+		t.Fatalf("request count = %d, want 2", len(requests))
+	}
+	for _, request := range requests {
+		if got := [16]byte(request[4:20]); got != txid {
+			t.Fatalf("request transaction id = %x, want %x", got, txid)
+		}
+		if got := binary.BigEndian.Uint32(request[24:28]); got != stunChangeIP|stunChangePort {
+			t.Fatalf("change request flags = %#x, want change IP and port", got)
+		}
+	}
+	if result.Source.Addr() != netip.MustParseAddr("127.0.0.1") || result.Source.Port() == 0 {
+		t.Fatalf("source address = %s, want allocated loopback port", result.Source)
+	}
+	if result.Mapped != mapped {
+		t.Fatalf("mapped address = %s, want %s", result.Mapped, mapped)
+	}
+	if result.IPChanged {
+		t.Fatalf("IPChanged = true, want false for loopback responder")
+	}
+	if !result.PortChanged {
+		t.Fatalf("PortChanged = false, want true from alternate responder port")
+	}
+}
+
 func TestDefaultRunReportsUnimplementedChecksWithoutFakeSuccess(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 
@@ -290,6 +335,45 @@ func startLocalTCPCheckSTUN(t *testing.T, txid [16]byte, mapped netip.AddrPort) 
 	server := netip.AddrPortFrom(netip.MustParseAddr("127.0.0.1"), uint16(addr.Port))
 	return server, requestCh, func() {
 		_ = listener.Close()
+		<-done
+	}
+}
+
+func startLocalUDPCheckSTUN(t *testing.T, txid [16]byte, mapped netip.AddrPort, repeat int) (netip.AddrPort, <-chan [][]byte, func()) {
+	t.Helper()
+	serverConn, err := net.ListenPacket("udp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("listen udp server: %v", err)
+	}
+	responseConn, err := net.ListenPacket("udp", "127.0.0.1:0")
+	if err != nil {
+		_ = serverConn.Close()
+		t.Fatalf("listen udp responder: %v", err)
+	}
+	requestsCh := make(chan [][]byte, 1)
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		requests := make([][]byte, 0, repeat)
+		var client net.Addr
+		for len(requests) < repeat {
+			buf := make([]byte, 1500)
+			n, addr, err := serverConn.ReadFrom(buf)
+			if err != nil {
+				return
+			}
+			client = addr
+			requests = append(requests, append([]byte(nil), buf[:n]...))
+		}
+		requestsCh <- requests
+		_, _ = responseConn.WriteTo(stunResponse(txid, stunAttrMappedAddress, mappedAddressAttr(mapped)), client)
+	}()
+
+	addr := serverConn.LocalAddr().(*net.UDPAddr)
+	server := netip.AddrPortFrom(netip.MustParseAddr("127.0.0.1"), uint16(addr.Port))
+	return server, requestsCh, func() {
+		_ = serverConn.Close()
+		_ = responseConn.Close()
 		<-done
 	}
 }

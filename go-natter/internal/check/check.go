@@ -81,9 +81,21 @@ type TCPSTUNOptions struct {
 	TxID    func() ([16]byte, error)
 }
 
+type UDPSTUNOptions struct {
+	Server     netip.AddrPort
+	Source     netip.AddrPort
+	Timeout    time.Duration
+	Repeat     int
+	ChangeIP   bool
+	ChangePort bool
+	TxID       func() ([16]byte, error)
+}
+
 type STUNTestResult struct {
-	Source netip.AddrPort
-	Mapped netip.AddrPort
+	Source      netip.AddrPort
+	Mapped      netip.AddrPort
+	IPChanged   bool
+	PortChanged bool
 }
 
 func Run(ctx context.Context, cfg config.Config, stdout io.Writer, stderr io.Writer) error {
@@ -265,6 +277,67 @@ func TCPSTUNTest(ctx context.Context, options TCPSTUNOptions) (STUNTestResult, e
 	return STUNTestResult{Source: source, Mapped: mapped}, nil
 }
 
+func UDPSTUNTest(ctx context.Context, options UDPSTUNOptions) (STUNTestResult, error) {
+	timeout := options.Timeout
+	if timeout == 0 {
+		timeout = 3 * time.Second
+	}
+	repeat := options.Repeat
+	if repeat <= 0 {
+		repeat = 3
+	}
+	ctx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+
+	txid, err := udpSTUNTxID(options)
+	if err != nil {
+		return STUNTestResult{}, err
+	}
+
+	conn, err := net.ListenUDP("udp", udpAddrFromAddrPort(options.Source))
+	if err != nil {
+		return STUNTestResult{}, err
+	}
+	defer conn.Close()
+	if deadline, ok := ctx.Deadline(); ok {
+		_ = conn.SetDeadline(deadline)
+	}
+
+	serverAddr := udpAddrFromAddrPort(options.Server)
+	request := BuildSTUNBindingRequest(txid, options.ChangeIP, options.ChangePort)
+	for i := 0; i < repeat; i++ {
+		if _, err := conn.WriteToUDP(request, serverAddr); err != nil {
+			return STUNTestResult{}, err
+		}
+	}
+
+	buf := make([]byte, 1500)
+	for {
+		n, responseAddr, err := conn.ReadFromUDP(buf)
+		if err != nil {
+			return STUNTestResult{}, err
+		}
+		mapped, err := ParseSTUNMappedAddress(buf[:n], txid)
+		if err != nil {
+			continue
+		}
+		source, err := addrPortFromNetAddr(conn.LocalAddr())
+		if err != nil {
+			return STUNTestResult{}, err
+		}
+		received, err := addrPortFromNetAddr(responseAddr)
+		if err != nil {
+			return STUNTestResult{}, err
+		}
+		return STUNTestResult{
+			Source:      source,
+			Mapped:      mapped,
+			IPChanged:   received.Addr() != options.Server.Addr(),
+			PortChanged: received.Port() != options.Server.Port(),
+		}, nil
+	}
+}
+
 func tcpSTUNTxID(options TCPSTUNOptions) ([16]byte, error) {
 	if options.TxID != nil {
 		return options.TxID()
@@ -277,6 +350,17 @@ func tcpSTUNTxID(options TCPSTUNOptions) ([16]byte, error) {
 	return txid, nil
 }
 
+func udpSTUNTxID(options UDPSTUNOptions) ([16]byte, error) {
+	if options.TxID != nil {
+		return options.TxID()
+	}
+	var txid [16]byte
+	if _, err := rand.Read(txid[:]); err != nil {
+		return [16]byte{}, err
+	}
+	return txid, nil
+}
+
 func tcpAddrFromAddrPort(addr netip.AddrPort) *net.TCPAddr {
 	return &net.TCPAddr{
 		IP:   net.IP(addr.Addr().AsSlice()),
@@ -284,16 +368,34 @@ func tcpAddrFromAddrPort(addr netip.AddrPort) *net.TCPAddr {
 	}
 }
 
+func udpAddrFromAddrPort(addr netip.AddrPort) *net.UDPAddr {
+	if !addr.IsValid() {
+		return nil
+	}
+	return &net.UDPAddr{
+		IP:   net.IP(addr.Addr().AsSlice()),
+		Port: int(addr.Port()),
+	}
+}
+
 func addrPortFromNetAddr(addr net.Addr) (netip.AddrPort, error) {
-	tcpAddr, ok := addr.(*net.TCPAddr)
-	if !ok {
+	var ip net.IP
+	var port int
+	switch typed := addr.(type) {
+	case *net.TCPAddr:
+		ip = typed.IP
+		port = typed.Port
+	case *net.UDPAddr:
+		ip = typed.IP
+		port = typed.Port
+	default:
 		return netip.AddrPort{}, fmt.Errorf("unsupported network address %T", addr)
 	}
-	parsed, ok := netip.AddrFromSlice(tcpAddr.IP)
+	parsed, ok := netip.AddrFromSlice(ip)
 	if !ok {
-		return netip.AddrPort{}, fmt.Errorf("invalid local IP address %s", tcpAddr.IP)
+		return netip.AddrPort{}, fmt.Errorf("invalid IP address %s", ip)
 	}
-	return netip.AddrPortFrom(parsed.Unmap(), uint16(tcpAddr.Port)), nil
+	return netip.AddrPortFrom(parsed.Unmap(), uint16(port)), nil
 }
 
 func unimplementedTCP(context.Context, config.Config) (Result, error) {
