@@ -34,31 +34,62 @@ type Result struct {
 	Target  netip.AddrPort
 }
 
+type Session struct {
+	Result    Result
+	Forwarder forward.Forwarder
+	KeepAlive KeepAlive
+}
+
+func (s *Session) Close() error {
+	var firstErr error
+	if s.Forwarder != nil {
+		if err := s.Forwarder.Stop(); err != nil {
+			firstErr = err
+		}
+		s.Forwarder = nil
+	}
+	if s.KeepAlive != nil {
+		if err := s.KeepAlive.Close(); err != nil && firstErr == nil {
+			firstErr = err
+		}
+		s.KeepAlive = nil
+	}
+	return firstErr
+}
+
 func RunOnce(ctx context.Context, cfg config.Config, deps Dependencies) (Result, error) {
+	session, err := StartSession(ctx, cfg, deps)
+	if err != nil {
+		return Result{}, err
+	}
+	return session.Result, nil
+}
+
+func StartSession(ctx context.Context, cfg config.Config, deps Dependencies) (*Session, error) {
 	if deps.STUN == nil {
-		return Result{}, fmt.Errorf("missing STUN client")
+		return nil, fmt.Errorf("missing STUN client")
 	}
 
 	first, err := deps.STUN.GetMapping(ctx)
 	if err != nil {
-		return Result{}, err
+		return nil, err
 	}
 	keepAlive := deps.KeepAlive
 	if keepAlive == nil && deps.NewKeepAlive != nil {
 		keepAlive, err = deps.NewKeepAlive(first)
 		if err != nil {
-			return Result{}, err
+			return nil, err
 		}
 	}
 	if keepAlive == nil {
-		return Result{}, fmt.Errorf("missing keep-alive client")
+		return nil, fmt.Errorf("missing keep-alive client")
 	}
 	if err := keepAlive.KeepAlive(); err != nil {
-		return Result{}, err
+		return nil, err
 	}
 	mapping, err := deps.STUN.GetMapping(ctx)
 	if err != nil {
-		return Result{}, err
+		return nil, err
 	}
 	if !mapping.Inner.IsValid() {
 		mapping.Inner = first.Inner
@@ -77,7 +108,7 @@ func RunOnce(ctx context.Context, cfg config.Config, deps Dependencies) (Result,
 	}
 	fwd, err := newForwarder(method)
 	if err != nil {
-		return Result{}, err
+		return nil, err
 	}
 
 	target := resolveTarget(cfg, method, mapping)
@@ -89,7 +120,7 @@ func RunOnce(ctx context.Context, cfg config.Config, deps Dependencies) (Result,
 		UDP:        cfg.UDP,
 	}
 	if err := fwd.Start(options); err != nil {
-		return Result{}, err
+		return nil, err
 	}
 
 	if deps.Notify != nil {
@@ -103,11 +134,15 @@ func RunOnce(ctx context.Context, cfg config.Config, deps Dependencies) (Result,
 			Outer:    mapping.Outer,
 			Message:  "mapped",
 		}); err != nil {
-			return Result{}, err
+			return nil, err
 		}
 	}
 
-	return Result{Method: method, Mapping: mapping, Target: target}, nil
+	return &Session{
+		Result:    Result{Method: method, Mapping: mapping, Target: target},
+		Forwarder: fwd,
+		KeepAlive: keepAlive,
+	}, nil
 }
 
 func resolveTarget(cfg config.Config, method string, mapping stun.Mapping) netip.AddrPort {

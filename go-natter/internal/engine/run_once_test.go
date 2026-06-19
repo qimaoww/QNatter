@@ -204,6 +204,9 @@ func (k *fakeKeepAlive) KeepAlive() error {
 }
 
 func (k *fakeKeepAlive) Close() error {
+	if k.events != nil {
+		*k.events = append(*k.events, "keepalive-close")
+	}
 	return nil
 }
 
@@ -221,5 +224,8 @@ func (f *fakeForwarder) Start(options forward.StartOptions) error {
 }
 
 func (f *fakeForwarder) Stop() error {
+	if f.events != nil {
+		*f.events = append(*f.events, "forward-stop")
+	}
 	return nil
 }
