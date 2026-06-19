@@ -1,0 +1,57 @@
+package app
+
+import (
+	"bytes"
+	"strings"
+	"testing"
+)
+
+func TestRunVersion(t *testing.T) {
+	var stdout bytes.Buffer
+	code := Run([]string{"--version"}, &stdout, &bytes.Buffer{})
+
+	if code != 0 {
+		t.Fatalf("Run returned code %d, want 0", code)
+	}
+	if got := stdout.String(); !strings.Contains(got, "Natter Go") {
+		t.Fatalf("version output = %q, want Natter Go", got)
+	}
+}
+
+func TestRunCheckParsesExistingOpenWrtArguments(t *testing.T) {
+	var stdout bytes.Buffer
+	code := Run([]string{
+		"--check",
+		"-k", "15",
+		"-s", "turn.cloud-rtc.com:80",
+		"-i", "pppoe-wan_cmcc",
+		"-b", "0",
+		"-m", "none",
+		"-t", "0.0.0.0",
+		"-p", "0",
+		"-e", "/var/run/natter/cmcc_.notify",
+	}, &stdout, &bytes.Buffer{})
+
+	if code != 0 {
+		t.Fatalf("Run returned code %d, want 0", code)
+	}
+	out := stdout.String()
+	for _, want := range []string{
+		"check: ok",
+		"bind=pppoe-wan_cmcc:0",
+		"stun=turn.cloud-rtc.com:80",
+		"method=none",
+	} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("check output = %q, missing %q", out, want)
+		}
+	}
+}
+
+func TestRunRejectsInvalidArguments(t *testing.T) {
+	code := Run([]string{"-s", "bad:port"}, &bytes.Buffer{}, &bytes.Buffer{})
+
+	if code == 0 {
+		t.Fatal("Run accepted invalid arguments")
+	}
+}

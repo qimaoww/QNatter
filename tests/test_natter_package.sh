@@ -57,6 +57,11 @@ assert_file luci-app-natter/root/usr/share/rpcd/acl.d/luci-app-natter.json
 assert_file luci-app-natter/root/usr/libexec/rpcd/luci.natter
 assert_file luci-app-natter/root/usr/libexec/natter-status
 assert_file luci-app-natter/root/usr/libexec/natter-log
+assert_file go-natter/go.mod
+assert_file go-natter/cmd/natter/main.go
+assert_file go-natter/internal/app/app.go
+assert_file go-natter/internal/config/config.go
+assert_file go-natter/internal/stun/message.go
 
 assert_no_path luci-app-natter/luci-app-natter
 assert_no_path luci-app-natter/luasrc
@@ -197,6 +202,8 @@ sh -n "$ROOT/natter/files/natter.init"
 sh -n "$ROOT/luci-app-natter/root/usr/libexec/natter-status"
 sh -n "$ROOT/luci-app-natter/root/usr/libexec/natter-log"
 sh -n "$ROOT/luci-app-natter/root/usr/libexec/rpcd/luci.natter"
+
+(cd "$ROOT/go-natter" && go test ./...)
 
 dummy_natter="$tmp/natter.py"
 archive="$tmp/natter-openwrt-direct.tar.gz"
