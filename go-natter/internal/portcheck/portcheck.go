@@ -10,6 +10,8 @@ import (
 	"net/netip"
 	"strings"
 	"time"
+
+	"natter-openwrt/go-natter/internal/socketopts"
 )
 
 type Result int
@@ -24,6 +26,7 @@ type Probe func(context.Context, int, netip.Addr) (Result, error)
 
 type Checker struct {
 	Timeout           time.Duration
+	Interface         string
 	IfconfigProbe     Probe
 	TransmissionProbe Probe
 }
@@ -34,6 +37,7 @@ func (c Checker) TestLAN(ctx context.Context, addr netip.AddrPort, source netip.
 	if source.IsValid() {
 		dialer.LocalAddr = &net.TCPAddr{IP: net.IP(source.AsSlice())}
 	}
+	dialer.Control = socketopts.Control(socketopts.Options{Interface: c.Interface})
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 
@@ -91,6 +95,7 @@ func (c Checker) httpGet(ctx context.Context, host string, path string, source n
 	if source.IsValid() {
 		dialer.LocalAddr = &net.TCPAddr{IP: net.IP(source.AsSlice())}
 	}
+	dialer.Control = socketopts.Control(socketopts.Options{Interface: c.Interface})
 
 	client := http.Client{
 		Timeout: timeout,

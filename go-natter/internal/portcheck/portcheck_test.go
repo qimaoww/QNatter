@@ -4,7 +4,10 @@ import (
 	"context"
 	"errors"
 	"net"
+	"net/http"
+	"net/http/httptest"
 	"net/netip"
+	"runtime"
 	"testing"
 )
 
@@ -82,6 +85,30 @@ func TestWANReportsUnknownWhenAnyProbeIsUnknown(t *testing.T) {
 
 	if result != Unknown {
 		t.Fatalf("TestWAN = %v, want Unknown", result)
+	}
+}
+
+func TestHTTPGetAppliesInterfaceBinding(t *testing.T) {
+	if runtime.GOOS != "linux" {
+		t.Skip("SO_BINDTODEVICE is Linux-specific")
+	}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte("ok"))
+	}))
+	defer server.Close()
+
+	host, _, err := net.SplitHostPort(server.Listener.Addr().String())
+	if err != nil {
+		t.Fatalf("SplitHostPort returned error: %v", err)
+	}
+	if host != "127.0.0.1" && host != "::1" {
+		t.Fatalf("test server host = %s, want loopback", host)
+	}
+
+	checker := Checker{Interface: "natter-missing-iface"}
+	_, err = checker.httpGet(context.Background(), server.Listener.Addr().String(), "/", netip.Addr{})
+	if err == nil {
+		t.Fatal("httpGet succeeded with a missing bound interface")
 	}
 }
 
