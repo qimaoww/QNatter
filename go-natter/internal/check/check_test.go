@@ -133,6 +133,50 @@ func TestParseSTUNMappedAddressRejectsWrongTransaction(t *testing.T) {
 	}
 }
 
+func TestBuildSTUNBindingRequestUsesPythonWireFormat(t *testing.T) {
+	txid := [16]byte{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}
+
+	msg := BuildSTUNBindingRequest(txid, false, false)
+
+	if len(msg) != 20 {
+		t.Fatalf("request length = %d, want 20", len(msg))
+	}
+	if got := binary.BigEndian.Uint16(msg[0:2]); got != stunBindingRequest {
+		t.Fatalf("message type = %#x, want binding request", got)
+	}
+	if got := binary.BigEndian.Uint16(msg[2:4]); got != 0 {
+		t.Fatalf("payload length = %d, want 0", got)
+	}
+	if got := [16]byte(msg[4:20]); got != txid {
+		t.Fatalf("transaction id = %x, want %x", got, txid)
+	}
+}
+
+func TestBuildSTUNBindingRequestCanAskServerToChangeAddress(t *testing.T) {
+	txid := [16]byte{15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0}
+
+	msg := BuildSTUNBindingRequest(txid, true, true)
+
+	if len(msg) != 28 {
+		t.Fatalf("request length = %d, want 28", len(msg))
+	}
+	if got := binary.BigEndian.Uint16(msg[2:4]); got != 8 {
+		t.Fatalf("payload length = %d, want 8", got)
+	}
+	if got := [16]byte(msg[4:20]); got != txid {
+		t.Fatalf("transaction id = %x, want %x", got, txid)
+	}
+	if got := binary.BigEndian.Uint16(msg[20:22]); got != stunAttrChangeRequest {
+		t.Fatalf("attribute type = %#x, want change request", got)
+	}
+	if got := binary.BigEndian.Uint16(msg[22:24]); got != 4 {
+		t.Fatalf("attribute length = %d, want 4", got)
+	}
+	if got := binary.BigEndian.Uint32(msg[24:28]); got != stunChangeIP|stunChangePort {
+		t.Fatalf("change request flags = %#x, want change IP and port", got)
+	}
+}
+
 func TestDefaultRunReportsUnimplementedChecksWithoutFakeSuccess(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 

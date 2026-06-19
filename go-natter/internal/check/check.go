@@ -18,10 +18,14 @@ import (
 const Version = "2.2.1-go"
 
 const (
+	stunBindingRequest       uint16 = 0x0001
 	stunBindingResponse      uint16 = 0x0101
 	stunAttrMappedAddress    uint16 = 0x0001
+	stunAttrChangeRequest    uint16 = 0x0003
 	stunAttrXORMappedAddress uint16 = 0x0020
 	stunFamilyIPv4           byte   = 0x01
+	stunChangePort           uint32 = 0x0002
+	stunChangeIP             uint32 = 0x0004
 	stunMagicCookie          uint32 = 0x2112a442
 )
 
@@ -117,6 +121,31 @@ func ResultFromNATType(nat NATType) Result {
 		status = NA
 	}
 	return Result{Status: status, Info: fmt.Sprintf("NAT Type: %d", nat)}
+}
+
+func BuildSTUNBindingRequest(txid [16]byte, changeIP bool, changePort bool) []byte {
+	payloadLen := 0
+	flags := uint32(0)
+	if changeIP {
+		flags |= stunChangeIP
+	}
+	if changePort {
+		flags |= stunChangePort
+	}
+	if flags != 0 {
+		payloadLen = 8
+	}
+
+	msg := make([]byte, 20+payloadLen)
+	binary.BigEndian.PutUint16(msg[0:2], stunBindingRequest)
+	binary.BigEndian.PutUint16(msg[2:4], uint16(payloadLen))
+	copy(msg[4:20], txid[:])
+	if flags != 0 {
+		binary.BigEndian.PutUint16(msg[20:22], stunAttrChangeRequest)
+		binary.BigEndian.PutUint16(msg[22:24], 4)
+		binary.BigEndian.PutUint32(msg[24:28], flags)
+	}
+	return msg
 }
 
 func ParseSTUNMappedAddress(data []byte, txid [16]byte) (netip.AddrPort, error) {
