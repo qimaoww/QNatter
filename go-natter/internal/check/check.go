@@ -58,6 +58,17 @@ const (
 	NATSymmetricUDPFirewall NATType = 5
 )
 
+const (
+	tcpFullConeBlocked      = -1
+	tcpFullConeUnknown      = 0
+	tcpFullConeReachable    = 1
+	tcpFullConeOpenInternet = 2
+
+	tcpConeSymmetric = -1
+	tcpConeUnknown   = 0
+	tcpConeStable    = 1
+)
+
 type Probe func(context.Context, config.Config) (Result, error)
 
 type Runner struct {
@@ -96,6 +107,12 @@ type STUNTestResult struct {
 	Mapped      netip.AddrPort
 	IPChanged   bool
 	PortChanged bool
+}
+
+type TCPNATOptions struct {
+	SourcePort    int
+	CheckFullCone func(context.Context, int) (int, error)
+	CheckCone     func(context.Context) (int, error)
 }
 
 func Run(ctx context.Context, cfg config.Config, stdout io.Writer, stderr io.Writer) error {
@@ -148,6 +165,47 @@ func ResultFromNATType(nat NATType) Result {
 		status = NA
 	}
 	return Result{Status: status, Info: fmt.Sprintf("NAT Type: %d", nat)}
+}
+
+func CheckTCPNATType(ctx context.Context, options TCPNATOptions) (NATType, error) {
+	checkFullCone := options.CheckFullCone
+	if checkFullCone == nil {
+		checkFullCone = func(context.Context, int) (int, error) {
+			return tcpFullConeUnknown, nil
+		}
+	}
+	checkCone := options.CheckCone
+	if checkCone == nil {
+		checkCone = func(context.Context) (int, error) {
+			return tcpConeUnknown, nil
+		}
+	}
+
+	fullCone, err := checkFullCone(ctx, options.SourcePort)
+	if err != nil {
+		return NATUnknown, err
+	}
+	switch fullCone {
+	case tcpFullConeOpenInternet:
+		return NATOpenInternet, nil
+	case tcpFullConeReachable:
+		return NATFullCone, nil
+	case tcpFullConeUnknown:
+		return NATUnknown, nil
+	}
+
+	cone, err := checkCone(ctx)
+	if err != nil {
+		return NATUnknown, err
+	}
+	switch cone {
+	case tcpConeStable:
+		return NATPortRestricted, nil
+	case tcpConeSymmetric:
+		return NATSymmetric, nil
+	default:
+		return NATUnknown, nil
+	}
 }
 
 func BuildSTUNBindingRequest(txid [16]byte, changeIP bool, changePort bool) []byte {

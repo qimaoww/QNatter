@@ -100,6 +100,63 @@ func TestNATResultMatchesPythonStatusRules(t *testing.T) {
 	}
 }
 
+func TestCheckTCPNATTypeMatchesPythonDecisionTree(t *testing.T) {
+	tests := []struct {
+		name     string
+		fullCone int
+		cone     int
+		want     NATType
+	}{
+		{name: "open internet", fullCone: tcpFullConeOpenInternet, want: NATOpenInternet},
+		{name: "full cone", fullCone: tcpFullConeReachable, want: NATFullCone},
+		{name: "full cone unknown", fullCone: tcpFullConeUnknown, want: NATUnknown},
+		{name: "port restricted", fullCone: tcpFullConeBlocked, cone: tcpConeStable, want: NATPortRestricted},
+		{name: "symmetric", fullCone: tcpFullConeBlocked, cone: tcpConeSymmetric, want: NATSymmetric},
+		{name: "cone unknown", fullCone: tcpFullConeBlocked, cone: tcpConeUnknown, want: NATUnknown},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := CheckTCPNATType(context.Background(), TCPNATOptions{
+				CheckFullCone: func(context.Context, int) (int, error) {
+					return tt.fullCone, nil
+				},
+				CheckCone: func(context.Context) (int, error) {
+					return tt.cone, nil
+				},
+			})
+			if err != nil {
+				t.Fatalf("CheckTCPNATType returned error: %v", err)
+			}
+			if got != tt.want {
+				t.Fatalf("CheckTCPNATType = %d, want %d", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestCheckTCPNATTypeSkipsConeWhenFullConeIsConclusive(t *testing.T) {
+	calledCone := false
+	got, err := CheckTCPNATType(context.Background(), TCPNATOptions{
+		CheckFullCone: func(context.Context, int) (int, error) {
+			return tcpFullConeReachable, nil
+		},
+		CheckCone: func(context.Context) (int, error) {
+			calledCone = true
+			return tcpConeSymmetric, nil
+		},
+	})
+	if err != nil {
+		t.Fatalf("CheckTCPNATType returned error: %v", err)
+	}
+	if got != NATFullCone {
+		t.Fatalf("CheckTCPNATType = %d, want full cone", got)
+	}
+	if calledCone {
+		t.Fatal("CheckTCPNATType called cone checker after conclusive full-cone result")
+	}
+}
+
 func TestParseSTUNMappedAddressSupportsRFC3489MappedAddress(t *testing.T) {
 	txid := [16]byte{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}
 	response := stunResponse(txid, stunAttrMappedAddress, mappedAddressAttr(netip.MustParseAddrPort("198.51.100.7:45678")))
