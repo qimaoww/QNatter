@@ -232,3 +232,17 @@ func (f *fakeForwarder) Stop() error {
 	}
 	return nil
 }
+
+type fakeUPnP struct {
+	mapping UPnPMapping
+	events  *[]string
+	err     error
+}
+
+func (u *fakeUPnP) Forward(_ context.Context, mapping UPnPMapping) error {
+	if u.events != nil {
+		*u.events = append(*u.events, "upnp-forward")
+	}
+	u.mapping = mapping
+	return u.err
+}

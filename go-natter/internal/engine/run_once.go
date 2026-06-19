@@ -21,6 +21,18 @@ type KeepAlive interface {
 	Close() error
 }
 
+type UPnPMapper interface {
+	Forward(context.Context, UPnPMapping) error
+}
+
+type UPnPMapping struct {
+	ExternalPort   int
+	InternalPort   int
+	InternalClient string
+	UDP            bool
+	LeaseDuration  int
+}
+
 type PortResult = portcheck.Result
 
 const (
@@ -40,6 +52,7 @@ type Dependencies struct {
 	NewForwarder func(string) (forward.Forwarder, error)
 	PortCheck    PortChecker
 	Notify       func(status.Mapping) error
+	UPnP         UPnPMapper
 }
 
 type Result struct {
@@ -52,6 +65,7 @@ type Session struct {
 	Result    Result
 	Forwarder forward.Forwarder
 	KeepAlive KeepAlive
+	UPnP      UPnPMapper
 }
 
 func (s *Session) Close() error {
@@ -137,6 +151,22 @@ func StartSession(ctx context.Context, cfg config.Config, deps Dependencies) (*S
 		return nil, err
 	}
 
+	var activeUPnP UPnPMapper
+	if cfg.UPnP {
+		if deps.UPnP == nil {
+			return nil, fmt.Errorf("missing UPnP mapper")
+		}
+		if err := deps.UPnP.Forward(ctx, UPnPMapping{
+			ExternalPort:   cfg.BindPort,
+			InternalPort:   cfg.BindPort,
+			InternalClient: mapping.Inner.Addr().String(),
+			UDP:            cfg.UDP,
+			LeaseDuration:  cfg.KeepAliveInterval * 3,
+		}); err == nil {
+			activeUPnP = deps.UPnP
+		}
+	}
+
 	if deps.Notify != nil {
 		protocol := "tcp"
 		if cfg.UDP {
@@ -156,6 +186,7 @@ func StartSession(ctx context.Context, cfg config.Config, deps Dependencies) (*S
 		Result:    Result{Method: method, Mapping: mapping, Target: target},
 		Forwarder: fwd,
 		KeepAlive: keepAlive,
+		UPnP:      activeUPnP,
 	}, nil
 }
 
