@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"natter-openwrt/go-natter/internal/config"
+	"natter-openwrt/go-natter/internal/engine"
 )
 
 func TestRunVersion(t *testing.T) {
@@ -107,5 +108,18 @@ func TestRunWithContextPassesContextToEngine(t *testing.T) {
 	}
 	if !gotCanceled {
 		t.Fatal("runner did not receive canceled context")
+	}
+}
+
+func TestRunWithContextTreatsExitWhenChangedAsCleanExit(t *testing.T) {
+	code := RunWithContext(context.Background(), []string{"-q"}, &bytes.Buffer{}, &bytes.Buffer{}, func(ctx context.Context, cfg config.Config) error {
+		if !cfg.ExitWhenChanged {
+			t.Fatal("ExitWhenChanged = false, want true")
+		}
+		return engine.ErrMappingChanged
+	})
+
+	if code != 0 {
+		t.Fatalf("RunWithContext returned code %d, want clean exit", code)
 	}
 }
