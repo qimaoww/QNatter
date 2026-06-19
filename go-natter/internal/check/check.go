@@ -102,6 +102,21 @@ type UDPSTUNOptions struct {
 	TxID       func() ([16]byte, error)
 }
 
+type UDPProbeRequest struct {
+	Server     netip.AddrPort
+	SourcePort int
+	ChangeIP   bool
+	ChangePort bool
+}
+
+type UDPProbe func(context.Context, UDPProbeRequest) (STUNTestResult, error)
+
+type UDPNATOptions struct {
+	Servers    []netip.AddrPort
+	SourcePort int
+	Probe      UDPProbe
+}
+
 type STUNTestResult struct {
 	Source      netip.AddrPort
 	Mapped      netip.AddrPort
@@ -206,6 +221,103 @@ func CheckTCPNATType(ctx context.Context, options TCPNATOptions) (NATType, error
 	default:
 		return NATUnknown, nil
 	}
+}
+
+func CheckUDPNATType(ctx context.Context, options UDPNATOptions) (NATType, error) {
+	probe := options.Probe
+	if probe == nil {
+		probe = func(ctx context.Context, request UDPProbeRequest) (STUNTestResult, error) {
+			return UDPSTUNTest(ctx, UDPSTUNOptions{
+				Server:     request.Server,
+				Source:     netip.AddrPortFrom(netip.IPv4Unspecified(), uint16(request.SourcePort)),
+				ChangeIP:   request.ChangeIP,
+				ChangePort: request.ChangePort,
+			})
+		}
+	}
+
+	var test1First *STUNTestResult
+	var test1Second *STUNTestResult
+	var test2 *STUNTestResult
+	var test3 *STUNTestResult
+
+	for _, server := range options.Servers {
+		normal, ok, err := udpProbeMaybe(ctx, probe, UDPProbeRequest{
+			Server:     server,
+			SourcePort: options.SourcePort,
+		})
+		if err != nil {
+			return NATUnknown, err
+		}
+		if !ok {
+			continue
+		}
+		if test1First == nil {
+			test1First = &normal
+			continue
+		}
+		test1Second = &normal
+
+		changed, ok, err := udpProbeMaybe(ctx, probe, UDPProbeRequest{
+			Server:     server,
+			SourcePort: options.SourcePort,
+			ChangeIP:   true,
+			ChangePort: true,
+		})
+		if err != nil {
+			return NATUnknown, err
+		}
+		if ok {
+			if !changed.IPChanged || !changed.PortChanged {
+				continue
+			}
+			test2 = &changed
+		}
+
+		changedPort, ok, err := udpProbeMaybe(ctx, probe, UDPProbeRequest{
+			Server:     server,
+			SourcePort: options.SourcePort,
+			ChangePort: true,
+		})
+		if err != nil {
+			return NATUnknown, err
+		}
+		if ok {
+			test3 = &changedPort
+		}
+		break
+	}
+
+	if test1First == nil || test1Second == nil {
+		return NATUnknown, nil
+	}
+	if test1First.Mapped != test1Second.Mapped {
+		return NATSymmetric, nil
+	}
+	if test1First.Source == test1First.Mapped {
+		if test2 != nil {
+			return NATOpenInternet, nil
+		}
+		return NATSymmetricUDPFirewall, nil
+	}
+	if test2 != nil {
+		return NATFullCone, nil
+	}
+	if test3 != nil {
+		return NATRestricted, nil
+	}
+	return NATPortRestricted, nil
+}
+
+func udpProbeMaybe(ctx context.Context, probe UDPProbe, request UDPProbeRequest) (STUNTestResult, bool, error) {
+	result, err := probe(ctx, request)
+	if err != nil {
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			return STUNTestResult{}, false, ctxErr
+		}
+		return STUNTestResult{}, false, nil
+	}
+	return result, true, nil
 }
 
 func BuildSTUNBindingRequest(txid [16]byte, changeIP bool, changePort bool) []byte {

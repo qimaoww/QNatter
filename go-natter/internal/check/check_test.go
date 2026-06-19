@@ -157,6 +157,126 @@ func TestCheckTCPNATTypeSkipsConeWhenFullConeIsConclusive(t *testing.T) {
 	}
 }
 
+func TestCheckUDPNATTypeMatchesPythonDecisionTree(t *testing.T) {
+	source := netip.MustParseAddrPort("192.0.2.10:40000")
+	mapped := netip.MustParseAddrPort("198.51.100.10:50000")
+	servers := []netip.AddrPort{
+		netip.MustParseAddrPort("203.0.113.1:3478"),
+		netip.MustParseAddrPort("203.0.113.2:3478"),
+	}
+
+	tests := []struct {
+		name      string
+		responses map[udpProbeKey]udpProbeResponse
+		want      NATType
+	}{
+		{
+			name: "symmetric when normal mappings differ",
+			responses: map[udpProbeKey]udpProbeResponse{
+				{server: servers[0]}: {result: STUNTestResult{Source: source, Mapped: mapped}},
+				{server: servers[1]}: {result: STUNTestResult{Source: source, Mapped: netip.MustParseAddrPort("198.51.100.10:50001")}},
+				{server: servers[1], changeIP: true, changePort: true}: {
+					result: STUNTestResult{Source: source, Mapped: mapped, IPChanged: true, PortChanged: true},
+				},
+			},
+			want: NATSymmetric,
+		},
+		{
+			name: "open internet when source equals mapped and test2 responds",
+			responses: map[udpProbeKey]udpProbeResponse{
+				{server: servers[0]}: {result: STUNTestResult{Source: source, Mapped: source}},
+				{server: servers[1]}: {result: STUNTestResult{Source: source, Mapped: source}},
+				{server: servers[1], changeIP: true, changePort: true}: {
+					result: STUNTestResult{Source: source, Mapped: source, IPChanged: true, PortChanged: true},
+				},
+			},
+			want: NATOpenInternet,
+		},
+		{
+			name: "symmetric udp firewall when source equals mapped and test2 is silent",
+			responses: map[udpProbeKey]udpProbeResponse{
+				{server: servers[0]}: {result: STUNTestResult{Source: source, Mapped: source}},
+				{server: servers[1]}: {result: STUNTestResult{Source: source, Mapped: source}},
+			},
+			want: NATSymmetricUDPFirewall,
+		},
+		{
+			name: "full cone when test2 responds behind nat",
+			responses: map[udpProbeKey]udpProbeResponse{
+				{server: servers[0]}: {result: STUNTestResult{Source: source, Mapped: mapped}},
+				{server: servers[1]}: {result: STUNTestResult{Source: source, Mapped: mapped}},
+				{server: servers[1], changeIP: true, changePort: true}: {
+					result: STUNTestResult{Source: source, Mapped: mapped, IPChanged: true, PortChanged: true},
+				},
+			},
+			want: NATFullCone,
+		},
+		{
+			name: "restricted when test3 responds behind nat",
+			responses: map[udpProbeKey]udpProbeResponse{
+				{server: servers[0]}: {result: STUNTestResult{Source: source, Mapped: mapped}},
+				{server: servers[1]}: {result: STUNTestResult{Source: source, Mapped: mapped}},
+				{server: servers[1], changePort: true}: {
+					result: STUNTestResult{Source: source, Mapped: mapped, PortChanged: true},
+				},
+			},
+			want: NATRestricted,
+		},
+		{
+			name: "port restricted when test2 and test3 are silent behind nat",
+			responses: map[udpProbeKey]udpProbeResponse{
+				{server: servers[0]}: {result: STUNTestResult{Source: source, Mapped: mapped}},
+				{server: servers[1]}: {result: STUNTestResult{Source: source, Mapped: mapped}},
+			},
+			want: NATPortRestricted,
+		},
+		{
+			name: "unknown with fewer than two normal responses",
+			responses: map[udpProbeKey]udpProbeResponse{
+				{server: servers[0]}: {result: STUNTestResult{Source: source, Mapped: mapped}},
+			},
+			want: NATUnknown,
+		},
+		{
+			name: "skips unusable changed response and tries later server",
+			responses: map[udpProbeKey]udpProbeResponse{
+				{server: servers[0]}: {result: STUNTestResult{Source: source, Mapped: mapped}},
+				{server: servers[1]}: {result: STUNTestResult{Source: source, Mapped: mapped}},
+				{server: servers[1], changeIP: true, changePort: true}: {
+					result: STUNTestResult{Source: source, Mapped: mapped, IPChanged: false, PortChanged: true},
+				},
+				{server: netip.MustParseAddrPort("203.0.113.3:3478")}: {
+					result: STUNTestResult{Source: source, Mapped: mapped},
+				},
+				{server: netip.MustParseAddrPort("203.0.113.3:3478"), changeIP: true, changePort: true}: {
+					result: STUNTestResult{Source: source, Mapped: mapped, IPChanged: true, PortChanged: true},
+				},
+			},
+			want: NATFullCone,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			testServers := append([]netip.AddrPort(nil), servers...)
+			if strings.Contains(tt.name, "later server") {
+				testServers = append(testServers, netip.MustParseAddrPort("203.0.113.3:3478"))
+			}
+			got, err := CheckUDPNATType(context.Background(), UDPNATOptions{
+				Servers:    testServers,
+				SourcePort: int(source.Port()),
+				Probe:      fakeUDPProbe(tt.responses),
+			})
+			if err != nil {
+				t.Fatalf("CheckUDPNATType returned error: %v", err)
+			}
+			if got != tt.want {
+				t.Fatalf("CheckUDPNATType = %d, want %d", got, tt.want)
+			}
+		})
+	}
+}
+
 func TestParseSTUNMappedAddressSupportsRFC3489MappedAddress(t *testing.T) {
 	txid := [16]byte{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}
 	response := stunResponse(txid, stunAttrMappedAddress, mappedAddressAttr(netip.MustParseAddrPort("198.51.100.7:45678")))
@@ -432,6 +552,37 @@ func startLocalUDPCheckSTUN(t *testing.T, txid [16]byte, mapped netip.AddrPort, 
 		_ = serverConn.Close()
 		_ = responseConn.Close()
 		<-done
+	}
+}
+
+type udpProbeKey struct {
+	server     netip.AddrPort
+	changeIP   bool
+	changePort bool
+}
+
+type udpProbeResponse struct {
+	result STUNTestResult
+	err    error
+}
+
+func fakeUDPProbe(responses map[udpProbeKey]udpProbeResponse) UDPProbe {
+	return func(ctx context.Context, request UDPProbeRequest) (STUNTestResult, error) {
+		if err := ctx.Err(); err != nil {
+			return STUNTestResult{}, err
+		}
+		response, ok := responses[udpProbeKey{
+			server:     request.Server,
+			changeIP:   request.ChangeIP,
+			changePort: request.ChangePort,
+		}]
+		if !ok {
+			return STUNTestResult{}, errors.New("no response")
+		}
+		if response.err != nil {
+			return STUNTestResult{}, response.err
+		}
+		return response.result, nil
 	}
 }
 
