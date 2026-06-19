@@ -85,6 +85,9 @@ assert_contains luci-app-natter/htdocs/luci-static/resources/view/natter/instanc
 assert_contains luci-app-natter/htdocs/luci-static/resources/view/natter/instances.js "hideInGrid\\(s\\.option\\(widgets\\.DeviceSelect, 'bind_value'"
 assert_contains luci-app-natter/htdocs/luci-static/resources/view/natter/instances.js "widgets\\.DeviceSelect, 'bind_value', _\\('WAN interface'\\)"
 assert_contains luci-app-natter/htdocs/luci-static/resources/view/natter/instances.js "form\\.ListValue, 'runtime', _\\('Runtime'\\)"
+assert_contains luci-app-natter/htdocs/luci-static/resources/view/natter/instances.js "fs\\.stat\\('/usr/bin/python3'\\)"
+assert_contains luci-app-natter/htdocs/luci-static/resources/view/natter/instances.js 'tools\.python'
+assert_contains luci-app-natter/htdocs/luci-static/resources/view/natter/instances.js "if \\(tools\\.python\\)"
 assert_contains luci-app-natter/htdocs/luci-static/resources/view/natter/instances.js "o\\.value\\('python', 'Python'\\)"
 assert_contains luci-app-natter/htdocs/luci-static/resources/view/natter/instances.js "o\\.value\\('go', 'Go'\\)"
 assert_contains luci-app-natter/htdocs/luci-static/resources/view/natter/instances.js "o\\.default = 'go'"

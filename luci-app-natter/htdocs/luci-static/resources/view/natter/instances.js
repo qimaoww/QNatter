@@ -32,6 +32,7 @@ return view.extend({
 	load: function() {
 		return Promise.all([
 			uci.load('natter'),
+			fs.stat('/usr/bin/python3').then(function() { return true; }).catch(function() { return false; }),
 			fs.stat('/usr/bin/socat').then(function() { return true; }).catch(function() { return false; }),
 			fs.stat('/usr/bin/gost').then(function() { return true; }).catch(function() { return false; })
 		]);
@@ -40,8 +41,9 @@ return view.extend({
 	render: function(data) {
 		var m, s, o;
 		var tools = {
-			socat: data[1],
-			gost: data[2]
+			python: data[1],
+			socat: data[2],
+			gost: data[3]
 		};
 
 		m = new form.Map('natter', _('Natter'),
@@ -74,8 +76,9 @@ return view.extend({
 		o.placeholder = 'Default';
 
 		o = s.option(form.ListValue, 'runtime', _('Runtime'));
-		o.value('python', 'Python');
 		o.value('go', 'Go');
+		if (tools.python)
+			o.value('python', 'Python');
 		o.default = 'go';
 
 		o = s.option(form.ListValue, 'protocol', _('Protocol'));
