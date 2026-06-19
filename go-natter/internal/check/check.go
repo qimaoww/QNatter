@@ -2,6 +2,7 @@ package check
 
 import (
 	"context"
+	"crypto/rand"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -10,7 +11,9 @@ import (
 	"net/netip"
 	"os"
 	"runtime"
+	"strconv"
 	"strings"
+	"time"
 
 	"natter-openwrt/go-natter/internal/config"
 )
@@ -69,6 +72,18 @@ type DockerEnv struct {
 	Eth0MACPath   string
 	Hostname      func() (string, error)
 	LookupIPv4    func(string) (string, error)
+}
+
+type TCPSTUNOptions struct {
+	Server  netip.AddrPort
+	Source  netip.AddrPort
+	Timeout time.Duration
+	TxID    func() ([16]byte, error)
+}
+
+type STUNTestResult struct {
+	Source netip.AddrPort
+	Mapped netip.AddrPort
 }
 
 func Run(ctx context.Context, cfg config.Config, stdout io.Writer, stderr io.Writer) error {
@@ -201,6 +216,84 @@ func parseSTUNAddressAttribute(attrType uint16, value []byte) (netip.AddrPort, e
 		}
 	}
 	return netip.AddrPortFrom(netip.AddrFrom4(ip), port), nil
+}
+
+func TCPSTUNTest(ctx context.Context, options TCPSTUNOptions) (STUNTestResult, error) {
+	timeout := options.Timeout
+	if timeout == 0 {
+		timeout = 3 * time.Second
+	}
+	ctx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+
+	txid, err := tcpSTUNTxID(options)
+	if err != nil {
+		return STUNTestResult{}, err
+	}
+
+	dialer := net.Dialer{Timeout: timeout}
+	if options.Source.IsValid() {
+		dialer.LocalAddr = tcpAddrFromAddrPort(options.Source)
+	}
+	conn, err := dialer.DialContext(ctx, "tcp", net.JoinHostPort(options.Server.Addr().String(), strconv.Itoa(int(options.Server.Port()))))
+	if err != nil {
+		return STUNTestResult{}, err
+	}
+	defer conn.Close()
+	if deadline, ok := ctx.Deadline(); ok {
+		_ = conn.SetDeadline(deadline)
+	}
+	if tcpConn, ok := conn.(*net.TCPConn); ok {
+		_ = tcpConn.SetNoDelay(true)
+	}
+	if _, err := conn.Write(BuildSTUNBindingRequest(txid, false, false)); err != nil {
+		return STUNTestResult{}, err
+	}
+	buf := make([]byte, 1500)
+	n, err := conn.Read(buf)
+	if err != nil {
+		return STUNTestResult{}, err
+	}
+	source, err := addrPortFromNetAddr(conn.LocalAddr())
+	if err != nil {
+		return STUNTestResult{}, err
+	}
+	mapped, err := ParseSTUNMappedAddress(buf[:n], txid)
+	if err != nil {
+		return STUNTestResult{}, err
+	}
+	return STUNTestResult{Source: source, Mapped: mapped}, nil
+}
+
+func tcpSTUNTxID(options TCPSTUNOptions) ([16]byte, error) {
+	if options.TxID != nil {
+		return options.TxID()
+	}
+	var txid [16]byte
+	binary.BigEndian.PutUint32(txid[0:4], stunMagicCookie)
+	if _, err := rand.Read(txid[4:]); err != nil {
+		return [16]byte{}, err
+	}
+	return txid, nil
+}
+
+func tcpAddrFromAddrPort(addr netip.AddrPort) *net.TCPAddr {
+	return &net.TCPAddr{
+		IP:   net.IP(addr.Addr().AsSlice()),
+		Port: int(addr.Port()),
+	}
+}
+
+func addrPortFromNetAddr(addr net.Addr) (netip.AddrPort, error) {
+	tcpAddr, ok := addr.(*net.TCPAddr)
+	if !ok {
+		return netip.AddrPort{}, fmt.Errorf("unsupported network address %T", addr)
+	}
+	parsed, ok := netip.AddrFromSlice(tcpAddr.IP)
+	if !ok {
+		return netip.AddrPort{}, fmt.Errorf("invalid local IP address %s", tcpAddr.IP)
+	}
+	return netip.AddrPortFrom(parsed.Unmap(), uint16(tcpAddr.Port)), nil
 }
 
 func unimplementedTCP(context.Context, config.Config) (Result, error) {

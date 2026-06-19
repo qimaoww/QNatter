@@ -5,11 +5,14 @@ import (
 	"context"
 	"encoding/binary"
 	"errors"
+	"io"
+	"net"
 	"net/netip"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"natter-openwrt/go-natter/internal/config"
 )
@@ -177,6 +180,34 @@ func TestBuildSTUNBindingRequestCanAskServerToChangeAddress(t *testing.T) {
 	}
 }
 
+func TestTCPSTUNTestReturnsSourceAndMappedAddress(t *testing.T) {
+	txid := [16]byte{0x21, 0x12, 0xa4, 0x42, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12}
+	mapped := netip.MustParseAddrPort("203.0.113.20:62000")
+	server, requestCh, stop := startLocalTCPCheckSTUN(t, txid, mapped)
+	defer stop()
+
+	result, err := TCPSTUNTest(context.Background(), TCPSTUNOptions{
+		Server:  server,
+		Source:  netip.MustParseAddrPort("127.0.0.1:0"),
+		Timeout: time.Second,
+		TxID:    func() ([16]byte, error) { return txid, nil },
+	})
+	if err != nil {
+		t.Fatalf("TCPSTUNTest returned error: %v", err)
+	}
+
+	request := <-requestCh
+	if got := [16]byte(request[4:20]); got != txid {
+		t.Fatalf("request transaction id = %x, want %x", got, txid)
+	}
+	if result.Source.Addr() != netip.MustParseAddr("127.0.0.1") || result.Source.Port() == 0 {
+		t.Fatalf("source address = %s, want allocated loopback port", result.Source)
+	}
+	if result.Mapped != mapped {
+		t.Fatalf("mapped address = %s, want %s", result.Mapped, mapped)
+	}
+}
+
 func TestDefaultRunReportsUnimplementedChecksWithoutFakeSuccess(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 
@@ -230,6 +261,37 @@ func xorMappedAddressAttr(addr netip.AddrPort) []byte {
 		value[4+i] = ip[i] ^ cookie[i]
 	}
 	return value
+}
+
+func startLocalTCPCheckSTUN(t *testing.T, txid [16]byte, mapped netip.AddrPort) (netip.AddrPort, <-chan []byte, func()) {
+	t.Helper()
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("listen tcp: %v", err)
+	}
+	requestCh := make(chan []byte, 1)
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		conn, err := listener.Accept()
+		if err != nil {
+			return
+		}
+		defer conn.Close()
+		request := make([]byte, 20)
+		if _, err := io.ReadFull(conn, request); err != nil {
+			return
+		}
+		requestCh <- request
+		_, _ = conn.Write(stunResponse(txid, stunAttrXORMappedAddress, xorMappedAddressAttr(mapped)))
+	}()
+
+	addr := listener.Addr().(*net.TCPAddr)
+	server := netip.AddrPortFrom(netip.MustParseAddr("127.0.0.1"), uint16(addr.Port))
+	return server, requestCh, func() {
+		_ = listener.Close()
+		<-done
+	}
 }
 
 func TestCheckDockerNetworkRejectsDockerBridgeNetwork(t *testing.T) {
