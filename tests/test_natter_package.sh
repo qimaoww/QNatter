@@ -69,6 +69,7 @@ assert_no_path luci-app-natter/root/www/luci-static/natter
 assert_not_contains luci-app-natter/Makefile 'luci-compat'
 assert_not_contains luci-app-natter/Makefile 'LUCI_DEPENDS:=.*\+luci-compat'
 assert_contains luci-app-natter/htdocs/luci-static/resources/view/natter/instances.js "^'require form';"
+assert_contains luci-app-natter/htdocs/luci-static/resources/view/natter/instances.js "^'require fs';"
 assert_contains luci-app-natter/htdocs/luci-static/resources/view/natter/instances.js "^'require tools\\.widgets as widgets';"
 assert_not_contains luci-app-natter/htdocs/luci-static/resources/view/natter/instances.js 'cbi\('
 assert_contains luci-app-natter/htdocs/luci-static/resources/view/natter/instances.js 'natter-theme-aurora'
@@ -79,6 +80,12 @@ assert_contains luci-app-natter/htdocs/luci-static/resources/view/natter/instanc
 assert_contains luci-app-natter/htdocs/luci-static/resources/view/natter/instances.js 'o\.rmempty = true'
 assert_contains luci-app-natter/htdocs/luci-static/resources/view/natter/instances.js 'o\.nocreate = true'
 assert_not_contains luci-app-natter/htdocs/luci-static/resources/view/natter/instances.js "s\\.option\\(form\\.ListValue, 'network'"
+assert_contains luci-app-natter/htdocs/luci-static/resources/view/natter/instances.js "fs\\.stat\\('/usr/bin/socat'\\)"
+assert_contains luci-app-natter/htdocs/luci-static/resources/view/natter/instances.js "fs\\.stat\\('/usr/bin/gost'\\)"
+assert_contains luci-app-natter/htdocs/luci-static/resources/view/natter/instances.js 'tools\.socat'
+assert_contains luci-app-natter/htdocs/luci-static/resources/view/natter/instances.js 'tools\.gost'
+assert_not_contains luci-app-natter/htdocs/luci-static/resources/view/natter/instances.js "o\\.value\\('iptables'"
+assert_not_contains luci-app-natter/htdocs/luci-static/resources/view/natter/instances.js "o\\.value\\('iptables-snat'"
 assert_contains luci-app-natter/htdocs/luci-static/resources/view/natter/instances.js "hideInGrid\\(s\\.option\\(form\\.Value, 'target_ip'"
 assert_contains luci-app-natter/htdocs/luci-static/resources/view/natter/instances.js "hideInGrid\\(s\\.option\\(form\\.DynamicList, 'stun_server'"
 assert_contains luci-app-natter/htdocs/luci-static/resources/view/natter/instances.js "hideInGrid\\(s\\.option\\(form\\.Value, 'notify_script'"
@@ -101,7 +108,8 @@ assert_contains natter/files/natter.init 'network_get_device device "\$network"'
 assert_contains natter/files/natter.hotplug 'config_get bind_value "\$section" bind_value'
 assert_contains natter/files/natter.hotplug '\[ -n "\$bind_value" \] && \[ "\$bind_value" = "\$DEVICE" \]'
 assert_contains natter/files/natter.config "option forward_method 'auto'"
-assert_contains natter/files/natter-common.sh '\[ "\$\{NATTER_FORWARD_METHOD:-auto\}" != "auto" \]'
+assert_contains natter/files/natter-common.sh 'natter_forward_method_or_auto'
+assert_contains natter/files/natter-common.sh '\[ "\$forward_method" != "auto" \]'
 assert_contains natter/files/natter.init 'NATTER_STATUS_FILE'
 assert_contains natter/files/natter.init 'qbittorrent_target_ip'
 assert_contains natter/files/natter-qbittorrent.sh 'natter_qb_select_listen_port'
@@ -110,11 +118,11 @@ assert_contains natter/files/natter-notify 'api/v2/app/setPreferences'
 assert_contains natter/Makefile 'DEPENDS:=.*\+python3'
 assert_contains natter/Makefile 'DEPENDS:=.*\+curl'
 assert_contains natter/Makefile 'DEPENDS:=.*\+nftables'
-assert_contains natter/Makefile 'DEPENDS:=.*\+iptables-nft'
 assert_contains natter/Makefile 'DEPENDS:=.*\+firewall4'
 assert_contains natter/Makefile 'DEPENDS:=.*\+kmod-nft-nat'
-assert_contains natter/Makefile 'DEPENDS:=.*\+socat'
-assert_contains natter/Makefile 'DEPENDS:=.*\+gost'
+assert_not_contains natter/Makefile '\+iptables-nft'
+assert_not_contains natter/Makefile '\+socat'
+assert_not_contains natter/Makefile '\+gost'
 assert_not_contains natter/Makefile '\+python3-light'
 assert_contains luci-app-natter/Makefile 'LUCI_DEPENDS:=.*\+natter'
 assert_contains luci-app-natter/Makefile 'LUCI_DEPENDS:=.*\+luci-base'
@@ -147,6 +155,27 @@ cp "$ROOT/natter/files/natter-qbittorrent.sh" "$tmp/"
 	[ "$(natter_qb_select_listen_port 5000 62000 0)" = "62000" ] || exit 11
 	[ "$(natter_qb_select_listen_port 5000 62000 51413)" = "51413" ] || exit 12
 	[ "$(natter_qb_preferences_json 62000)" = '{"listen_port":62000}' ] || exit 13
+)
+
+(
+	. "$ROOT/natter/files/natter-common.sh"
+	old_path="$PATH"
+
+	NATTER_FORWARD_METHOD=iptables
+	natter_build_args
+	case "$NATTER_ARGS" in *iptables*|*'-m'*) exit 21 ;; esac
+
+	PATH=/nonexistent NATTER_FORWARD_METHOD=socat
+	natter_build_args
+	case "$NATTER_ARGS" in *socat*|*'-m'*) exit 22 ;; esac
+	PATH="$old_path"
+
+	mkdir -p "$tmp/bin"
+	printf '#!/bin/sh\n' > "$tmp/bin/socat"
+	chmod 0755 "$tmp/bin/socat"
+	PATH="$tmp/bin" NATTER_FORWARD_METHOD=socat
+	natter_build_args
+	case "$NATTER_ARGS" in *socat*) ;; *) exit 23 ;; esac
 )
 
 sh -n "$ROOT/natter/files/natter-common.sh"

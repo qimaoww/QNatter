@@ -2,6 +2,7 @@
 'require view';
 'require form';
 'require uci';
+'require fs';
 'require tools.widgets as widgets';
 
 function detectThemeClass() {
@@ -30,12 +31,18 @@ function hideInGrid(option) {
 return view.extend({
 	load: function() {
 		return Promise.all([
-			uci.load('natter')
+			uci.load('natter'),
+			fs.stat('/usr/bin/socat').then(function() { return true; }).catch(function() { return false; }),
+			fs.stat('/usr/bin/gost').then(function() { return true; }).catch(function() { return false; })
 		]);
 	},
 
-	render: function() {
+	render: function(data) {
 		var m, s, o;
+		var tools = {
+			socat: data[1],
+			gost: data[2]
+		};
 
 		m = new form.Map('natter', _('Natter'),
 			_('Expose ports behind full-cone NAT with optional forwarding and qBittorrent port updates.'));
@@ -93,10 +100,10 @@ return view.extend({
 		o.value('socket', 'socket');
 		o.value('nftables', 'nftables');
 		o.value('nftables-snat', 'nftables-snat');
-		o.value('iptables', 'iptables');
-		o.value('iptables-snat', 'iptables-snat');
-		o.value('socat', 'socat');
-		o.value('gost', 'gost');
+		if (tools.socat)
+			o.value('socat', 'socat');
+		if (tools.gost)
+			o.value('gost', 'gost');
 		o.default = 'auto';
 
 		o = hideInGrid(s.option(form.Value, 'target_ip', _('Forward target IP')));
@@ -166,9 +173,11 @@ return view.extend({
 		o = hideInGrid(s.option(form.ListValue, 'qbittorrent_forward_method', _('qBittorrent forward method')));
 		o.value('nftables', 'nftables');
 		o.value('nftables-snat', 'nftables-snat');
-		o.value('iptables', 'iptables');
-		o.value('iptables-snat', 'iptables-snat');
 		o.value('socket', 'socket');
+		if (tools.socat)
+			o.value('socat', 'socat');
+		if (tools.gost)
+			o.value('gost', 'gost');
 		o.default = 'nftables';
 		o.depends('qbittorrent_forward', '1');
 

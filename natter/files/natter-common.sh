@@ -32,8 +32,31 @@ natter_add_list_values() {
 	done
 }
 
+natter_forward_method_or_auto() {
+	local method="${1:-auto}"
+
+	case "$method" in
+		auto|none|test|socket|nftables|nftables-snat)
+			printf '%s\n' "$method"
+			;;
+		socat|gost)
+			if command -v "$method" >/dev/null 2>&1; then
+				printf '%s\n' "$method"
+			else
+				printf '%s\n' "auto"
+			fi
+			;;
+		*)
+			printf '%s\n' "auto"
+			;;
+	esac
+}
+
 natter_build_args() {
+	local forward_method
+
 	NATTER_ARGS=""
+	forward_method="$(natter_forward_method_or_auto "${NATTER_FORWARD_METHOD:-auto}")"
 
 	[ "${NATTER_PROTOCOL:-tcp}" = "udp" ] && natter_add_arg "-u"
 	natter_bool "${NATTER_VERBOSE:-0}" && natter_add_arg "-v"
@@ -47,7 +70,7 @@ natter_build_args() {
 	natter_add_arg_value "-h" "${NATTER_KEEPALIVE_SERVER:-}"
 	natter_add_arg_value "-i" "${NATTER_BIND_VALUE:-}"
 	natter_add_arg_value "-b" "${NATTER_BIND_PORT:-}"
-	[ "${NATTER_FORWARD_METHOD:-auto}" != "auto" ] && natter_add_arg_value "-m" "${NATTER_FORWARD_METHOD:-}"
+	[ "$forward_method" != "auto" ] && natter_add_arg_value "-m" "$forward_method"
 	natter_add_arg_value "-t" "${NATTER_TARGET_IP:-}"
 	natter_add_arg_value "-p" "${NATTER_TARGET_PORT:-}"
 	natter_bool "${NATTER_RETRY_TARGET:-0}" && natter_add_arg "-r"
