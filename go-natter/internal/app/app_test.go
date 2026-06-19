@@ -144,10 +144,11 @@ func TestRunRejectsInvalidArguments(t *testing.T) {
 
 func TestRunWithStartsEngineForMapping(t *testing.T) {
 	var got config.Config
+	var stderr bytes.Buffer
 	code := RunWith([]string{
 		"-i", "pppoe-wan_cmcc",
 		"-m", "none",
-	}, &bytes.Buffer{}, &bytes.Buffer{}, func(cfg config.Config) error {
+	}, &bytes.Buffer{}, &stderr, func(cfg config.Config) error {
 		got = cfg
 		return nil
 	})
@@ -157,6 +158,23 @@ func TestRunWithStartsEngineForMapping(t *testing.T) {
 	}
 	if got.BindValue != "pppoe-wan_cmcc" || got.ForwardMethod != "none" {
 		t.Fatalf("runner config = %+v", got)
+	}
+	if !strings.Contains(stderr.String(), "Natter v2.2.1-go") {
+		t.Fatalf("stderr = %q, want startup banner", stderr.String())
+	}
+}
+
+func TestRunWithNoArgsPrintsHelpTip(t *testing.T) {
+	var stderr bytes.Buffer
+	code := RunWith(nil, &bytes.Buffer{}, &stderr, func(config.Config) error {
+		return nil
+	})
+
+	if code != 0 {
+		t.Fatalf("RunWith returned code %d, want 0", code)
+	}
+	if !strings.Contains(stderr.String(), "Tips: Use `--help` to see help messages") {
+		t.Fatalf("stderr = %q, want help tip", stderr.String())
 	}
 }
 

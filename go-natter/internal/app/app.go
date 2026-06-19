@@ -93,6 +93,7 @@ func runWithContext(ctx context.Context, args []string, stdout io.Writer, stderr
 		return 0
 	}
 
+	printStartup(stderr, len(args) == 0)
 	if err := run(ctx, cfg); err != nil {
 		if cfg.ExitWhenChanged && (errors.Is(err, engine.ErrMappingChanged) || errors.Is(err, engine.ErrLocalAddressChanged)) {
 			return 0
@@ -101,6 +102,13 @@ func runWithContext(ctx context.Context, args []string, stdout io.Writer, stderr
 		return 1
 	}
 	return 0
+}
+
+func printStartup(stderr io.Writer, showTip bool) {
+	fmt.Fprintf(stderr, "Natter v%s\n", Version)
+	if showTip {
+		fmt.Fprintln(stderr, "Tips: Use `--help` to see help messages")
+	}
 }
 
 func runEngine(ctx context.Context, cfg config.Config) error {
