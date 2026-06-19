@@ -38,7 +38,7 @@ func retryable(err error, fn func(error) bool) bool {
 	if fn != nil {
 		return fn(err)
 	}
-	return errors.Is(err, ErrMappingChanged) || errors.Is(err, ErrKeepAliveFailed)
+	return errors.Is(err, ErrMappingChanged) || errors.Is(err, ErrKeepAliveFailed) || errors.Is(err, ErrTargetClosed)
 }
 
 func retryDelay(cfg config.Config) time.Duration {

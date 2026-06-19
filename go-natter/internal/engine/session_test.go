@@ -172,3 +172,54 @@ func TestStartSessionContinuesWhenUPnPForwardFails(t *testing.T) {
 		t.Fatalf("events = %#v, want %#v", events, wantEvents)
 	}
 }
+
+func TestStartSessionReturnsRetryWhenTargetPortClosed(t *testing.T) {
+	events := []string{}
+
+	_, err := StartSession(context.Background(), config.Config{
+		RetryTarget:   true,
+		ForwardMethod: "socket",
+		TargetIP:      "10.10.10.10",
+		TargetPort:    51413,
+	}, Dependencies{
+		STUN: &fakeSTUN{
+			mappings: []stun.Mapping{
+				{
+					Inner: netip.MustParseAddrPort("10.10.10.3:41000"),
+					Outer: netip.MustParseAddrPort("203.0.113.11:62010"),
+				},
+				{
+					Inner: netip.MustParseAddrPort("10.10.10.3:41000"),
+					Outer: netip.MustParseAddrPort("203.0.113.11:62010"),
+				},
+			},
+			events: &events,
+		},
+		KeepAlive: &fakeKeepAlive{events: &events},
+		NewForwarder: func(method string) (forward.Forwarder, error) {
+			events = append(events, "forwarder:"+method)
+			return &fakeForwarder{events: &events}, nil
+		},
+		PortCheck: fakePortCheck{
+			result: PortClosed,
+			events: &events,
+		},
+	})
+	if !errors.Is(err, ErrTargetClosed) {
+		t.Fatalf("StartSession error = %v, want ErrTargetClosed", err)
+	}
+
+	wantEvents := []string{
+		"stun",
+		"keepalive",
+		"stun",
+		"forwarder:socket",
+		"forward",
+		"portcheck",
+		"forward-stop",
+		"keepalive-close",
+	}
+	if !reflect.DeepEqual(events, wantEvents) {
+		t.Fatalf("events = %#v, want %#v", events, wantEvents)
+	}
+}

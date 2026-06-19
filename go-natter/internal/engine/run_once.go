@@ -183,12 +183,17 @@ func StartSession(ctx context.Context, cfg config.Config, deps Dependencies) (*S
 		}
 	}
 
-	return &Session{
+	session := &Session{
 		Result:    Result{Method: method, Mapping: mapping, Target: target},
 		Forwarder: fwd,
 		KeepAlive: keepAlive,
 		UPnP:      activeUPnP,
-	}, nil
+	}
+	if cfg.RetryTarget && !cfg.UDP && targetPortClosed(ctx, deps, session) {
+		_ = session.Close()
+		return nil, ErrTargetClosed
+	}
+	return session, nil
 }
 
 func resolveTarget(cfg config.Config, method string, mapping stun.Mapping) netip.AddrPort {
@@ -209,4 +214,12 @@ func resolveTarget(cfg config.Config, method string, mapping stun.Mapping) netip
 		return mapping.Inner
 	}
 	return netip.AddrPortFrom(addr, uint16(targetPort))
+}
+
+func targetPortClosed(ctx context.Context, deps Dependencies, session *Session) bool {
+	checker := deps.PortCheck
+	if checker == nil {
+		checker = portcheck.Checker{}
+	}
+	return checker.TestLAN(ctx, session.Result.Target, session.Result.Mapping.Inner.Addr()) == PortClosed
 }

@@ -66,6 +66,27 @@ func TestRunWithRetryRestartsKeepAliveFailures(t *testing.T) {
 	}
 }
 
+func TestRunWithRetryRestartsWhenTargetPortClosed(t *testing.T) {
+	calls := 0
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	err := RunWithRetry(ctx, config.Config{}, func(context.Context) error {
+		calls++
+		if calls == 1 {
+			return ErrTargetClosed
+		}
+		cancel()
+		return nil
+	}, RetryOptions{Sleep: noRetrySleep})
+	if err != nil {
+		t.Fatalf("RunWithRetry returned error: %v", err)
+	}
+	if calls != 2 {
+		t.Fatalf("loop calls = %d, want 2", calls)
+	}
+}
+
 func noRetrySleep(context.Context, time.Duration) error {
 	return nil
 }

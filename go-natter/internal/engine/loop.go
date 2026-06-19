@@ -18,6 +18,7 @@ type LoopOptions struct {
 var (
 	ErrMappingChanged  = errors.New("mapped address changed")
 	ErrKeepAliveFailed = errors.New("keep-alive failed")
+	ErrTargetClosed    = errors.New("target port closed")
 )
 
 func RunLoop(ctx context.Context, cfg config.Config, deps Dependencies, options LoopOptions) error {
