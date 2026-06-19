@@ -45,6 +45,10 @@ func NewForwarder(method string) (Forwarder, error) {
 		return &NftablesForwarder{}, nil
 	case "nftables-snat":
 		return &NftablesForwarder{SNAT: true}, nil
+	case "socat":
+		return &SocatForwarder{}, nil
+	case "gost":
+		return &GostForwarder{}, nil
 	default:
 		return nil, fmt.Errorf("unsupported forward method %q", method)
 	}

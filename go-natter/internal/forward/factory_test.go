@@ -68,6 +68,8 @@ func TestNewForwarderCreatesImplementedMethods(t *testing.T) {
 			nft, ok := f.(*NftablesForwarder)
 			return ok && nft.SNAT
 		}},
+		{method: "socat", check: func(f Forwarder) bool { _, ok := f.(*SocatForwarder); return ok }},
+		{method: "gost", check: func(f Forwarder) bool { _, ok := f.(*GostForwarder); return ok }},
 	}
 
 	for _, tc := range tests {
@@ -84,7 +86,7 @@ func TestNewForwarderCreatesImplementedMethods(t *testing.T) {
 }
 
 func TestNewForwarderRejectsUnsupportedMethods(t *testing.T) {
-	for _, method := range []string{"iptables", "socat", "gost", "does-not-exist"} {
+	for _, method := range []string{"iptables", "does-not-exist"} {
 		t.Run(method, func(t *testing.T) {
 			if _, err := NewForwarder(method); err == nil {
 				t.Fatalf("NewForwarder(%q) returned nil error", method)
