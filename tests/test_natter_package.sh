@@ -234,6 +234,7 @@ sh -n "$ROOT/natter/files/natter.init"
 sh -n "$ROOT/luci-app-natter/root/usr/libexec/natter-status"
 sh -n "$ROOT/luci-app-natter/root/usr/libexec/natter-log"
 sh -n "$ROOT/luci-app-natter/root/usr/libexec/rpcd/luci.natter"
+sh -n "$ROOT/tests/test_natter_status.sh"
 
 (
 	printf '#!/bin/sh\necho "go:$*"\n' > "$tmp/natter-go-bin"
@@ -249,6 +250,7 @@ sh -n "$ROOT/luci-app-natter/root/usr/libexec/rpcd/luci.natter"
 )
 
 (cd "$ROOT/go-natter" && go test ./...)
+"$ROOT/tests/test_natter_status.sh"
 
 dummy_natter_go="$tmp/natter-go"
 archive="$tmp/natter-openwrt-direct.tar.gz"

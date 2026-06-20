@@ -1,7 +1,10 @@
 #!/bin/sh
 
-. /lib/functions.sh
-. /usr/share/natter/natter-common.sh
+: "${NATTER_FUNCTIONS_SH:=/lib/functions.sh}"
+: "${NATTER_COMMON_SH:=/usr/share/natter/natter-common.sh}"
+
+. "$NATTER_FUNCTIONS_SH"
+. "$NATTER_COMMON_SH"
 
 first=1
 
@@ -36,7 +39,7 @@ instance_running() {
 	local proc env
 	for proc in /proc/[0-9]*; do
 		[ -r "$proc/environ" ] || continue
-		env="$(tr '\0' '\n' < "$proc/environ" 2>/dev/null | grep -x "NATTER_INSTANCE=$name" || true)"
+		env="$({ tr '\0' '\n' < "$proc/environ"; } 2>/dev/null | grep -x "NATTER_INSTANCE=$name" || true)"
 		if [ -n "$env" ]; then
 			return 0
 		fi
