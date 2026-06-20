@@ -5,6 +5,7 @@ import (
 	"net/netip"
 	"os"
 	"os/exec"
+	"path/filepath"
 
 	"natter-openwrt/go-natter/internal/status"
 )
@@ -12,6 +13,7 @@ import (
 type Options struct {
 	Instance   string
 	StatusFile string
+	RunDir     string
 	UserScript string
 }
 
@@ -29,7 +31,8 @@ func Run(options Options, mapping status.Mapping) (Result, error) {
 
 	statusFile := options.StatusFile
 	if statusFile == "" {
-		statusFile = "/var/run/natter/" + mapping.Instance + ".json"
+		runDir := defaultString(options.RunDir, "/var/run/natter")
+		statusFile = filepath.Join(runDir, status.RuntimeSlug(mapping.Instance)+".json")
 	}
 	if err := status.WriteMapping(statusFile, mapping); err != nil {
 		return Result{}, err

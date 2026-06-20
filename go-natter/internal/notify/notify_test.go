@@ -87,6 +87,29 @@ func TestRunIgnoresEmptyUserScript(t *testing.T) {
 	}
 }
 
+func TestRunDefaultStatusPathUsesRuntimeSlug(t *testing.T) {
+	dir := t.TempDir()
+
+	result, err := Run(Options{Instance: "wan-ct", RunDir: dir}, status.Mapping{
+		Protocol: "tcp",
+		Inner:    netip.MustParseAddrPort("192.0.2.197:41353"),
+		Outer:    netip.MustParseAddrPort("203.0.113.123:7533"),
+		Message:  "mapped",
+	})
+	if err != nil {
+		t.Fatalf("Run returned error: %v", err)
+	}
+	if result.UserNotifyError != "" {
+		t.Fatalf("user notify error = %q, want empty", result.UserNotifyError)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "wan_x2dct.json")); err != nil {
+		t.Fatalf("slugged status file was not written: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "wan-ct.json")); !os.IsNotExist(err) {
+		t.Fatalf("legacy status path exists or returned unexpected error: %v", err)
+	}
+}
+
 func TestRunReportsNonExecutableUserScriptWithoutFailingStatus(t *testing.T) {
 	dir := t.TempDir()
 	statusFile := filepath.Join(dir, "default.json")

@@ -3,9 +3,11 @@ package status
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"net/netip"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 )
 
@@ -27,6 +29,26 @@ type mappingJSON struct {
 	OuterPort uint16 `json:"outer_port"`
 	UpdatedAt string `json:"updated_at"`
 	Message   string `json:"message"`
+}
+
+func RuntimeSlug(name string) string {
+	if name == "" {
+		name = "default"
+	}
+	var out strings.Builder
+	for _, char := range name {
+		if char >= 'A' && char <= 'Z' || char >= 'a' && char <= 'z' || char >= '0' && char <= '9' || char == '_' {
+			out.WriteRune(char)
+		} else if char < 128 {
+			out.WriteString(fmt.Sprintf("_x%02x", char))
+		} else {
+			out.WriteByte('_')
+		}
+	}
+	if out.Len() == 0 {
+		return "default"
+	}
+	return out.String()
 }
 
 func WriteMapping(path string, mapping Mapping) error {
