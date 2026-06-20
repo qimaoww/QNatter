@@ -45,6 +45,14 @@ func TestTestServerTCPRespondsWithNatterPage(t *testing.T) {
 	}
 }
 
+func TestTestServerTCPAppliesInterfaceBinding(t *testing.T) {
+	f := &TestServer{}
+	if err := f.Start(StartOptions{IP: "127.0.0.1", Port: 0, Interface: "natter-missing-iface"}); err == nil {
+		_ = f.Stop()
+		t.Fatal("Start accepted a missing bind interface")
+	}
+}
+
 func TestTestServerUDPRespondsWithNatterMessage(t *testing.T) {
 	f := &TestServer{}
 	if err := f.Start(StartOptions{IP: "127.0.0.1", Port: 0, UDP: true}); err != nil {

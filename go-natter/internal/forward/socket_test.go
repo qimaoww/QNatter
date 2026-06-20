@@ -56,6 +56,21 @@ func TestSocketForwarderRejectsSameAddress(t *testing.T) {
 	}
 }
 
+func TestSocketForwarderAppliesInterfaceBinding(t *testing.T) {
+	f := &SocketForwarder{}
+	err := f.Start(StartOptions{
+		IP:         "127.0.0.1",
+		Port:       0,
+		TargetIP:   "127.0.0.1",
+		TargetPort: 1,
+		Interface:  "natter-missing-iface",
+	})
+	if err == nil {
+		_ = f.Stop()
+		t.Fatal("Start accepted a missing bind interface")
+	}
+}
+
 func TestSocketForwarderUDPForwardsBothDirections(t *testing.T) {
 	target := startUDPEchoServer(t)
 

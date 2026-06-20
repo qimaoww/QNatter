@@ -64,6 +64,7 @@ func TestRunOnceEstablishesSocketForwardAndNotifies(t *testing.T) {
 		Port:       40000,
 		TargetIP:   "10.10.10.10",
 		TargetPort: 62000,
+		Interface:  "pppoe-wan_cmcc",
 	}
 	if fwd.start != wantStart {
 		t.Fatalf("forward start = %+v, want %+v", fwd.start, wantStart)
@@ -252,6 +253,7 @@ func TestRunOnceNoneForwardTargetsNatterAddressForUDP(t *testing.T) {
 		TargetIP:   "10.0.0.2",
 		TargetPort: 50000,
 		UDP:        true,
+		Interface:  "pppoe-wan_ct",
 	}
 	if fwd.start != wantStart {
 		t.Fatalf("forward start = %+v, want %+v", fwd.start, wantStart)

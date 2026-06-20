@@ -1,10 +1,13 @@
 package forward
 
 import (
+	"context"
 	"fmt"
 	"net"
 	"net/http"
 	"sync"
+
+	"natter-openwrt/go-natter/internal/socketopts"
 )
 
 type TestServer struct {
@@ -61,7 +64,11 @@ func (s *TestServer) Stop() error {
 }
 
 func (s *TestServer) startTCP(options StartOptions) error {
-	ln, err := net.Listen("tcp", fmt.Sprintf("%s:%d", options.IP, options.Port))
+	listenConfig := net.ListenConfig{Control: socketopts.Control(socketopts.Options{
+		Interface: options.Interface,
+		Reuse:     true,
+	})}
+	ln, err := listenConfig.Listen(context.Background(), "tcp", fmt.Sprintf("%s:%d", options.IP, options.Port))
 	if err != nil {
 		return err
 	}
@@ -77,14 +84,15 @@ func (s *TestServer) startTCP(options StartOptions) error {
 }
 
 func (s *TestServer) startUDP(options StartOptions) error {
-	addr, err := net.ResolveUDPAddr("udp", fmt.Sprintf("%s:%d", options.IP, options.Port))
+	listenConfig := net.ListenConfig{Control: socketopts.Control(socketopts.Options{
+		Interface: options.Interface,
+		Reuse:     true,
+	})}
+	packetConn, err := listenConfig.ListenPacket(context.Background(), "udp", fmt.Sprintf("%s:%d", options.IP, options.Port))
 	if err != nil {
 		return err
 	}
-	conn, err := net.ListenUDP("udp", addr)
-	if err != nil {
-		return err
-	}
+	conn := packetConn.(*net.UDPConn)
 	s.udp = conn
 	s.udpAddr = conn.LocalAddr().(*net.UDPAddr)
 	go s.serveUDP(conn)

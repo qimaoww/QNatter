@@ -6,6 +6,7 @@ type StartOptions struct {
 	TargetIP   string
 	TargetPort int
 	UDP        bool
+	Interface  string
 }
 
 type None struct{}

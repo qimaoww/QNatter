@@ -1,11 +1,14 @@
 package forward
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"net"
 	"sync"
 	"time"
+
+	"natter-openwrt/go-natter/internal/socketopts"
 )
 
 type SocketForwarder struct {
@@ -31,7 +34,11 @@ func (f *SocketForwarder) Start(options StartOptions) error {
 		return f.startUDP(options)
 	}
 
-	ln, err := net.Listen("tcp", fmt.Sprintf("%s:%d", options.IP, options.Port))
+	listenConfig := net.ListenConfig{Control: socketopts.Control(socketopts.Options{
+		Interface: options.Interface,
+		Reuse:     true,
+	})}
+	ln, err := listenConfig.Listen(context.Background(), "tcp", fmt.Sprintf("%s:%d", options.IP, options.Port))
 	if err != nil {
 		return err
 	}
@@ -117,14 +124,15 @@ func (f *SocketForwarder) handleTCP(inbound net.Conn) {
 }
 
 func (f *SocketForwarder) startUDP(options StartOptions) error {
-	addr, err := net.ResolveUDPAddr("udp", fmt.Sprintf("%s:%d", options.IP, options.Port))
+	listenConfig := net.ListenConfig{Control: socketopts.Control(socketopts.Options{
+		Interface: options.Interface,
+		Reuse:     true,
+	})}
+	packetConn, err := listenConfig.ListenPacket(context.Background(), "udp", fmt.Sprintf("%s:%d", options.IP, options.Port))
 	if err != nil {
 		return err
 	}
-	conn, err := net.ListenUDP("udp", addr)
-	if err != nil {
-		return err
-	}
+	conn := packetConn.(*net.UDPConn)
 
 	f.mu.Lock()
 	f.udp = conn
