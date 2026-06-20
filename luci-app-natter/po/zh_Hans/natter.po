@@ -34,6 +34,36 @@ msgstr "日志行数"
 msgid "Label"
 msgstr "标签"
 
+msgid "Instance ID"
+msgstr "实例 ID"
+
+msgid "letters, numbers, and underscore"
+msgstr "字母、数字和下划线"
+
+msgid "Rename instance"
+msgstr "重命名实例"
+
+msgid "Rename"
+msgstr "重命名"
+
+msgid "Rename failed"
+msgstr "重命名失败"
+
+msgid "Invalid old instance name"
+msgstr "旧实例 ID 无效"
+
+msgid "Invalid new instance name"
+msgstr "实例 ID 无效"
+
+msgid "Instance not found"
+msgstr "实例不存在"
+
+msgid "Instance name already exists"
+msgstr "实例 ID 已存在"
+
+msgid "Failed to rename instance"
+msgstr "重命名实例失败"
+
 msgid "Protocol"
 msgstr "协议"
 

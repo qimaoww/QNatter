@@ -175,7 +175,7 @@ return view.extend({
 
 						return callRenameInstance(section_id, newName).then(function(result) {
 							if (!result || !result.ok) {
-								ui.addNotification(null, E('p', {}, [ result && result.error ? result.error : _('Rename failed') ]), 'danger');
+								ui.addNotification(null, E('p', {}, [ _(result && result.error ? result.error : 'Rename failed') ]), 'danger');
 								return;
 							}
 

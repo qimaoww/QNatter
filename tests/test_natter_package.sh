@@ -168,6 +168,7 @@ assert_contains luci-app-natter/htdocs/luci-static/resources/view/natter/instanc
 assert_contains luci-app-natter/htdocs/luci-static/resources/view/natter/instances.js "rename_instance"
 assert_contains luci-app-natter/htdocs/luci-static/resources/view/natter/instances.js "form\\.Value, '_rename_to'"
 assert_contains luci-app-natter/htdocs/luci-static/resources/view/natter/instances.js "form\\.DummyValue, '_rename_instance'"
+assert_contains luci-app-natter/htdocs/luci-static/resources/view/natter/instances.js "_\\(result && result\\.error \\? result\\.error : 'Rename failed'\\)"
 assert_contains luci-app-natter/htdocs/luci-static/resources/view/natter/instances.js "hideInGrid\\(s\\.option\\(form\\.Flag, 'qbittorrent_enabled'"
 assert_contains luci-app-natter/htdocs/luci-static/resources/view/natter/status.js 'natter-theme-aurora'
 assert_contains luci-app-natter/htdocs/luci-static/resources/view/natter/status.js "expect: \\{ '': \\{ instances: \\[\\] \\} \\}"
@@ -278,7 +279,7 @@ assert_not_contains natter/Makefile 'natter.py'
 assert_not_contains natter/Makefile './files/Natter'
 assert_not_contains natter/Makefile 'natter-python-wrapper.py'
 luci_release="$(sed -n 's/^PKG_RELEASE:=//p' "$ROOT/luci-app-natter/Makefile")"
-[ "$luci_release" -gt 2 ] || fail "luci-app-natter package release must increase when LuCI files change"
+[ "$luci_release" -ge 12 ] || fail "luci-app-natter package release must increase when LuCI files change"
 assert_contains luci-app-natter/Makefile 'LUCI_DEPENDS:=.*\+natter'
 assert_contains luci-app-natter/Makefile 'LUCI_DEPENDS:=.*\+luci-base'
 assert_contains luci-app-natter/Makefile 'LUCI_DEPENDS:=.*\+rpcd'
@@ -328,6 +329,12 @@ assert_po_translation 'Leave empty to bind to the default WAN device.' '留空�
 assert_po_translation 'Forward method' '转发方式'
 assert_po_translation 'Auto firewall' '自动防火墙'
 assert_po_translation 'Automatically opens this instance current Natter port on the WAN firewall.' '自动在 WAN 防火墙上放行此实例当前的 Natter 端口。'
+assert_po_translation 'Instance ID' '实例 ID'
+assert_po_translation 'letters, numbers, and underscore' '字母、数字和下划线'
+assert_po_translation 'Rename instance' '重命名实例'
+assert_po_translation 'Rename failed' '重命名失败'
+assert_po_translation 'Invalid new instance name' '实例 ID 无效'
+assert_po_translation 'Instance name already exists' '实例 ID 已存在'
 assert_po_translation 'Forward target port' '转发目标端口'
 assert_po_translation 'Cloudflare SRV' 'Cloudflare SRV'
 assert_po_translation 'Cloudflare API token/key' 'Cloudflare API Token/Key'
