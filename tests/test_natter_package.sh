@@ -194,6 +194,17 @@ cp "$ROOT/natter/files/natter-qbittorrent.sh" "$tmp/"
 	[ "$(natter_qb_select_listen_port 5000 62000 0)" = "62000" ] || exit 11
 	[ "$(natter_qb_select_listen_port 5000 62000 51413)" = "51413" ] || exit 12
 	[ "$(natter_qb_preferences_json 62000)" = '{"listen_port":62000}' ] || exit 13
+
+	env_file="$tmp/qb-env"
+	natter_qb_write_notify_env "$env_file" \
+		QBITTORRENT_URL "http://127.0.0.1:8080/path with spaces" \
+		QBITTORRENT_USERNAME "admin user" \
+		QBITTORRENT_PASSWORD "pa'ss word"
+	# shellcheck disable=SC1090
+	. "$env_file"
+	[ "$QBITTORRENT_URL" = "http://127.0.0.1:8080/path with spaces" ] || exit 14
+	[ "$QBITTORRENT_USERNAME" = "admin user" ] || exit 15
+	[ "$QBITTORRENT_PASSWORD" = "pa'ss word" ] || exit 16
 )
 
 (
