@@ -137,6 +137,18 @@ return view.extend({
 		o.placeholder = '/usr/bin/natter-notify-user';
 		o.description = _('Optional script called with protocol, inner IP, inner port, outer IP, and outer port after a mapping is detected.');
 
+		o = hideInGrid(s.option(form.Flag, 'cloudflare_enabled', _('Cloudflare SRV')));
+		o.default = '0';
+		o.description = _('Automatically patches the configured Cloudflare SRV record port to the current mapped public port.');
+
+		o = hideInGrid(s.option(form.Value, 'cloudflare_api_url', _('Cloudflare API URL')));
+		o.placeholder = 'https://api.cloudflare.com/client/v4/zones/.../dns_records/...';
+		o.depends('cloudflare_enabled', '1');
+
+		o = hideInGrid(s.option(form.Value, 'cloudflare_api_token', _('Cloudflare API token')));
+		o.password = true;
+		o.depends('cloudflare_enabled', '1');
+
 		o = hideInGrid(s.option(form.Flag, 'retry_target', _('Retry until target opens')));
 		o.default = '0';
 

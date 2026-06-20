@@ -77,7 +77,45 @@ update_auto_firewall() {
 	fi
 }
 
+update_cloudflare_srv() {
+	local enabled="${CLOUDFLARE_SRV_ENABLED:-0}"
+	local url="${CLOUDFLARE_API_URL:-}"
+	local token="${CLOUDFLARE_API_TOKEN:-}"
+	local port timeout json
+
+	natter_bool "$enabled" || return 0
+
+	port="$(natter_status_port "$outer_port")"
+	if [ "$port" = "0" ]; then
+		log "Cloudflare SRV skipped for ${NATTER_INSTANCE:-default}: invalid outer port $outer_port"
+		return 0
+	fi
+
+	if [ -z "$url" ] || [ -z "$token" ]; then
+		log "Cloudflare SRV is enabled but API URL or token is empty for ${NATTER_INSTANCE:-default}"
+		return 0
+	fi
+
+	if ! command -v "$NATTER_CURL_BIN" >/dev/null 2>&1; then
+		log "Cloudflare SRV skipped for ${NATTER_INSTANCE:-default}: curl not found"
+		return 0
+	fi
+
+	timeout="${CLOUDFLARE_TIMEOUT:-8}"
+	json='{"type":"SRV","data":{"port":'"$port"'}}'
+	if ! "$NATTER_CURL_BIN" -fsS -m "$timeout" -X PATCH \
+		-H "Authorization: Bearer $token" \
+		-H "Accept: application/json" \
+		-H "Content-Type: application/json" \
+		--data "$json" \
+		"$url" >/dev/null; then
+		log "Cloudflare SRV update failed for ${NATTER_INSTANCE:-default}: $port"
+		return 0
+	fi
+}
+
 update_auto_firewall
+update_cloudflare_srv
 
 run_user_notify() {
 	local script="${NATTER_USER_NOTIFY:-}"

@@ -54,10 +54,14 @@ natter_write_notify_env() {
 	local status_file="$3"
 	local notify_script qb_enabled qb_url qb_user qb_pass qb_forward qb_target_ip qb_target_port qb_forward_method
 	local label auto_firewall firewall_section firewall_name firewall_src
+	local cf_enabled cf_api_url cf_api_token
 
 	config_get label "$section" label "$section"
 	config_get notify_script "$section" notify_script ""
 	config_get_bool auto_firewall "$section" auto_firewall 0
+	config_get_bool cf_enabled "$section" cloudflare_enabled 0
+	config_get cf_api_url "$section" cloudflare_api_url ""
+	config_get cf_api_token "$section" cloudflare_api_token ""
 	config_get_bool qb_enabled "$section" qbittorrent_enabled 0
 	config_get qb_url "$section" qbittorrent_url ""
 	config_get qb_user "$section" qbittorrent_username ""
@@ -78,6 +82,9 @@ natter_write_notify_env() {
 		NATTER_FIREWALL_SECTION "$firewall_section" \
 		NATTER_FIREWALL_NAME "$firewall_name" \
 		NATTER_FIREWALL_SRC "$firewall_src" \
+		CLOUDFLARE_SRV_ENABLED "$cf_enabled" \
+		CLOUDFLARE_API_URL "$cf_api_url" \
+		CLOUDFLARE_API_TOKEN "$cf_api_token" \
 		QBITTORRENT_ENABLED "$qb_enabled" \
 		QBITTORRENT_URL "$qb_url" \
 		QBITTORRENT_USERNAME "$qb_user" \

@@ -20,6 +20,9 @@ uci_bin="$tmp/uci"
 uci_calls="$tmp/uci-calls.txt"
 firewall_bin="$tmp/firewall"
 firewall_calls="$tmp/firewall-calls.txt"
+cf_curl_bin="$tmp/curl-cloudflare"
+cf_curl_args="$tmp/curl-cloudflare-args.txt"
+cf_curl_body="$tmp/curl-cloudflare-body.json"
 
 cat > "$user_script" <<EOF
 #!/bin/sh
@@ -41,6 +44,22 @@ exit 0
 EOF
 chmod 0755 "$firewall_bin"
 
+cat > "$cf_curl_bin" <<EOF
+#!/bin/sh
+printf '%s\n' "\$@" > "$cf_curl_args"
+while [ "\$#" -gt 0 ]; do
+	case "\$1" in
+		--data|-d|--data-raw)
+			shift
+			printf '%s\n' "\$1" > "$cf_curl_body"
+			;;
+	esac
+	shift
+done
+exit 0
+EOF
+chmod 0755 "$cf_curl_bin"
+
 cat > "$env_file" <<EOF
 NATTER_INSTANCE='wan_ct'
 NATTER_STATUS_FILE='$status_file'
@@ -49,6 +68,9 @@ NATTER_AUTO_FIREWALL='1'
 NATTER_FIREWALL_SECTION='natter_wan_ct'
 NATTER_FIREWALL_NAME='Natter WAN CT'
 NATTER_FIREWALL_SRC='wan'
+CLOUDFLARE_SRV_ENABLED='1'
+CLOUDFLARE_API_URL='https://api.cloudflare.com/client/v4/zones/zone/dns_records/record'
+CLOUDFLARE_API_TOKEN='test-token'
 QBITTORRENT_ENABLED='0'
 EOF
 
@@ -56,6 +78,7 @@ NATTER_COMMON_SH="$ROOT/natter/files/natter-common.sh" \
 NATTER_QBITTORRENT_SH="$ROOT/natter/files/natter-qbittorrent.sh" \
 NATTER_UCI_BIN="$uci_bin" \
 NATTER_FIREWALL_INIT="$firewall_bin" \
+NATTER_CURL_BIN="$cf_curl_bin" \
 NATTER_NOTIFY_ENV="$env_file" \
 	"$ROOT/natter/files/natter-notify" tcp 10.10.10.10 51413 203.0.113.10 62000
 
@@ -98,12 +121,84 @@ do
 done
 grep -Fqx 'reload' "$firewall_calls" || fail "auto firewall did not reload firewall"
 
+for want in \
+	'-X' \
+	'PATCH' \
+	'Authorization: Bearer test-token' \
+	'Accept: application/json' \
+	'Content-Type: application/json' \
+	'https://api.cloudflare.com/client/v4/zones/zone/dns_records/record'
+do
+	grep -Fqx -- "$want" "$cf_curl_args" || fail "Cloudflare SRV curl call is missing: $want"
+done
+grep -Fqx '{"type":"SRV","data":{"port":62000}}' "$cf_curl_body" || \
+	fail "Cloudflare SRV request body must use mapped outer port"
+
+cf_fail_status_file="$tmp/wan_cf_fail.json"
+cf_fail_args_file="$tmp/cf-fail-user-args.txt"
+cf_fail_user_script="$tmp/cf-fail-user-notify.sh"
+cf_fail_env_file="$tmp/cf-fail-notify.env"
+cf_fail_curl_bin="$tmp/curl-cloudflare-fail"
+logger_bin="$tmp/logger"
+logger_file="$tmp/logger.txt"
+
+cat > "$cf_fail_user_script" <<EOF
+#!/bin/sh
+printf '%s\n' "\$@" > "$cf_fail_args_file"
+EOF
+chmod 0755 "$cf_fail_user_script"
+
+cat > "$cf_fail_curl_bin" <<'EOF'
+#!/bin/sh
+exit 22
+EOF
+chmod 0755 "$cf_fail_curl_bin"
+
+cat > "$logger_bin" <<EOF
+#!/bin/sh
+printf '%s\n' "\$*" >> "$logger_file"
+EOF
+chmod 0755 "$logger_bin"
+
+cat > "$cf_fail_env_file" <<EOF
+NATTER_INSTANCE='wan_cf_fail'
+NATTER_STATUS_FILE='$cf_fail_status_file'
+NATTER_USER_NOTIFY='$cf_fail_user_script'
+CLOUDFLARE_SRV_ENABLED='1'
+CLOUDFLARE_API_URL='https://api.cloudflare.com/client/v4/zones/zone/dns_records/record'
+CLOUDFLARE_API_TOKEN='test-token'
+QBITTORRENT_ENABLED='0'
+EOF
+
+NATTER_COMMON_SH="$ROOT/natter/files/natter-common.sh" \
+NATTER_QBITTORRENT_SH="$ROOT/natter/files/natter-qbittorrent.sh" \
+NATTER_LOGGER_BIN="$logger_bin" \
+NATTER_CURL_BIN="$cf_fail_curl_bin" \
+NATTER_NOTIFY_ENV="$cf_fail_env_file" \
+	"$ROOT/natter/files/natter-notify" tcp 10.10.10.11 51414 203.0.113.11 62005
+
+grep -Fq 'Cloudflare SRV update failed for wan_cf_fail: 62005' "$logger_file" || \
+	fail "Cloudflare SRV update failure was not logged"
+cat > "$expected_args" <<'EOF'
+tcp
+10.10.10.11
+51414
+203.0.113.11
+62005
+EOF
+cmp -s "$expected_args" "$cf_fail_args_file" || fail "Cloudflare SRV failure path did not call user notify"
+cat > "$expected_args" <<'EOF'
+tcp
+10.10.10.10
+51413
+203.0.113.10
+62000
+EOF
+
 qb_status_file="$tmp/wan_cm.json"
 qb_args_file="$tmp/qb-user-args.txt"
 qb_user_script="$tmp/qb-user-notify.sh"
 qb_env_file="$tmp/qb-notify.env"
-logger_bin="$tmp/logger"
-logger_file="$tmp/logger.txt"
 
 cat > "$qb_user_script" <<EOF
 #!/bin/sh

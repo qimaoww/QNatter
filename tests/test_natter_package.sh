@@ -105,6 +105,9 @@ assert_contains luci-app-natter/htdocs/luci-static/resources/view/natter/instanc
 assert_not_contains luci-app-natter/htdocs/luci-static/resources/view/natter/instances.js 'Port 0 forwards to the Natter mapped internal port\.'
 assert_contains luci-app-natter/htdocs/luci-static/resources/view/natter/instances.js "hideInGrid\\(s\\.option\\(form\\.DynamicList, 'stun_server'"
 assert_contains luci-app-natter/htdocs/luci-static/resources/view/natter/instances.js "hideInGrid\\(s\\.option\\(form\\.Value, 'notify_script'"
+assert_contains luci-app-natter/htdocs/luci-static/resources/view/natter/instances.js "hideInGrid\\(s\\.option\\(form\\.Flag, 'cloudflare_enabled'"
+assert_contains luci-app-natter/htdocs/luci-static/resources/view/natter/instances.js "hideInGrid\\(s\\.option\\(form\\.Value, 'cloudflare_api_url'"
+assert_contains luci-app-natter/htdocs/luci-static/resources/view/natter/instances.js "hideInGrid\\(s\\.option\\(form\\.Value, 'cloudflare_api_token'"
 assert_contains luci-app-natter/htdocs/luci-static/resources/view/natter/instances.js "hideInGrid\\(s\\.option\\(form\\.Flag, 'qbittorrent_enabled'"
 assert_contains luci-app-natter/htdocs/luci-static/resources/view/natter/status.js 'natter-theme-aurora'
 assert_contains luci-app-natter/htdocs/luci-static/resources/view/natter/status.js "expect: \\{ '': \\{ instances: \\[\\] \\} \\}"
@@ -138,15 +141,24 @@ assert_contains natter/files/natter.hotplug 'if \[ -n "\$bind_value" \]; then'
 assert_contains natter/files/natter.hotplug '\[ "\$bind_value" = "\$DEVICE" \] && MATCHED=1'
 assert_contains natter/files/natter.config "option forward_method 'auto'"
 assert_contains natter/files/natter.config "option auto_firewall '0'"
+assert_contains natter/files/natter.config "option cloudflare_enabled '0'"
+assert_contains natter/files/natter.config "option cloudflare_api_url ''"
+assert_contains natter/files/natter.config "option cloudflare_api_token ''"
 assert_not_contains natter/files/natter.config "^[[:space:]]*list[[:space:]]+stun_server"
 assert_contains natter/files/natter-common.sh 'natter_forward_method_or_auto'
 assert_contains natter/files/natter-common.sh '\[ "\$forward_method" != "auto" \]'
 assert_contains natter/files/natter.init 'NATTER_STATUS_FILE'
 assert_contains natter/files/natter.init 'NATTER_AUTO_FIREWALL'
 assert_contains natter/files/natter.init 'NATTER_FIREWALL_SECTION'
+assert_contains natter/files/natter.init 'CLOUDFLARE_SRV_ENABLED'
+assert_contains natter/files/natter.init 'CLOUDFLARE_API_URL'
+assert_contains natter/files/natter.init 'CLOUDFLARE_API_TOKEN'
 assert_contains natter/files/natter-notify 'NATTER_AUTO_FIREWALL'
 assert_contains natter/files/natter-notify 'NATTER_UCI_BIN'
 assert_contains natter/files/natter-notify 'firewall\.\$\{section\}\.dest_port=\$\{port\}'
+assert_contains natter/files/natter-notify 'update_cloudflare_srv'
+assert_contains natter/files/natter-notify 'Authorization: Bearer'
+assert_contains natter/files/natter-notify '\{"type":"SRV","data":\{"port":'
 assert_not_contains natter/files/natter.config 'option runtime'
 assert_not_contains natter/files/natter.init 'config_get runtime'
 assert_not_contains natter/files/natter.init 'NATTER_RUNTIME'
@@ -212,6 +224,9 @@ assert_po_translation 'Forward method' '转发方式'
 assert_po_translation 'Auto firewall' '自动防火墙'
 assert_po_translation 'Automatically opens this instance current Natter port on the WAN firewall.' '自动在 WAN 防火墙上放行此实例当前的 Natter 端口。'
 assert_po_translation 'Forward target port' '转发目标端口'
+assert_po_translation 'Cloudflare SRV' 'Cloudflare SRV'
+assert_po_translation 'Cloudflare API URL' 'Cloudflare API 地址'
+assert_po_translation 'Cloudflare API token' 'Cloudflare API Token'
 assert_not_contains luci-app-natter/po/zh_Hans/natter.po 'Port 0 forwards to the Natter mapped internal port\.'
 assert_po_translation 'Port 0 forwards to the port Natter reports after punching.' '端口 0 会转发到 Natter 打洞后报告的端口。'
 assert_po_translation 'Natter Status' 'Natter 状态'

@@ -88,6 +88,9 @@ config_get() {
 		wan_ct:auto_firewall) value="1" ;;
 		wan_ct:target_ip) value="10.10.10.10" ;;
 		wan_ct:target_port) value="51413" ;;
+		wan_ct:cloudflare_enabled) value="1" ;;
+		wan_ct:cloudflare_api_url) value="https://api.cloudflare.com/client/v4/zones/zone/dns_records/record" ;;
+		wan_ct:cloudflare_api_token) value="cf-secret" ;;
 		wan_cm:enabled) value="1" ;;
 		wan_cm:label) value="Mobile" ;;
 		wan_cm:protocol) value="udp" ;;
@@ -176,7 +179,11 @@ grep -Fq "NATTER_AUTO_FIREWALL='1'" "$tmp/run/wan_ct.env" || fail "Telecom notif
 grep -Fq "NATTER_FIREWALL_SECTION='natter_wan_ct'" "$tmp/run/wan_ct.env" || fail "Telecom notify env missing firewall section"
 grep -Fq "NATTER_FIREWALL_NAME='Natter Telecom'" "$tmp/run/wan_ct.env" || fail "Telecom notify env missing firewall name"
 grep -Fq "NATTER_FIREWALL_SRC='wan'" "$tmp/run/wan_ct.env" || fail "Telecom notify env missing firewall source zone"
+grep -Fq "CLOUDFLARE_SRV_ENABLED='1'" "$tmp/run/wan_ct.env" || fail "Telecom notify env missing Cloudflare SRV flag"
+grep -Fq "CLOUDFLARE_API_URL='https://api.cloudflare.com/client/v4/zones/zone/dns_records/record'" "$tmp/run/wan_ct.env" || fail "Telecom notify env missing Cloudflare API URL"
+grep -Fq "CLOUDFLARE_API_TOKEN='cf-secret'" "$tmp/run/wan_ct.env" || fail "Telecom notify env missing Cloudflare API token"
 grep -Fq "NATTER_AUTO_FIREWALL='0'" "$tmp/run/wan_cm.env" || fail "Mobile notify env should disable auto firewall by default"
+grep -Fq "CLOUDFLARE_SRV_ENABLED='0'" "$tmp/run/wan_cm.env" || fail "Mobile notify env should disable Cloudflare SRV by default"
 
 grep -Fqx 'reload natter' "$trigger_log" || fail "config reload trigger missing"
 grep -Fqx 'interface interface.* wan3 /etc/init.d/natter reload' "$trigger_log" || fail "unbound instance network trigger missing"
