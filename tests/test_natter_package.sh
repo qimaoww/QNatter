@@ -240,6 +240,7 @@ sh -n "$ROOT/luci-app-natter/root/usr/libexec/rpcd/luci.natter"
 sh -n "$ROOT/tests/test_natter_init.sh"
 sh -n "$ROOT/tests/test_natter_log.sh"
 sh -n "$ROOT/tests/test_natter_notify.sh"
+sh -n "$ROOT/tests/test_natter_rpcd.sh"
 sh -n "$ROOT/tests/test_natter_status.sh"
 
 (
@@ -259,6 +260,7 @@ sh -n "$ROOT/tests/test_natter_status.sh"
 "$ROOT/tests/test_natter_init.sh"
 "$ROOT/tests/test_natter_log.sh"
 "$ROOT/tests/test_natter_notify.sh"
+"$ROOT/tests/test_natter_rpcd.sh"
 "$ROOT/tests/test_natter_status.sh"
 
 dummy_natter_go="$tmp/natter-go"

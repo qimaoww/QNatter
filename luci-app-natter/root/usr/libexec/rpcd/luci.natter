@@ -1,5 +1,8 @@
 #!/bin/sh
 
+: "${NATTER_STATUS_BIN:=/usr/libexec/natter-status}"
+: "${NATTER_LOG_BIN:=/usr/libexec/natter-log}"
+
 json_arg_string() {
 	local key="$1"
 	local input="$2"
@@ -24,18 +27,18 @@ case "$1" in
 		read -r input
 		case "$2" in
 			status)
-				exec /usr/libexec/natter-status
+				exec "$NATTER_STATUS_BIN"
 				;;
 			log)
 				instance="$(json_arg_string instance "$input")"
 				lines="$(json_arg_number lines "$input")"
 				printf '{"log":"'
-				/usr/libexec/natter-log read "${instance:-default}" "${lines:-200}" | json_escape_stream
+				"$NATTER_LOG_BIN" read "${instance:-default}" "${lines:-200}" | json_escape_stream
 				printf '"}\n'
 				;;
 			clear_log)
 				instance="$(json_arg_string instance "$input")"
-				exec /usr/libexec/natter-log clear "${instance:-default}" 200
+				exec "$NATTER_LOG_BIN" clear "${instance:-default}" 200
 				;;
 		esac
 		;;
