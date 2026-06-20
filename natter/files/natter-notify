@@ -4,6 +4,7 @@ set -u
 
 : "${NATTER_QBITTORRENT_SH:=/usr/share/natter/natter-qbittorrent.sh}"
 : "${NATTER_COMMON_SH:=/usr/share/natter/natter-common.sh}"
+: "${NATTER_LOGGER_BIN:=logger}"
 
 . "$NATTER_QBITTORRENT_SH"
 . "$NATTER_COMMON_SH"
@@ -21,7 +22,7 @@ if [ -n "$env_file" ] && [ -r "$env_file" ]; then
 fi
 
 log() {
-	logger -t natter-notify "$*"
+	"$NATTER_LOGGER_BIN" -t natter-notify "$*"
 }
 
 status_file="${NATTER_STATUS_FILE:-/var/run/natter/${NATTER_INSTANCE:-default}.json}"
