@@ -47,6 +47,9 @@ function addMissingValue(option, value, label) {
 	if (!value)
 		return;
 
+	if (option.keylist && option.keylist.indexOf(String(value)) > -1)
+		return;
+
 	option.value(value, label || value);
 }
 
@@ -108,6 +111,7 @@ return view.extend({
 			var elem = option ? option.getUIElement(section_id) : null;
 			var select = elem && elem.node ? elem.node.querySelector('select') : null;
 			var seen = {};
+			var label;
 
 			if (!select)
 				return;
@@ -120,14 +124,31 @@ return view.extend({
 				if (!item.id)
 					return;
 
+				if (seen[item.id])
+					return;
+
 				seen[item.id] = true;
-				select.add(new Option(labelFn ? labelFn(item) : (item.name || item.id), item.id));
+				label = labelFn ? labelFn(item) : (item.name || item.id);
+				select.add(new Option(label, item.id));
 			});
 
 			if (current && !seen[current])
 				select.add(new Option(current, current));
 
 			elem.setValue(current || '');
+		}
+
+		function cloudflareButtonRenderer(handler) {
+			return function(section_id) {
+				return E('button', {
+					'type': 'button',
+					'class': 'cbi-button cbi-button-%s'.format(this.inputstyle || 'button'),
+					'click': L.bind(function(ev) {
+						ev.preventDefault();
+						return handler(this, section_id);
+					}, this)
+				}, [ this.inputtitle || this.title ]);
+			};
 		}
 
 		function refreshCloudflareSrvRecords(contextOption, section_id) {
@@ -287,17 +308,14 @@ return view.extend({
 		o.password = true;
 		o.depends('cloudflare_enabled', '1');
 
-		o = hideInGrid(s.option(form.Button, '_cloudflare_load_zones', _('Read zones')));
+		o = hideInGrid(s.option(form.DummyValue, '_cloudflare_load_zones', _('Read zones')));
 		o.title = '&#160;';
 		o.inputtitle = _('Read zones');
 		o.inputstyle = 'apply';
+		o.default = '1';
 		o.rmempty = true;
 		o.depends('cloudflare_enabled', '1');
-		o.write = function() {};
-		o.remove = function() {};
-		o.onclick = function(ev, section_id) {
-			return refreshCloudflareZones(this, section_id);
-		};
+		o.renderWidget = cloudflareButtonRenderer(refreshCloudflareZones);
 
 		o = hideInGrid(s.option(form.ListValue, 'cloudflare_zone_id', _('Cloudflare zone')));
 		o.value('', _('Select zone'));
@@ -309,17 +327,14 @@ return view.extend({
 			return current;
 		};
 
-		o = hideInGrid(s.option(form.Button, '_cloudflare_load_records', _('Read SRV records')));
+		o = hideInGrid(s.option(form.DummyValue, '_cloudflare_load_records', _('Read SRV records')));
 		o.title = '&#160;';
 		o.inputtitle = _('Read SRV records');
 		o.inputstyle = 'apply';
+		o.default = '1';
 		o.rmempty = true;
 		o.depends('cloudflare_enabled', '1');
-		o.write = function() {};
-		o.remove = function() {};
-		o.onclick = function(ev, section_id) {
-			return refreshCloudflareSrvRecords(this, section_id);
-		};
+		o.renderWidget = cloudflareButtonRenderer(refreshCloudflareSrvRecords);
 
 		o = hideInGrid(s.option(form.ListValue, 'cloudflare_record_id', _('Cloudflare SRV record')));
 		o.value('', _('Select SRV record'));

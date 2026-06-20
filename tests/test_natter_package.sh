@@ -97,6 +97,7 @@ assert_file natter/files/natter.uci-default
 
 assert_file luci-app-natter/Makefile
 assert_file luci-app-natter/htdocs/luci-static/resources/view/natter/instances.js
+assert_file luci-app-natter/htdocs/luci-static/resources/view/natter/instances-v11.js
 assert_file luci-app-natter/htdocs/luci-static/resources/view/natter/status.js
 assert_file luci-app-natter/htdocs/luci-static/resources/view/natter/log.js
 assert_file luci-app-natter/root/usr/share/luci/menu.d/luci-app-natter.json
@@ -128,6 +129,9 @@ assert_not_contains luci-app-natter/htdocs/luci-static/resources/view/natter/ins
 assert_contains luci-app-natter/htdocs/luci-static/resources/view/natter/instances.js 'natter-theme-aurora'
 assert_contains luci-app-natter/htdocs/luci-static/resources/view/natter/instances.js "L\\.resource\\('natter/natter\\.css'\\)"
 assert_contains luci-app-natter/htdocs/luci-static/resources/view/natter/instances.js 'hideInGrid'
+assert_contains luci-app-natter/htdocs/luci-static/resources/view/natter/instances.js 'option\.keylist'
+assert_contains luci-app-natter/htdocs/luci-static/resources/view/natter/instances.js 'indexOf\(String\(value\)\)'
+assert_contains luci-app-natter/htdocs/luci-static/resources/view/natter/instances.js "return E\\('button'"
 assert_contains luci-app-natter/htdocs/luci-static/resources/view/natter/instances.js "hideInGrid\\(s\\.option\\(widgets\\.DeviceSelect, 'bind_value'"
 assert_contains luci-app-natter/htdocs/luci-static/resources/view/natter/instances.js "widgets\\.DeviceSelect, 'bind_value', _\\('WAN interface'\\)"
 assert_not_contains luci-app-natter/htdocs/luci-static/resources/view/natter/instances.js "form\\.ListValue, 'runtime'"
@@ -169,6 +173,7 @@ assert_contains luci-app-natter/htdocs/luci-static/resources/view/natter/log.js 
 assert_contains luci-app-natter/htdocs/luci-static/resources/view/natter/log.js "expect: \\{ '': \\{ log: '' \\} \\}"
 assert_contains luci-app-natter/htdocs/luci-static/resources/view/natter/log.js 'data\.log'
 assert_contains luci-app-natter/root/usr/share/luci/menu.d/luci-app-natter.json '"type"[[:space:]]*:[[:space:]]*"view"'
+assert_contains luci-app-natter/root/usr/share/luci/menu.d/luci-app-natter.json '"path"[[:space:]]*:[[:space:]]*"natter/instances-v11"'
 assert_contains luci-app-natter/root/usr/libexec/rpcd/luci.natter '"instance":"String"'
 assert_contains luci-app-natter/root/usr/libexec/rpcd/luci.natter '"lines":"Integer"'
 assert_contains luci-app-natter/root/usr/libexec/rpcd/luci.natter '"cloudflare_zones":\{"section":"String","token":"String"\}'
@@ -280,10 +285,13 @@ assert_contains luci-app-natter/htdocs/luci-static/resources/view/natter/instanc
 assert_contains luci-app-natter/htdocs/luci-static/resources/view/natter/instances.js 'contextOption\.section\.children'
 assert_contains luci-app-natter/htdocs/luci-static/resources/view/natter/instances.js 'refreshCloudflareZones'
 assert_contains luci-app-natter/htdocs/luci-static/resources/view/natter/instances.js 'refreshCloudflareSrvRecords'
-assert_contains luci-app-natter/htdocs/luci-static/resources/view/natter/instances.js "hideInGrid\\(s\\.option\\(form\\.Button, '_cloudflare_load_zones', _\\('Read zones'\\)"
-assert_contains luci-app-natter/htdocs/luci-static/resources/view/natter/instances.js "hideInGrid\\(s\\.option\\(form\\.Button, '_cloudflare_load_records', _\\('Read SRV records'\\)"
-assert_contains luci-app-natter/htdocs/luci-static/resources/view/natter/instances.js 'refreshCloudflareZones\(this, section_id\)'
-assert_contains luci-app-natter/htdocs/luci-static/resources/view/natter/instances.js 'refreshCloudflareSrvRecords\(this, section_id\)'
+assert_contains luci-app-natter/htdocs/luci-static/resources/view/natter/instances.js "hideInGrid\\(s\\.option\\(form\\.DummyValue, '_cloudflare_load_zones', _\\('Read zones'\\)"
+assert_contains luci-app-natter/htdocs/luci-static/resources/view/natter/instances.js "hideInGrid\\(s\\.option\\(form\\.DummyValue, '_cloudflare_load_records', _\\('Read SRV records'\\)"
+assert_not_contains luci-app-natter/htdocs/luci-static/resources/view/natter/instances.js "form\\.Button, '_cloudflare_load_zones'"
+assert_not_contains luci-app-natter/htdocs/luci-static/resources/view/natter/instances.js "form\\.Button, '_cloudflare_load_records'"
+assert_contains luci-app-natter/htdocs/luci-static/resources/view/natter/instances.js 'cloudflareButtonRenderer\(refreshCloudflareZones\)'
+assert_contains luci-app-natter/htdocs/luci-static/resources/view/natter/instances.js 'cloudflareButtonRenderer\(refreshCloudflareSrvRecords\)'
+assert_contains luci-app-natter/htdocs/luci-static/resources/view/natter/instances.js 'return handler\(this, section_id\)'
 assert_not_contains luci-app-natter/htdocs/luci-static/resources/view/natter/instances.js 'var tokenOption, zoneOption, recordOption'
 assert_not_contains luci-app-natter/htdocs/luci-static/resources/view/natter/instances.js 'o\.load = function\(section_id\)[^}]*callCloudflareZones'
 assert_not_contains luci-app-natter/htdocs/luci-static/resources/view/natter/instances.js 'o\.load = function\(section_id\)[^}]*callCloudflareSrvRecords'
@@ -292,16 +300,14 @@ assert_option_block_not_contains luci-app-natter/htdocs/luci-static/resources/vi
 assert_option_block_not_contains luci-app-natter/htdocs/luci-static/resources/view/natter/instances.js cloudflare_zone_id "refreshCloudflareSrvRecords(this, section_id)"
 assert_option_block_contains luci-app-natter/htdocs/luci-static/resources/view/natter/instances.js _cloudflare_load_zones "o.inputtitle = _('Read zones')"
 assert_option_block_contains luci-app-natter/htdocs/luci-static/resources/view/natter/instances.js _cloudflare_load_zones "o.inputstyle = 'apply'"
+assert_option_block_contains luci-app-natter/htdocs/luci-static/resources/view/natter/instances.js _cloudflare_load_zones "o.default = '1'"
 assert_option_block_contains luci-app-natter/htdocs/luci-static/resources/view/natter/instances.js _cloudflare_load_zones "o.rmempty = true"
-assert_option_block_contains luci-app-natter/htdocs/luci-static/resources/view/natter/instances.js _cloudflare_load_zones "o.write = function() {}"
-assert_option_block_contains luci-app-natter/htdocs/luci-static/resources/view/natter/instances.js _cloudflare_load_zones "o.remove = function() {}"
-assert_option_block_contains luci-app-natter/htdocs/luci-static/resources/view/natter/instances.js _cloudflare_load_zones "refreshCloudflareZones(this, section_id)"
+assert_option_block_contains luci-app-natter/htdocs/luci-static/resources/view/natter/instances.js _cloudflare_load_zones "o.renderWidget = cloudflareButtonRenderer(refreshCloudflareZones)"
 assert_option_block_contains luci-app-natter/htdocs/luci-static/resources/view/natter/instances.js _cloudflare_load_records "o.inputtitle = _('Read SRV records')"
 assert_option_block_contains luci-app-natter/htdocs/luci-static/resources/view/natter/instances.js _cloudflare_load_records "o.inputstyle = 'apply'"
+assert_option_block_contains luci-app-natter/htdocs/luci-static/resources/view/natter/instances.js _cloudflare_load_records "o.default = '1'"
 assert_option_block_contains luci-app-natter/htdocs/luci-static/resources/view/natter/instances.js _cloudflare_load_records "o.rmempty = true"
-assert_option_block_contains luci-app-natter/htdocs/luci-static/resources/view/natter/instances.js _cloudflare_load_records "o.write = function() {}"
-assert_option_block_contains luci-app-natter/htdocs/luci-static/resources/view/natter/instances.js _cloudflare_load_records "o.remove = function() {}"
-assert_option_block_contains luci-app-natter/htdocs/luci-static/resources/view/natter/instances.js _cloudflare_load_records "refreshCloudflareSrvRecords(this, section_id)"
+assert_option_block_contains luci-app-natter/htdocs/luci-static/resources/view/natter/instances.js _cloudflare_load_records "o.renderWidget = cloudflareButtonRenderer(refreshCloudflareSrvRecords)"
 assert_contains luci-app-natter/root/usr/libexec/rpcd/luci.natter 'CLOUDFLARE_TIMEOUT:-4'
 assert_contains natter/files/natter.uci-default 'NATTER_UCI_CONFIG:=/etc/config/natter'
 assert_contains natter/files/natter.uci-default 'NATTER_UCI_DEFAULT:=/etc/config/natter.default'
