@@ -118,6 +118,9 @@ msgstr "Cloudflare API Token"
 msgid "Cloudflare API token/key"
 msgstr "Cloudflare API Token/Key"
 
+msgid "Read zones"
+msgstr "读取区域"
+
 msgid "Cloudflare zone"
 msgstr "Cloudflare 区域"
 
@@ -126,6 +129,9 @@ msgstr "选择区域"
 
 msgid "Cloudflare SRV record"
 msgstr "Cloudflare SRV 记录"
+
+msgid "Read SRV records"
+msgstr "读取 SRV 记录"
 
 msgid "Select SRV record"
 msgstr "选择 SRV 记录"

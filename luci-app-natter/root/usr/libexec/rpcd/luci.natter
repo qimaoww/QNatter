@@ -58,7 +58,7 @@ cloudflare_api_get() {
 	[ -n "$token" ] || return 1
 
 	base="${CLOUDFLARE_API_BASE%/}"
-	"$NATTER_CURL_BIN" -fsS -m "${CLOUDFLARE_TIMEOUT:-10}" \
+	"$NATTER_CURL_BIN" -fsS -m "${CLOUDFLARE_TIMEOUT:-4}" \
 		-H "Authorization: Bearer $token" \
 		-H "Accept: application/json" \
 		"${base}${path}"

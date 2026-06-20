@@ -156,10 +156,11 @@ return view.extend({
 		function refreshCloudflareZones(contextOption, section_id) {
 			var token = getCloudflareToken(contextOption, section_id);
 			var current = getOptionValue(contextOption, 'cloudflare_zone_id', section_id);
+			var currentRecord = getOptionValue(contextOption, 'cloudflare_record_id', section_id);
 
 			if (!token) {
 				setSelectChoices(contextOption, 'cloudflare_zone_id', section_id, _('Select zone'), [], current);
-				setSelectChoices(contextOption, 'cloudflare_record_id', section_id, _('Select SRV record'), [], getOptionValue(contextOption, 'cloudflare_record_id', section_id));
+				setSelectChoices(contextOption, 'cloudflare_record_id', section_id, _('Select SRV record'), [], currentRecord);
 				return Promise.resolve();
 			}
 
@@ -171,7 +172,7 @@ return view.extend({
 				}
 
 				setSelectChoices(contextOption, 'cloudflare_zone_id', section_id, _('Select zone'), data ? data.zones : [], current);
-				return refreshCloudflareSrvRecords(contextOption, section_id);
+				setSelectChoices(contextOption, 'cloudflare_record_id', section_id, _('Select SRV record'), [], currentRecord);
 			}).catch(function() {
 				setSelectChoices(contextOption, 'cloudflare_zone_id', section_id, _('Cloudflare request failed'), [], current);
 			});
@@ -285,7 +286,16 @@ return view.extend({
 		o = hideInGrid(s.option(form.Value, 'cloudflare_api_token', _('Cloudflare API token/key')));
 		o.password = true;
 		o.depends('cloudflare_enabled', '1');
-		o.onchange = function(ev, section_id) {
+
+		o = hideInGrid(s.option(form.Button, '_cloudflare_load_zones', _('Read zones')));
+		o.title = '&#160;';
+		o.inputtitle = _('Read zones');
+		o.inputstyle = 'apply';
+		o.rmempty = true;
+		o.depends('cloudflare_enabled', '1');
+		o.write = function() {};
+		o.remove = function() {};
+		o.onclick = function(ev, section_id) {
 			return refreshCloudflareZones(this, section_id);
 		};
 
@@ -294,20 +304,20 @@ return view.extend({
 		o.depends('cloudflare_enabled', '1');
 		o.load = function(section_id) {
 			var current = uci.get('natter', section_id, 'cloudflare_zone_id') || '';
-			var token = uci.get('natter', section_id, 'cloudflare_api_token') || '';
 
 			addMissingValue(this, current, current);
-			return callCloudflareZones(section_id, token).then(L.bind(function(data) {
-				((data && data.zones) || []).forEach(L.bind(function(zone) {
-					this.value(zone.id, zone.name || zone.id);
-				}, this));
-
-				return current;
-			}, this)).catch(function() {
-				return current;
-			});
+			return current;
 		};
-		o.onchange = function(ev, section_id) {
+
+		o = hideInGrid(s.option(form.Button, '_cloudflare_load_records', _('Read SRV records')));
+		o.title = '&#160;';
+		o.inputtitle = _('Read SRV records');
+		o.inputstyle = 'apply';
+		o.rmempty = true;
+		o.depends('cloudflare_enabled', '1');
+		o.write = function() {};
+		o.remove = function() {};
+		o.onclick = function(ev, section_id) {
 			return refreshCloudflareSrvRecords(this, section_id);
 		};
 
@@ -316,22 +326,9 @@ return view.extend({
 		o.depends('cloudflare_enabled', '1');
 		o.load = function(section_id) {
 			var current = uci.get('natter', section_id, 'cloudflare_record_id') || '';
-			var zone = uci.get('natter', section_id, 'cloudflare_zone_id') || '';
-			var token = uci.get('natter', section_id, 'cloudflare_api_token') || '';
 
 			addMissingValue(this, current, current);
-			if (!zone)
-				return current;
-
-			return callCloudflareSrvRecords(section_id, zone, token).then(L.bind(function(data) {
-				((data && data.records) || []).forEach(L.bind(function(record) {
-					this.value(record.id, cloudflareRecordLabel(record));
-				}, this));
-
-				return current;
-			}, this)).catch(function() {
-				return current;
-			});
+			return current;
 		};
 
 		o = hideInGrid(s.option(form.Flag, 'retry_target', _('Retry until target opens')));

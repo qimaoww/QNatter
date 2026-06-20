@@ -49,6 +49,28 @@ assert_option_block_contains() {
 	' "$ROOT/$file" || fail "$file option $option does not contain text: $text"
 }
 
+assert_option_block_not_contains() {
+	file="$1"
+	option="$2"
+	text="$3"
+	awk -v option="'$option'" -v text="$text" '
+		index($0, "s.option") && index($0, option) {
+			found = 1
+			in_block = 1
+			next
+		}
+		in_block && /^[[:space:]]*o = / {
+			in_block = 0
+		}
+		in_block && index($0, text) {
+			seen = 1
+		}
+		END {
+			exit(found && !seen ? 0 : 1)
+		}
+	' "$ROOT/$file" || fail "$file option $option contains forbidden text: $text"
+}
+
 assert_po_translation() {
 	msgid="$1"
 	msgstr="$2"
@@ -258,9 +280,29 @@ assert_contains luci-app-natter/htdocs/luci-static/resources/view/natter/instanc
 assert_contains luci-app-natter/htdocs/luci-static/resources/view/natter/instances.js 'contextOption\.section\.children'
 assert_contains luci-app-natter/htdocs/luci-static/resources/view/natter/instances.js 'refreshCloudflareZones'
 assert_contains luci-app-natter/htdocs/luci-static/resources/view/natter/instances.js 'refreshCloudflareSrvRecords'
+assert_contains luci-app-natter/htdocs/luci-static/resources/view/natter/instances.js "hideInGrid\\(s\\.option\\(form\\.Button, '_cloudflare_load_zones', _\\('Read zones'\\)"
+assert_contains luci-app-natter/htdocs/luci-static/resources/view/natter/instances.js "hideInGrid\\(s\\.option\\(form\\.Button, '_cloudflare_load_records', _\\('Read SRV records'\\)"
 assert_contains luci-app-natter/htdocs/luci-static/resources/view/natter/instances.js 'refreshCloudflareZones\(this, section_id\)'
 assert_contains luci-app-natter/htdocs/luci-static/resources/view/natter/instances.js 'refreshCloudflareSrvRecords\(this, section_id\)'
 assert_not_contains luci-app-natter/htdocs/luci-static/resources/view/natter/instances.js 'var tokenOption, zoneOption, recordOption'
+assert_not_contains luci-app-natter/htdocs/luci-static/resources/view/natter/instances.js 'o\.load = function\(section_id\)[^}]*callCloudflareZones'
+assert_not_contains luci-app-natter/htdocs/luci-static/resources/view/natter/instances.js 'o\.load = function\(section_id\)[^}]*callCloudflareSrvRecords'
+assert_not_contains luci-app-natter/htdocs/luci-static/resources/view/natter/instances.js 'return refreshCloudflareSrvRecords\(contextOption, section_id\);'
+assert_option_block_not_contains luci-app-natter/htdocs/luci-static/resources/view/natter/instances.js cloudflare_api_token "refreshCloudflareZones(this, section_id)"
+assert_option_block_not_contains luci-app-natter/htdocs/luci-static/resources/view/natter/instances.js cloudflare_zone_id "refreshCloudflareSrvRecords(this, section_id)"
+assert_option_block_contains luci-app-natter/htdocs/luci-static/resources/view/natter/instances.js _cloudflare_load_zones "o.inputtitle = _('Read zones')"
+assert_option_block_contains luci-app-natter/htdocs/luci-static/resources/view/natter/instances.js _cloudflare_load_zones "o.inputstyle = 'apply'"
+assert_option_block_contains luci-app-natter/htdocs/luci-static/resources/view/natter/instances.js _cloudflare_load_zones "o.rmempty = true"
+assert_option_block_contains luci-app-natter/htdocs/luci-static/resources/view/natter/instances.js _cloudflare_load_zones "o.write = function() {}"
+assert_option_block_contains luci-app-natter/htdocs/luci-static/resources/view/natter/instances.js _cloudflare_load_zones "o.remove = function() {}"
+assert_option_block_contains luci-app-natter/htdocs/luci-static/resources/view/natter/instances.js _cloudflare_load_zones "refreshCloudflareZones(this, section_id)"
+assert_option_block_contains luci-app-natter/htdocs/luci-static/resources/view/natter/instances.js _cloudflare_load_records "o.inputtitle = _('Read SRV records')"
+assert_option_block_contains luci-app-natter/htdocs/luci-static/resources/view/natter/instances.js _cloudflare_load_records "o.inputstyle = 'apply'"
+assert_option_block_contains luci-app-natter/htdocs/luci-static/resources/view/natter/instances.js _cloudflare_load_records "o.rmempty = true"
+assert_option_block_contains luci-app-natter/htdocs/luci-static/resources/view/natter/instances.js _cloudflare_load_records "o.write = function() {}"
+assert_option_block_contains luci-app-natter/htdocs/luci-static/resources/view/natter/instances.js _cloudflare_load_records "o.remove = function() {}"
+assert_option_block_contains luci-app-natter/htdocs/luci-static/resources/view/natter/instances.js _cloudflare_load_records "refreshCloudflareSrvRecords(this, section_id)"
+assert_contains luci-app-natter/root/usr/libexec/rpcd/luci.natter 'CLOUDFLARE_TIMEOUT:-4'
 assert_contains natter/files/natter.uci-default 'NATTER_UCI_CONFIG:=/etc/config/natter'
 assert_contains natter/files/natter.uci-default 'NATTER_UCI_DEFAULT:=/etc/config/natter.default'
 assert_contains natter/files/natter.uci-default '\[ -e "\$NATTER_UCI_CONFIG" \] && exit 0'
@@ -277,8 +319,10 @@ assert_po_translation 'Automatically opens this instance current Natter port on 
 assert_po_translation 'Forward target port' '转发目标端口'
 assert_po_translation 'Cloudflare SRV' 'Cloudflare SRV'
 assert_po_translation 'Cloudflare API token/key' 'Cloudflare API Token/Key'
+assert_po_translation 'Read zones' '读取区域'
 assert_po_translation 'Cloudflare zone' 'Cloudflare 区域'
 assert_po_translation 'Cloudflare SRV record' 'Cloudflare SRV 记录'
+assert_po_translation 'Read SRV records' '读取 SRV 记录'
 assert_not_contains luci-app-natter/po/zh_Hans/natter.po 'Port 0 forwards to the Natter mapped internal port\.'
 assert_po_translation 'Port 0 forwards to the port Natter reports after punching.' '端口 0 会转发到 Natter 打洞后报告的端口。'
 assert_po_translation 'Natter Status' 'Natter 状态'
