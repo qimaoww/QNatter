@@ -90,7 +90,10 @@ natter_runtime_slug() {
 		{
 			for (i = 1; i <= length($0); i++) {
 				char = substr($0, i, 1)
-				if (char ~ /^[A-Za-z0-9_]$/)
+				next_three = substr($0, i + 1, 3)
+				if (char == "_" && next_three ~ /^x[0-9A-Fa-f][0-9A-Fa-f]$/)
+					out = out "_x5f"
+				else if (char ~ /^[A-Za-z0-9_]$/)
 					out = out char
 				else if (char in ord)
 					out = out sprintf("_x%02x", ord[char])

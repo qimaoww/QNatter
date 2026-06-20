@@ -98,6 +98,15 @@ func TestWriteMappingDoesNotHTMLEscapeStatusStrings(t *testing.T) {
 	}
 }
 
+func TestRuntimeSlugAvoidsEscapedLiteralCollisions(t *testing.T) {
+	if got := RuntimeSlug("wan_ct"); got != "wan_ct" {
+		t.Fatalf("plain underscore slug = %q, want wan_ct", got)
+	}
+	if RuntimeSlug("wan_x2dct") == RuntimeSlug("wan-ct") {
+		t.Fatalf("literal escape-like slug collided: %q", RuntimeSlug("wan_x2dct"))
+	}
+}
+
 func TestWriteMappingAtomicallyReplacesExistingFile(t *testing.T) {
 	dir := t.TempDir()
 	file := dir + "/status.json"

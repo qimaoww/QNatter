@@ -36,8 +36,11 @@ func RuntimeSlug(name string) string {
 		name = "default"
 	}
 	var out strings.Builder
-	for _, char := range name {
-		if char >= 'A' && char <= 'Z' || char >= 'a' && char <= 'z' || char >= '0' && char <= '9' || char == '_' {
+	runes := []rune(name)
+	for i, char := range runes {
+		if char == '_' && hasHexEscapePrefix(runes[i+1:]) {
+			out.WriteString("_x5f")
+		} else if char >= 'A' && char <= 'Z' || char >= 'a' && char <= 'z' || char >= '0' && char <= '9' || char == '_' {
 			out.WriteRune(char)
 		} else if char < 128 {
 			out.WriteString(fmt.Sprintf("_x%02x", char))
@@ -49,6 +52,14 @@ func RuntimeSlug(name string) string {
 		return "default"
 	}
 	return out.String()
+}
+
+func hasHexEscapePrefix(runes []rune) bool {
+	return len(runes) >= 3 && runes[0] == 'x' && isHex(runes[1]) && isHex(runes[2])
+}
+
+func isHex(char rune) bool {
+	return char >= '0' && char <= '9' || char >= 'a' && char <= 'f' || char >= 'A' && char <= 'F'
 }
 
 func WriteMapping(path string, mapping Mapping) error {
