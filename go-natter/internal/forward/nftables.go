@@ -70,14 +70,25 @@ func NftablesSNATRule(options StartOptions) string {
 	)
 }
 
+func NftablesConnMarkRule(options StartOptions, mark string) string {
+	proto := "tcp"
+	if options.UDP {
+		proto = "udp"
+	}
+	return fmt.Sprintf(
+		"insert rule ip natter natter_mark ip daddr %s %s dport %d ct mark set %s",
+		options.IP, proto, options.Port, mark,
+	)
+}
+
 func NftablesRouteMarkRule(options StartOptions, mark string) string {
 	proto := "tcp"
 	if options.UDP {
 		proto = "udp"
 	}
 	return fmt.Sprintf(
-		"insert rule ip natter natter_mark ip saddr %s %s sport %d meta mark set %s",
-		options.TargetIP, proto, options.TargetPort, mark,
+		"insert rule ip natter natter_mark ip saddr %s %s sport %d ct mark %s meta mark set %s",
+		options.TargetIP, proto, options.TargetPort, mark, mark,
 	)
 }
 

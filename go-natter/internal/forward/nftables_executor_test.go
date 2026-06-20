@@ -39,6 +39,7 @@ func TestNftablesForwarderMarksRepliesForBoundInterface(t *testing.T) {
 	runner := &fakeNftRunner{
 		outputs: map[string]string{
 			NftablesDNATRule(options):                   "insert rule ip natter natter_dnat # handle 42\n",
+			NftablesConnMarkRule(options, policy.Mark):  "insert rule ip natter natter_mark # handle 87\n",
 			NftablesRouteMarkRule(options, policy.Mark): "insert rule ip natter natter_mark # handle 88\n",
 		},
 	}
@@ -49,8 +50,8 @@ func TestNftablesForwarderMarksRepliesForBoundInterface(t *testing.T) {
 	if err := f.Start(options); err != nil {
 		t.Fatalf("Start returned error: %v", err)
 	}
-	if f.RouteMarkHandle != 88 {
-		t.Fatalf("RouteMarkHandle = %d, want 88", f.RouteMarkHandle)
+	if f.ConnMarkHandle != 87 || f.RouteMarkHandle != 88 {
+		t.Fatalf("mark handles = %d/%d, want 87/88", f.ConnMarkHandle, f.RouteMarkHandle)
 	}
 	if err := f.Stop(); err != nil {
 		t.Fatalf("Stop returned error: %v", err)
@@ -60,8 +61,10 @@ func TestNftablesForwarderMarksRepliesForBoundInterface(t *testing.T) {
 		"list table ip natter",
 		NftablesDNATRule(options),
 		"list chain ip natter natter_mark",
+		NftablesConnMarkRule(options, policy.Mark),
 		NftablesRouteMarkRule(options, policy.Mark),
 		"delete rule ip natter natter_dnat handle 42",
+		"delete rule ip natter natter_mark handle 87",
 		"delete rule ip natter natter_mark handle 88",
 	}
 	assertNftCalls(t, runner.calls, wantCalls)

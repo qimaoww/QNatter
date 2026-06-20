@@ -14,6 +14,7 @@ trap 'rm -rf "$tmp"' EXIT
 
 procd_log="$tmp/procd.log"
 trigger_log="$tmp/triggers.log"
+nft_log="$tmp/nft.log"
 current_instance=""
 
 procd_open_instance() {
@@ -139,17 +140,29 @@ cat > "$tmp/network.sh" <<'EOF'
 # Intentionally empty. natter.init must not need network_get_device to bind.
 EOF
 
+cat > "$tmp/nft" <<'EOF'
+#!/bin/sh
+printf '%s\n' "$*" >> "$NATTER_TEST_NFT_LOG"
+EOF
+chmod +x "$tmp/nft"
+
 NATTER_FUNCTIONS_SH="$tmp/functions.sh"
 NATTER_NETWORK_SH="$tmp/network.sh"
 NATTER_COMMON_SH="$ROOT/natter/files/natter-common.sh"
 NATTER_QBITTORRENT_SH="$ROOT/natter/files/natter-qbittorrent.sh"
 NATTER_RUN_DIR="$tmp/run"
 NATTER_LOG_DIR="$tmp/log"
-export NATTER_FUNCTIONS_SH NATTER_NETWORK_SH NATTER_COMMON_SH NATTER_QBITTORRENT_SH NATTER_RUN_DIR NATTER_LOG_DIR
+NATTER_NFT_BIN="$tmp/nft"
+NATTER_TEST_NFT_LOG="$nft_log"
+export NATTER_FUNCTIONS_SH NATTER_NETWORK_SH NATTER_COMMON_SH NATTER_QBITTORRENT_SH NATTER_RUN_DIR NATTER_LOG_DIR NATTER_NFT_BIN NATTER_TEST_NFT_LOG
 
 . "$ROOT/natter/files/natter.init"
 start_service
 service_triggers
+
+grep -Fqx 'flush chain ip natter natter_dnat' "$nft_log" || fail "start_service did not flush stale DNAT rules"
+grep -Fqx 'flush chain ip natter natter_snat' "$nft_log" || fail "start_service did not flush stale SNAT rules"
+grep -Fqx 'flush chain ip natter natter_mark' "$nft_log" || fail "start_service did not flush stale mark rules"
 
 grep -Fqx 'wan_ct append command -i' "$procd_log" || fail "Telecom instance did not pass -i"
 grep -Fqx 'wan_ct append command pppoe-wan' "$procd_log" || fail "Telecom instance did not bind pppoe-wan"

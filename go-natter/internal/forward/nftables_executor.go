@@ -27,6 +27,7 @@ type NftablesForwarder struct {
 	SNAT            bool
 	DNATHandle      int
 	SNATHandle      int
+	ConnMarkHandle  int
 	RouteMarkHandle int
 	ReadIPForward   func() (string, error)
 	CheckVersion    func() error
@@ -91,6 +92,18 @@ func (f *NftablesForwarder) Start(options StartOptions) error {
 			_ = f.Stop()
 			return err
 		}
+		output, err = runner.Run(NftablesConnMarkRule(options, policy.Mark))
+		if err != nil {
+			_ = f.Stop()
+			return err
+		}
+		handle, err = ParseNftablesHandle(output)
+		if err != nil {
+			_ = f.Stop()
+			return err
+		}
+		f.ConnMarkHandle = handle
+
 		output, err = runner.Run(NftablesRouteMarkRule(options, policy.Mark))
 		if err != nil {
 			_ = f.Stop()
@@ -167,6 +180,13 @@ func (f *NftablesForwarder) Stop() error {
 			firstErr = err
 		}
 		f.SNATHandle = 0
+	}
+	if f.ConnMarkHandle > 0 {
+		_, err := runner.Run(fmt.Sprintf("delete rule ip natter natter_mark handle %d", f.ConnMarkHandle))
+		if err != nil && firstErr == nil {
+			firstErr = err
+		}
+		f.ConnMarkHandle = 0
 	}
 	if f.RouteMarkHandle > 0 {
 		_, err := runner.Run(fmt.Sprintf("delete rule ip natter natter_mark handle %d", f.RouteMarkHandle))

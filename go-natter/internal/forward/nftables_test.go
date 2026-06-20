@@ -50,13 +50,25 @@ func TestNftablesSNATRuleUsesRouteSourceIP(t *testing.T) {
 	}
 }
 
-func TestNftablesRouteMarkRuleMarksForwardTargetReplies(t *testing.T) {
+func TestNftablesConnMarkRuleMarksInboundMappingConnection(t *testing.T) {
+	rule := NftablesConnMarkRule(StartOptions{
+		IP:   "192.0.2.197",
+		Port: 36983,
+	}, "0x4e34")
+
+	want := "insert rule ip natter natter_mark ip daddr 192.0.2.197 tcp dport 36983 ct mark set 0x4e34"
+	if rule != want {
+		t.Fatalf("conn mark rule = %q, want %q", rule, want)
+	}
+}
+
+func TestNftablesRouteMarkRuleUsesConnectionMarkForForwardTargetReplies(t *testing.T) {
 	rule := NftablesRouteMarkRule(StartOptions{
 		TargetIP:   "10.10.10.180",
 		TargetPort: 25565,
 	}, "0x4e34")
 
-	want := "insert rule ip natter natter_mark ip saddr 10.10.10.180 tcp sport 25565 meta mark set 0x4e34"
+	want := "insert rule ip natter natter_mark ip saddr 10.10.10.180 tcp sport 25565 ct mark 0x4e34 meta mark set 0x4e34"
 	if rule != want {
 		t.Fatalf("mark rule = %q, want %q", rule, want)
 	}

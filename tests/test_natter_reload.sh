@@ -15,6 +15,7 @@ trap 'rm -rf "$tmp"' EXIT
 procd_log="$tmp/procd.log"
 service_log="$tmp/service.log"
 trigger_log="$tmp/triggers.log"
+nft_log="$tmp/nft.log"
 current_instance=""
 GLOBAL_ENABLED=1
 HOT_RELOAD=1
@@ -111,13 +112,21 @@ cat > "$tmp/network.sh" <<'EOF'
 # Not needed by natter.init in tests.
 EOF
 
+cat > "$tmp/nft" <<'EOF'
+#!/bin/sh
+printf '%s\n' "$*" >> "$NATTER_TEST_NFT_LOG"
+EOF
+chmod +x "$tmp/nft"
+
 NATTER_FUNCTIONS_SH="$tmp/functions.sh"
 NATTER_NETWORK_SH="$tmp/network.sh"
 NATTER_COMMON_SH="$ROOT/natter/files/natter-common.sh"
 NATTER_QBITTORRENT_SH="$ROOT/natter/files/natter-qbittorrent.sh"
 NATTER_RUN_DIR="$tmp/run"
 NATTER_LOG_DIR="$tmp/log"
-export NATTER_FUNCTIONS_SH NATTER_NETWORK_SH NATTER_COMMON_SH NATTER_QBITTORRENT_SH NATTER_RUN_DIR NATTER_LOG_DIR
+NATTER_NFT_BIN="$tmp/nft"
+NATTER_TEST_NFT_LOG="$nft_log"
+export NATTER_FUNCTIONS_SH NATTER_NETWORK_SH NATTER_COMMON_SH NATTER_QBITTORRENT_SH NATTER_RUN_DIR NATTER_LOG_DIR NATTER_NFT_BIN NATTER_TEST_NFT_LOG
 export GLOBAL_ENABLED HOT_RELOAD BIND_VALUE CF_TOKEN
 
 . "$ROOT/natter/files/natter.init"
@@ -125,34 +134,49 @@ export GLOBAL_ENABLED HOT_RELOAD BIND_VALUE CF_TOKEN
 start_service
 [ -s "$tmp/run/wan_ct.runtime" ] || fail "start_service did not write runtime fingerprint"
 grep -Fq "CLOUDFLARE_API_TOKEN='token-one'" "$tmp/run/wan_ct.env" || fail "initial notify env missing token"
+grep -Fqx 'flush chain ip natter natter_dnat' "$nft_log" || fail "initial start did not flush stale DNAT rules"
+grep -Fqx 'flush chain ip natter natter_snat' "$nft_log" || fail "initial start did not flush stale SNAT rules"
+grep -Fqx 'flush chain ip natter natter_mark' "$nft_log" || fail "initial start did not flush stale mark rules"
 
 : > "$service_log"
 : > "$procd_log"
+: > "$nft_log"
 CF_TOKEN="token-two"
 reload_service
 
 [ ! -s "$service_log" ] || fail "notify-only reload should not restart backend"
 [ ! -s "$procd_log" ] || fail "notify-only reload should not reopen procd instance"
+[ ! -s "$nft_log" ] || fail "notify-only reload must not flush nft runtime rules"
 grep -Fq "CLOUDFLARE_API_TOKEN='token-two'" "$tmp/run/wan_ct.env" || fail "hot reload did not rewrite notify env"
 
 : > "$service_log"
+: > "$nft_log"
 BIND_VALUE="pppoe-wan-new"
 reload_service
 grep -Fqx 'stop' "$service_log" || fail "runtime reload must stop backend"
 grep -Fqx 'start' "$service_log" || fail "runtime reload must start backend"
+grep -Fqx 'flush chain ip natter natter_dnat' "$nft_log" || fail "runtime reload did not flush stale DNAT rules"
+grep -Fqx 'flush chain ip natter natter_snat' "$nft_log" || fail "runtime reload did not flush stale SNAT rules"
+grep -Fqx 'flush chain ip natter natter_mark' "$nft_log" || fail "runtime reload did not flush stale mark rules"
 
 : > "$service_log"
+: > "$nft_log"
 HOT_RELOAD=0
 reload_service
 grep -Fqx 'stop' "$service_log" || fail "disabled hot reload must stop backend"
 grep -Fqx 'start' "$service_log" || fail "disabled hot reload must start backend"
+grep -Fqx 'flush chain ip natter natter_dnat' "$nft_log" || fail "disabled hot reload start did not flush stale DNAT rules"
+grep -Fqx 'flush chain ip natter natter_snat' "$nft_log" || fail "disabled hot reload start did not flush stale SNAT rules"
+grep -Fqx 'flush chain ip natter natter_mark' "$nft_log" || fail "disabled hot reload start did not flush stale mark rules"
 
 : > "$service_log"
+: > "$nft_log"
 GLOBAL_ENABLED=0
 reload_service
 grep -Fqx 'stop' "$service_log" || fail "disabled service reload must stop backend"
 if grep -Fqx 'start' "$service_log"; then
 	fail "disabled service reload must not start backend"
 fi
+[ ! -s "$nft_log" ] || fail "disabled service reload must not flush nft runtime rules"
 
 printf 'natter reload checks passed\n'

@@ -14,6 +14,7 @@ LOG_DIR="${NATTER_LOG_DIR:-/var/log/natter}"
 : "${NATTER_NETWORK_SH:=/lib/functions/network.sh}"
 : "${NATTER_COMMON_SH:=/usr/share/natter/natter-common.sh}"
 : "${NATTER_QBITTORRENT_SH:=/usr/share/natter/natter-qbittorrent.sh}"
+: "${NATTER_NFT_BIN:=nft}"
 
 . "$NATTER_FUNCTIONS_SH"
 . "$NATTER_NETWORK_SH"
@@ -46,6 +47,14 @@ natter_resolve_bind_value() {
 		printf '%s\n' "$configured"
 		return 0
 	fi
+}
+
+natter_flush_runtime_rules() {
+	command -v "$NATTER_NFT_BIN" >/dev/null 2>&1 || return 0
+
+	"$NATTER_NFT_BIN" flush chain ip natter natter_dnat >/dev/null 2>&1 || true
+	"$NATTER_NFT_BIN" flush chain ip natter natter_snat >/dev/null 2>&1 || true
+	"$NATTER_NFT_BIN" flush chain ip natter natter_mark >/dev/null 2>&1 || true
 }
 
 natter_firewall_dest_zone() {
@@ -273,6 +282,7 @@ start_service() {
 	config_get_bool enabled global enabled 0
 	[ "$enabled" = "1" ] || return 0
 	mkdir -p "$RUN_DIR"
+	natter_flush_runtime_rules
 	runtime_list_tmp="${RUN_DIR}/.runtime-instances.$$"
 	: > "$runtime_list_tmp"
 	NATTER_PREPARE_ONLY=0
