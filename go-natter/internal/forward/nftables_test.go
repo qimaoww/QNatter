@@ -9,7 +9,9 @@ func TestNftablesInitialRulesContainNatterChains(t *testing.T) {
 		"table ip natter",
 		"chain natter_dnat",
 		"chain natter_snat",
+		"chain natter_mark",
 		"type nat hook prerouting priority -105",
+		"type filter hook prerouting priority -150",
 		"type nat hook postrouting priority 95",
 	} {
 		if !contains(rules, want) {
@@ -45,6 +47,18 @@ func TestNftablesSNATRuleUsesRouteSourceIP(t *testing.T) {
 	want := "insert rule ip natter natter_snat ip daddr 10.10.10.10 udp dport 51413 snat to 10.10.10.1"
 	if rule != want {
 		t.Fatalf("SNAT rule = %q, want %q", rule, want)
+	}
+}
+
+func TestNftablesRouteMarkRuleMarksForwardTargetReplies(t *testing.T) {
+	rule := NftablesRouteMarkRule(StartOptions{
+		TargetIP:   "10.10.10.180",
+		TargetPort: 25565,
+	}, "0x4e34")
+
+	want := "insert rule ip natter natter_mark ip saddr 10.10.10.180 tcp sport 25565 meta mark set 0x4e34"
+	if rule != want {
+		t.Fatalf("mark rule = %q, want %q", rule, want)
 	}
 }
 

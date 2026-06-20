@@ -32,13 +32,53 @@ func TestNftablesForwarderStartAndStopDNAT(t *testing.T) {
 	assertNftCalls(t, runner.calls, wantCalls)
 }
 
+func TestNftablesForwarderMarksRepliesForBoundInterface(t *testing.T) {
+	options := nftTestOptions()
+	options.Interface = "pppoe-wan_cmcc"
+	policy := natterRoutePolicy(options.Interface)
+	runner := &fakeNftRunner{
+		outputs: map[string]string{
+			NftablesDNATRule(options):                   "insert rule ip natter natter_dnat # handle 42\n",
+			NftablesRouteMarkRule(options, policy.Mark): "insert rule ip natter natter_mark # handle 88\n",
+		},
+	}
+	ip := &fakeIPRunner{}
+	f := testNftablesForwarder(runner)
+	f.RunIP = ip.Run
+
+	if err := f.Start(options); err != nil {
+		t.Fatalf("Start returned error: %v", err)
+	}
+	if f.RouteMarkHandle != 88 {
+		t.Fatalf("RouteMarkHandle = %d, want 88", f.RouteMarkHandle)
+	}
+	if err := f.Stop(); err != nil {
+		t.Fatalf("Stop returned error: %v", err)
+	}
+
+	wantCalls := []string{
+		"list table ip natter",
+		NftablesDNATRule(options),
+		"list chain ip natter natter_mark",
+		NftablesRouteMarkRule(options, policy.Mark),
+		"delete rule ip natter natter_dnat handle 42",
+		"delete rule ip natter natter_mark handle 88",
+	}
+	assertNftCalls(t, runner.calls, wantCalls)
+	assertIPCalls(t, ip.calls, []string{
+		"route replace default dev pppoe-wan_cmcc table " + policy.Table,
+		"rule del priority " + policy.Priority + " fwmark " + policy.Mark + " lookup " + policy.Table,
+		"rule add priority " + policy.Priority + " fwmark " + policy.Mark + " lookup " + policy.Table,
+	})
+}
+
 func TestNftablesForwarderStartAndStopSNAT(t *testing.T) {
 	options := nftTestOptions()
 	snatOptions := options
 	snatOptions.SNATIP = "10.10.10.1"
 	runner := &fakeNftRunner{
 		outputs: map[string]string{
-			NftablesDNATRule(options): "insert rule ip natter natter_dnat # handle 42\n",
+			NftablesDNATRule(options):     "insert rule ip natter natter_dnat # handle 42\n",
 			NftablesSNATRule(snatOptions): "insert rule ip natter natter_snat # handle 77\n",
 		},
 	}
@@ -263,6 +303,27 @@ func (r *fakeNftRunner) Run(command string) (string, error) {
 		return "", err
 	}
 	return r.outputs[command], nil
+}
+
+type fakeIPRunner struct {
+	calls []string
+}
+
+func (r *fakeIPRunner) Run(args ...string) (string, error) {
+	r.calls = append(r.calls, strings.Join(args, " "))
+	return "", nil
+}
+
+func assertIPCalls(t *testing.T, got []string, want []string) {
+	t.Helper()
+	if len(got) != len(want) {
+		t.Fatalf("ip calls = %#v, want %#v", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("ip call %d = %q, want %q (all calls %#v)", i, got[i], want[i], got)
+		}
+	}
 }
 
 func assertNftCalls(t *testing.T, got []string, want []string) {

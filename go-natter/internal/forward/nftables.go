@@ -11,9 +11,14 @@ func NftablesInitialRules() string {
 table ip natter {
     chain natter_dnat { }
     chain natter_snat { }
+    chain natter_mark { }
     chain prerouting {
         type nat hook prerouting priority -105; policy accept;
         jump natter_dnat;
+    }
+    chain mark_prerouting {
+        type filter hook prerouting priority -150; policy accept;
+        jump natter_mark;
     }
     chain output {
         type nat hook output priority -105; policy accept;
@@ -28,6 +33,14 @@ table ip natter {
         jump natter_snat;
     }
 }
+`
+}
+
+func NftablesRouteMarkInitialRules() string {
+	return `
+add chain ip natter natter_mark
+add chain ip natter mark_prerouting { type filter hook prerouting priority -150; policy accept; }
+add rule ip natter mark_prerouting jump natter_mark
 `
 }
 
@@ -54,6 +67,17 @@ func NftablesSNATRule(options StartOptions) string {
 	return fmt.Sprintf(
 		"insert rule ip natter natter_snat ip daddr %s %s dport %d snat to %s",
 		options.TargetIP, proto, options.TargetPort, snatIP,
+	)
+}
+
+func NftablesRouteMarkRule(options StartOptions, mark string) string {
+	proto := "tcp"
+	if options.UDP {
+		proto = "udp"
+	}
+	return fmt.Sprintf(
+		"insert rule ip natter natter_mark ip saddr %s %s sport %d meta mark set %s",
+		options.TargetIP, proto, options.TargetPort, mark,
 	)
 }
 

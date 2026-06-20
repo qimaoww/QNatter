@@ -2,6 +2,7 @@ package forward
 
 import (
 	"fmt"
+	"hash/fnv"
 	"net/netip"
 	"os"
 	"os/exec"
@@ -22,13 +23,15 @@ func (NftRunner) Run(command string) (string, error) {
 }
 
 type NftablesForwarder struct {
-	Runner        Runner
-	SNAT          bool
-	DNATHandle    int
-	SNATHandle    int
-	ReadIPForward func() (string, error)
-	CheckVersion  func() error
-	RouteSourceIP func(string) (string, error)
+	Runner          Runner
+	SNAT            bool
+	DNATHandle      int
+	SNATHandle      int
+	RouteMarkHandle int
+	ReadIPForward   func() (string, error)
+	CheckVersion    func() error
+	RouteSourceIP   func(string) (string, error)
+	RunIP           func(args ...string) (string, error)
 }
 
 func (f *NftablesForwarder) Start(options StartOptions) error {
@@ -78,8 +81,65 @@ func (f *NftablesForwarder) Start(options StartOptions) error {
 		}
 		f.SNATHandle = handle
 	}
+	if options.Interface != "" {
+		policy := natterRoutePolicy(options.Interface)
+		if err := f.ensureRoutePolicy(options.Interface, policy); err != nil {
+			_ = f.Stop()
+			return err
+		}
+		if err := f.ensureRouteMarkChain(runner); err != nil {
+			_ = f.Stop()
+			return err
+		}
+		output, err = runner.Run(NftablesRouteMarkRule(options, policy.Mark))
+		if err != nil {
+			_ = f.Stop()
+			return err
+		}
+		handle, err = ParseNftablesHandle(output)
+		if err != nil {
+			_ = f.Stop()
+			return err
+		}
+		f.RouteMarkHandle = handle
+	}
 
 	return nil
+}
+
+func (f *NftablesForwarder) ensureRouteMarkChain(runner Runner) error {
+	if _, err := runner.Run("list chain ip natter natter_mark"); err == nil {
+		return nil
+	}
+	_, err := runner.Run(NftablesRouteMarkInitialRules())
+	return err
+}
+
+func (f *NftablesForwarder) ensureRoutePolicy(iface string, policy routePolicy) error {
+	if err := f.runIPChecked("route", "replace", "default", "dev", iface, "table", policy.Table); err != nil {
+		return err
+	}
+	_, _ = f.ipRunner()("rule", "del", "priority", policy.Priority, "fwmark", policy.Mark, "lookup", policy.Table)
+	return f.runIPChecked("rule", "add", "priority", policy.Priority, "fwmark", policy.Mark, "lookup", policy.Table)
+}
+
+func (f *NftablesForwarder) runIPChecked(args ...string) error {
+	output, err := f.ipRunner()(args...)
+	if err == nil {
+		return nil
+	}
+	text := strings.TrimSpace(output)
+	if text == "" {
+		return fmt.Errorf("ip %s: %w", strings.Join(args, " "), err)
+	}
+	return fmt.Errorf("ip %s: %w: %s", strings.Join(args, " "), err, text)
+}
+
+func (f *NftablesForwarder) ipRunner() func(args ...string) (string, error) {
+	if f.RunIP != nil {
+		return f.RunIP
+	}
+	return ipCommandOutput
 }
 
 func (f *NftablesForwarder) routeSourceIP(target string) (string, error) {
@@ -107,6 +167,13 @@ func (f *NftablesForwarder) Stop() error {
 			firstErr = err
 		}
 		f.SNATHandle = 0
+	}
+	if f.RouteMarkHandle > 0 {
+		_, err := runner.Run(fmt.Sprintf("delete rule ip natter natter_mark handle %d", f.RouteMarkHandle))
+		if err != nil && firstErr == nil {
+			firstErr = err
+		}
+		f.RouteMarkHandle = 0
 	}
 
 	return firstErr
@@ -184,6 +251,28 @@ func (c DefaultNftablesVersionChecker) Check() error {
 func nftCommandOutput(name string, args ...string) (string, error) {
 	output, err := exec.Command(name, args...).CombinedOutput()
 	return string(output), err
+}
+
+func ipCommandOutput(args ...string) (string, error) {
+	output, err := exec.Command("ip", args...).CombinedOutput()
+	return string(output), err
+}
+
+type routePolicy struct {
+	Mark     string
+	Table    string
+	Priority string
+}
+
+func natterRoutePolicy(iface string) routePolicy {
+	hash := fnv.New32a()
+	_, _ = hash.Write([]byte(iface))
+	suffix := int(hash.Sum32() & 0x0fff)
+	return routePolicy{
+		Mark:     fmt.Sprintf("0x%x", 0x4e000000|suffix),
+		Table:    strconv.Itoa(20000 + suffix),
+		Priority: strconv.Itoa(20000 + suffix),
+	}
 }
 
 func defaultRouteSourceIP(target string) (string, error) {
