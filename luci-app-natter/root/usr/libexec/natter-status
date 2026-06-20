@@ -90,11 +90,15 @@ status_number_field() {
 
 instance_running() {
 	local name="$1"
+	local status_file="$2"
 	local proc env
 	for proc in "$NATTER_PROC_DIR"/[0-9]*; do
 		[ -r "$proc/environ" ] || continue
-		env="$({ tr '\0' '\n' < "$proc/environ"; } 2>/dev/null | grep -Fx "NATTER_INSTANCE=$name" || true)"
-		if [ -n "$env" ]; then
+		env="$({ tr '\0' '\n' < "$proc/environ"; } 2>/dev/null || true)"
+		if printf '%s\n' "$env" | grep -Fx "NATTER_INSTANCE=$name" >/dev/null 2>&1; then
+			return 0
+		fi
+		if [ -n "$status_file" ] && printf '%s\n' "$env" | grep -Fx "NATTER_STATUS_FILE=$status_file" >/dev/null 2>&1; then
 			return 0
 		fi
 	done
@@ -124,7 +128,7 @@ emit_instance() {
 	message="$(status_field "$file" message)"
 
 	running=0
-	instance_running "$section" && running=1
+	instance_running "$section" "$file" && running=1
 
 	[ "$first" = "1" ] || printf ','
 	first=0

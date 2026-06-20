@@ -68,6 +68,7 @@ config_get() {
 EOF
 
 printf 'NATTER_INSTANCE=dotXname\0' > "$proc_dir/100/environ"
+printf 'NATTER_STATUS_FILE=%s/wan_ct.json\0' "$run_dir" > "$proc_dir/101/environ"
 
 cat > "$run_dir/wan_ct.json" <<'EOF'
 {"instance":"wan_ct","protocol":"tcp","inner_ip":"10.10.10.10","inner_port":51413,"outer_ip":"203.0.113.10","outer_port":62000,"updated_at":"2026-06-20 04:00:00","message":"mapped \"quote\" \\ path\nnext\tend \u003cwan\u003e\u0026ok"}
@@ -119,6 +120,11 @@ printf '%s\n' "$output" | grep -Fq '"outer_port":62000' || \
 	fail "status output is missing Telecom outer port: $output"
 printf '%s\n' "$output" | grep -Fq '"message":"mapped \"quote\" \\ path\nnext\tend <wan>&ok"' || \
 	fail "status output must preserve escaped runtime strings: $output"
+
+case "$output" in
+	*'"name":"wan_ct"'*'"running":true'*'"network":"wan"'*) : ;;
+	*) fail "status output must detect runtime status file proc instance: $output" ;;
+esac
 
 case "$output" in
 	*'"name":"wan_cm"'*'"inner_port":0'*'"outer_port":0'*) : ;;
