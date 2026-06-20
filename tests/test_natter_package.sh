@@ -27,6 +27,28 @@ assert_not_contains() {
 	fi
 }
 
+assert_option_block_contains() {
+	file="$1"
+	option="$2"
+	text="$3"
+	awk -v option="'$option'" -v text="$text" '
+		index($0, "s.option") && index($0, option) {
+			found = 1
+			in_block = 1
+			next
+		}
+		in_block && /^[[:space:]]*o = / {
+			in_block = 0
+		}
+		in_block && index($0, text) {
+			seen = 1
+		}
+		END {
+			exit(found && seen ? 0 : 1)
+		}
+	' "$ROOT/$file" || fail "$file option $option does not contain text: $text"
+}
+
 assert_po_translation() {
 	msgid="$1"
 	msgstr="$2"
@@ -102,6 +124,10 @@ assert_contains luci-app-natter/htdocs/luci-static/resources/view/natter/instanc
 assert_contains luci-app-natter/htdocs/luci-static/resources/view/natter/instances.js "o\\.depends\\('qbittorrent_enabled', '0'\\)"
 assert_contains luci-app-natter/htdocs/luci-static/resources/view/natter/instances.js "hideInGrid\\(s\\.option\\(form\\.Flag, 'auto_firewall'"
 assert_contains luci-app-natter/htdocs/luci-static/resources/view/natter/instances.js "hideInGrid\\(s\\.option\\(form\\.Value, 'target_ip'"
+assert_option_block_contains luci-app-natter/htdocs/luci-static/resources/view/natter/instances.js target_ip "o.depends('qbittorrent_enabled', '0')"
+assert_option_block_contains luci-app-natter/htdocs/luci-static/resources/view/natter/instances.js target_ip "o.depends('qbittorrent_forward', '0')"
+assert_option_block_contains luci-app-natter/htdocs/luci-static/resources/view/natter/instances.js target_port "o.depends('qbittorrent_enabled', '0')"
+assert_option_block_contains luci-app-natter/htdocs/luci-static/resources/view/natter/instances.js target_port "o.depends('qbittorrent_forward', '0')"
 assert_not_contains luci-app-natter/htdocs/luci-static/resources/view/natter/instances.js 'Port 0 forwards to the Natter mapped internal port\.'
 assert_contains luci-app-natter/htdocs/luci-static/resources/view/natter/instances.js "hideInGrid\\(s\\.option\\(form\\.DynamicList, 'stun_server'"
 assert_contains luci-app-natter/htdocs/luci-static/resources/view/natter/instances.js "hideInGrid\\(s\\.option\\(form\\.Value, 'notify_script'"

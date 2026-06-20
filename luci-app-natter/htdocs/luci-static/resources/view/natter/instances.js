@@ -117,11 +117,19 @@ return view.extend({
 		o = hideInGrid(s.option(form.Value, 'target_ip', _('Forward target IP')));
 		o.datatype = 'ip4addr';
 		o.placeholder = '0.0.0.0';
+		o.depends('qbittorrent_enabled', '');
+		o.depends('qbittorrent_enabled', '0');
+		o.depends('qbittorrent_forward', '');
+		o.depends('qbittorrent_forward', '0');
 
 		o = hideInGrid(s.option(form.Value, 'target_port', _('Forward target port')));
 		o.datatype = 'port';
 		o.placeholder = '0';
 		o.description = _('Port 0 forwards to the port Natter reports after punching.');
+		o.depends('qbittorrent_enabled', '');
+		o.depends('qbittorrent_enabled', '0');
+		o.depends('qbittorrent_forward', '');
+		o.depends('qbittorrent_forward', '0');
 
 		o = hideInGrid(s.option(form.DynamicList, 'stun_server', _('STUN server')));
 		o.placeholder = 'stun.example.com:3478';
