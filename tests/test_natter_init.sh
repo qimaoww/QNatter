@@ -188,6 +188,7 @@ grep -Fq "CLOUDFLARE_ZONE_ID='zone-selected'" "$tmp/run/wan_ct.env" || fail "Tel
 grep -Fq "CLOUDFLARE_RECORD_ID='record-selected'" "$tmp/run/wan_ct.env" || fail "Telecom notify env missing Cloudflare record ID"
 grep -Fq "NATTER_AUTO_FIREWALL='0'" "$tmp/run/wan_cm.env" || fail "Mobile notify env should disable auto firewall by default"
 grep -Fq "CLOUDFLARE_SRV_ENABLED='0'" "$tmp/run/wan_cm.env" || fail "Mobile notify env should disable Cloudflare SRV by default"
+grep -Fq "NATTER_FIREWALL_DEST='lan'" "$tmp/run/wan_qb.env" || fail "qBittorrent notify env missing firewall destination zone"
 
 grep -Fqx 'reload natter' "$trigger_log" || fail "config reload trigger missing"
 grep -Fqx 'interface interface.* wan3 /etc/init.d/natter reload' "$trigger_log" || fail "unbound instance network trigger missing"

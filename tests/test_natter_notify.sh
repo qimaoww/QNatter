@@ -68,6 +68,7 @@ NATTER_AUTO_FIREWALL='1'
 NATTER_FIREWALL_SECTION='natter_wan_ct'
 NATTER_FIREWALL_NAME='Natter WAN CT'
 NATTER_FIREWALL_SRC='wan'
+NATTER_FIREWALL_DEST='lan'
 CLOUDFLARE_SRV_ENABLED='1'
 CLOUDFLARE_API_URL='https://api.cloudflare.com/client/v4/zones/zone/dns_records/record'
 CLOUDFLARE_API_TOKEN='test-token'
@@ -112,6 +113,8 @@ for want in \
 	'set firewall.natter_wan_ct=rule' \
 	'set firewall.natter_wan_ct.name=Natter WAN CT' \
 	'set firewall.natter_wan_ct.src=wan' \
+	'set firewall.natter_wan_ct.dest=lan' \
+	'set firewall.natter_wan_ct.dest_ip=10.10.10.10' \
 	'set firewall.natter_wan_ct.proto=tcp' \
 	'set firewall.natter_wan_ct.dest_port=51413' \
 	'set firewall.natter_wan_ct.target=ACCEPT' \

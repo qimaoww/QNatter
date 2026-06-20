@@ -48,17 +48,42 @@ natter_resolve_bind_value() {
 	fi
 }
 
+natter_firewall_dest_zone() {
+	local forward_method="$1"
+	local target_ip="$2"
+	local qb_forward="$3"
+	local qb_target_ip="$4"
+
+	if [ "$qb_forward" = "1" ] && [ -n "$qb_target_ip" ] && [ "$qb_target_ip" != "0.0.0.0" ] && [ "$qb_target_ip" != "127.0.0.1" ]; then
+		printf '%s\n' "lan"
+		return 0
+	fi
+
+	case "$forward_method" in
+		none|test)
+			return 0
+			;;
+	esac
+
+	if [ -n "$target_ip" ] && [ "$target_ip" != "0.0.0.0" ] && [ "$target_ip" != "127.0.0.1" ]; then
+		printf '%s\n' "lan"
+	fi
+}
+
 natter_write_notify_env() {
 	local section="$1"
 	local env_file="$2"
 	local status_file="$3"
 	local notify_script qb_enabled qb_url qb_user qb_pass qb_forward qb_target_ip qb_target_port qb_forward_method
-	local label auto_firewall firewall_section firewall_name firewall_src
+	local label auto_firewall firewall_section firewall_name firewall_src firewall_dest
 	local cf_enabled cf_api_url cf_api_token cf_zone_id cf_record_id
+	local forward_method target_ip
 
 	config_get label "$section" label "$section"
 	config_get notify_script "$section" notify_script ""
 	config_get_bool auto_firewall "$section" auto_firewall 0
+	config_get forward_method "$section" forward_method "auto"
+	config_get target_ip "$section" target_ip "0.0.0.0"
 	config_get_bool cf_enabled "$section" cloudflare_enabled 0
 	config_get cf_api_url "$section" cloudflare_api_url ""
 	config_get cf_api_token "$section" cloudflare_api_token ""
@@ -75,6 +100,7 @@ natter_write_notify_env() {
 	firewall_section="natter_$(natter_runtime_slug "$section")"
 	firewall_name="Natter ${label}"
 	firewall_src="wan"
+	firewall_dest="$(natter_firewall_dest_zone "$forward_method" "$target_ip" "$qb_forward" "$qb_target_ip")"
 
 	natter_qb_write_notify_env "$env_file" \
 		NATTER_INSTANCE "$section" \
@@ -84,6 +110,7 @@ natter_write_notify_env() {
 		NATTER_FIREWALL_SECTION "$firewall_section" \
 		NATTER_FIREWALL_NAME "$firewall_name" \
 		NATTER_FIREWALL_SRC "$firewall_src" \
+		NATTER_FIREWALL_DEST "$firewall_dest" \
 		CLOUDFLARE_SRV_ENABLED "$cf_enabled" \
 		CLOUDFLARE_API_URL "$cf_api_url" \
 		CLOUDFLARE_API_TOKEN "$cf_api_token" \

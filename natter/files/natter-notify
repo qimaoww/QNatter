@@ -37,6 +37,7 @@ update_auto_firewall() {
 	local section="${NATTER_FIREWALL_SECTION:-natter_${runtime_slug}}"
 	local name="${NATTER_FIREWALL_NAME:-Natter ${NATTER_INSTANCE:-default}}"
 	local src="${NATTER_FIREWALL_SRC:-wan}"
+	local dest="${NATTER_FIREWALL_DEST:-}"
 	local port proto
 
 	natter_bool "$enabled" || return 0
@@ -65,8 +66,18 @@ update_auto_firewall() {
 		! "$NATTER_UCI_BIN" set "firewall.${section}.name=${name}" ||
 		! "$NATTER_UCI_BIN" set "firewall.${section}.src=${src}" ||
 		! "$NATTER_UCI_BIN" set "firewall.${section}.proto=${proto}" ||
-		! "$NATTER_UCI_BIN" set "firewall.${section}.dest_port=${port}" ||
-		! "$NATTER_UCI_BIN" set "firewall.${section}.target=ACCEPT" ||
+		! "$NATTER_UCI_BIN" set "firewall.${section}.dest_port=${port}"; then
+		log "auto firewall update failed for ${NATTER_INSTANCE:-default}"
+		return 0
+	fi
+	if [ -n "$dest" ]; then
+		if ! "$NATTER_UCI_BIN" set "firewall.${section}.dest=${dest}" ||
+			! "$NATTER_UCI_BIN" set "firewall.${section}.dest_ip=${inner_ip}"; then
+			log "auto firewall update failed for ${NATTER_INSTANCE:-default}"
+			return 0
+		fi
+	fi
+	if ! "$NATTER_UCI_BIN" set "firewall.${section}.target=ACCEPT" ||
 		! "$NATTER_UCI_BIN" commit firewall; then
 		log "auto firewall update failed for ${NATTER_INSTANCE:-default}"
 		return 0
