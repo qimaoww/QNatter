@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net/netip"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -14,6 +15,7 @@ import (
 
 	"natter-openwrt/go-natter/internal/config"
 	"natter-openwrt/go-natter/internal/engine"
+	"natter-openwrt/go-natter/internal/stun"
 )
 
 func TestRunVersion(t *testing.T) {
@@ -236,6 +238,46 @@ func TestRunVerboseLogsRuntimeConfig(t *testing.T) {
 	}
 }
 
+func TestLogMappingPrintsRouteInformation(t *testing.T) {
+	var stderr bytes.Buffer
+	logMapping(&stderr, config.Config{}, engine.Result{
+		Method: "socket",
+		Target: mustAddrPort("10.10.10.10:51413"),
+		Mapping: stun.Mapping{
+			Inner: mustAddrPort("10.10.10.2:40000"),
+			Outer: mustAddrPort("203.0.113.10:62000"),
+		},
+	})
+
+	for _, want := range []string{
+		"[I] tcp://10.10.10.10:51413 <--socket--> tcp://10.10.10.2:40000 <--Natter--> tcp://203.0.113.10:62000",
+	} {
+		if !strings.Contains(stderr.String(), want) {
+			t.Fatalf("stderr = %q, missing %q", stderr.String(), want)
+		}
+	}
+}
+
+func TestLogMappingOmitsForwardSegmentForNoneMethod(t *testing.T) {
+	var stderr bytes.Buffer
+	logMapping(&stderr, config.Config{UDP: true}, engine.Result{
+		Method: "none",
+		Target: mustAddrPort("10.0.0.2:50000"),
+		Mapping: stun.Mapping{
+			Inner: mustAddrPort("10.0.0.2:50000"),
+			Outer: mustAddrPort("198.51.100.8:62001"),
+		},
+	})
+
+	want := "[I] udp://10.0.0.2:50000 <--Natter--> udp://198.51.100.8:62001"
+	if !strings.Contains(stderr.String(), want) {
+		t.Fatalf("stderr = %q, missing %q", stderr.String(), want)
+	}
+	if strings.Contains(stderr.String(), "<--none-->") {
+		t.Fatalf("stderr = %q, must not include none as a forward segment", stderr.String())
+	}
+}
+
 func TestRunWithContextPassesContextToEngine(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
@@ -278,4 +320,8 @@ func TestRunWithContextTreatsLocalAddressChangeAsCleanExitWhenRequested(t *testi
 	if code != 0 {
 		t.Fatalf("RunWithContext returned code %d, want clean exit", code)
 	}
+}
+
+func mustAddrPort(value string) netip.AddrPort {
+	return netip.MustParseAddrPort(value)
 }

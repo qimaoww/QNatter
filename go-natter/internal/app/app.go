@@ -156,6 +156,9 @@ func runEngineWithLog(ctx context.Context, cfg config.Config, log io.Writer) err
 			}, mapping)
 			return err
 		},
+		OnMapped: func(result engine.Result) {
+			logMapping(log, cfg, result)
+		},
 	}
 	if cfg.UPnP {
 		upnpMapper, err := engine.NewUPnPMapperFromConfig(cfg)
@@ -171,4 +174,18 @@ func runEngineWithLog(ctx context.Context, cfg config.Config, log io.Writer) err
 			logLine(log, "W", "%v; retrying in %s", err, delay)
 		},
 	})
+}
+
+func logMapping(w io.Writer, cfg config.Config, result engine.Result) {
+	protocol := "tcp"
+	if cfg.UDP {
+		protocol = "udp"
+	}
+
+	route := ""
+	if result.Method != "none" && result.Method != "test" {
+		route += fmt.Sprintf("%s://%s <--%s--> ", protocol, result.Target, result.Method)
+	}
+	route += fmt.Sprintf("%s://%s <--Natter--> %s://%s", protocol, result.Mapping.Inner, protocol, result.Mapping.Outer)
+	logLine(w, "I", "%s", route)
 }

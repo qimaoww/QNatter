@@ -53,6 +53,7 @@ type Dependencies struct {
 	NewForwarder func(string) (forward.Forwarder, error)
 	PortCheck    PortChecker
 	Notify       func(status.Mapping) error
+	OnMapped     func(Result)
 	UPnP         UPnPMapper
 }
 
@@ -185,8 +186,13 @@ func StartSession(ctx context.Context, cfg config.Config, deps Dependencies) (*S
 		}
 	}
 
+	result := Result{Method: method, Mapping: mapping, Target: target}
+	if deps.OnMapped != nil {
+		deps.OnMapped(result)
+	}
+
 	session := &Session{
-		Result:    Result{Method: method, Mapping: mapping, Target: target},
+		Result:    result,
 		Forwarder: fwd,
 		KeepAlive: keepAlive,
 		UPnP:      activeUPnP,

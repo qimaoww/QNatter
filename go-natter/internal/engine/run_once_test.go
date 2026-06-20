@@ -82,6 +82,54 @@ func TestRunOnceEstablishesSocketForwardAndNotifies(t *testing.T) {
 	}
 }
 
+func TestRunOnceReportsMappedResultAfterForwarding(t *testing.T) {
+	stunClient := &fakeSTUN{
+		mappings: []stun.Mapping{
+			{
+				Inner: netip.MustParseAddrPort("10.10.10.2:40000"),
+				Outer: netip.MustParseAddrPort("203.0.113.10:62000"),
+			},
+			{
+				Inner: netip.MustParseAddrPort("10.10.10.2:40000"),
+				Outer: netip.MustParseAddrPort("203.0.113.10:62000"),
+			},
+		},
+	}
+	var mapped Result
+	var called bool
+
+	_, err := RunOnce(context.Background(), config.Config{
+		ForwardMethod: "socket",
+		TargetIP:      "10.10.10.10",
+		TargetPort:    51413,
+	}, Dependencies{
+		STUN:      stunClient,
+		KeepAlive: &fakeKeepAlive{},
+		NewForwarder: func(method string) (forward.Forwarder, error) {
+			return &fakeForwarder{}, nil
+		},
+		OnMapped: func(result Result) {
+			called = true
+			mapped = result
+		},
+	})
+	if err != nil {
+		t.Fatalf("RunOnce returned error: %v", err)
+	}
+	if !called {
+		t.Fatal("OnMapped was not called")
+	}
+	if mapped.Method != "socket" {
+		t.Fatalf("mapped method = %q, want socket", mapped.Method)
+	}
+	if mapped.Target != netip.MustParseAddrPort("10.10.10.10:51413") {
+		t.Fatalf("mapped target = %s, want 10.10.10.10:51413", mapped.Target)
+	}
+	if mapped.Mapping.Outer != netip.MustParseAddrPort("203.0.113.10:62000") {
+		t.Fatalf("mapped outer = %s, want 203.0.113.10:62000", mapped.Mapping.Outer)
+	}
+}
+
 func TestRunOnceNoneForwardTargetsNatterAddressForUDP(t *testing.T) {
 	stunClient := &fakeSTUN{
 		mappings: []stun.Mapping{
