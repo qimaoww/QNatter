@@ -2,6 +2,8 @@
 
 QNatter 是一个面向 OpenWrt/ImmortalWrt 的端口打洞集成包，基于 [MikeWang000000/Natter](https://github.com/MikeWang000000/Natter) 构建。
 
+本仓库所有代码及文档（包括本 README）均由 AI 生成。
+
 本仓库主要提供：
 
 - `qnatter`：OpenWrt 软件包，包含 QNatter Go 运行核心、init 脚本、热重载、状态文件、通知脚本和自动防火墙规则。
@@ -20,23 +22,34 @@ QNatter 是一个面向 OpenWrt/ImmortalWrt 的端口打洞集成包，基于 [M
 - 可选根据映射公网端口更新 Cloudflare SRV 记录。
 - LuCI 界面支持实例重命名、状态查看和日志查看。
 
-## 构建
+## 安装与编译
 
-在 ImmortalWrt/OpenWrt 源码树中放置本仓库的包目录后，可以编译 APK：
+在 OpenWrt/ImmortalWrt 源码树中，将 QNatter 作为 feed 添加：
 
 ```sh
-cd /openwrt/immortalwrt
-make package/qnatter/compile V=s CONFIG_PACKAGE_qnatter=m
-make package/luci-app-qnatter/compile V=s CONFIG_PACKAGE_luci-app-qnatter=m CONFIG_PACKAGE_luci-i18n-qnatter-zh-cn=m
+# 在 feeds.conf 中添加 qnatter feed
+echo "src-git qnatter https://github.com/qimaoww/QNatter.git" >> feeds.conf
+
+# 更新并安装 feed
+./scripts/feeds update qnatter
+./scripts/feeds install -a -p qnatter
+
+# 在 menuconfig 中选中 Network -> qnatter、LuCI -> Applications -> luci-app-qnatter
+# 如需中文界面，同时选中 LuCI -> Translations -> luci-i18n-qnatter-zh-cn
+make menuconfig
+
+# 编译
+make package/qnatter/compile
+make package/luci-app-qnatter/compile
 ```
 
-当前项目按 APK 包安装流程使用，编译产物通常位于：
+编译产物通常位于：
 
 ```text
 /openwrt/immortalwrt/bin/packages/<arch>/base/
 ```
 
-## 安装
+## APK 安装
 
 将编译出的 APK 上传到路由器后安装：
 
