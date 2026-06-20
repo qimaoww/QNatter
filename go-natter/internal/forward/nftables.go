@@ -47,9 +47,13 @@ func NftablesSNATRule(options StartOptions) string {
 	if options.UDP {
 		proto = "udp"
 	}
+	snatIP := options.SNATIP
+	if snatIP == "" {
+		snatIP = options.IP
+	}
 	return fmt.Sprintf(
 		"insert rule ip natter natter_snat ip daddr %s %s dport %d snat to %s",
-		options.TargetIP, proto, options.TargetPort, options.IP,
+		options.TargetIP, proto, options.TargetPort, snatIP,
 	)
 }
 

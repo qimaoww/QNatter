@@ -16,6 +16,7 @@ import (
 	"natter-openwrt/go-natter/internal/config"
 	"natter-openwrt/go-natter/internal/engine"
 	"natter-openwrt/go-natter/internal/notify"
+	"natter-openwrt/go-natter/internal/portcheck"
 	"natter-openwrt/go-natter/internal/stun"
 )
 
@@ -224,6 +225,44 @@ func TestRunWithReportsEngineError(t *testing.T) {
 	}
 	if !strings.Contains(stderr.String(), "mapping failed") {
 		t.Fatalf("stderr = %q, want mapping failed", stderr.String())
+	}
+}
+
+func TestSplitPortCheckerUsesWANInterfaceOnlyForWANChecks(t *testing.T) {
+	wanProbeCalled := false
+	checker := splitPortChecker{
+		lan: portcheck.Checker{
+			IfconfigProbe: func(context.Context, int, netip.Addr) (portcheck.Result, error) {
+				t.Fatal("LAN checker should not call WAN probes")
+				return portcheck.Unknown, nil
+			},
+		},
+		wan: portcheck.Checker{
+			Interface: "pppoe-wan_cmcc",
+			IfconfigProbe: func(_ context.Context, _ int, _ netip.Addr) (portcheck.Result, error) {
+				wanProbeCalled = true
+				return portcheck.Open, nil
+			},
+		},
+	}
+
+	lan := checker.TestLAN(context.Background(), netip.MustParseAddrPort("127.0.0.1:1"), netip.Addr{})
+	if lan != portcheck.Closed {
+		t.Fatalf("LAN check = %v, want closed for unused local port", lan)
+	}
+	if checker.lan.Interface != "" {
+		t.Fatalf("LAN checker interface = %q, want empty", checker.lan.Interface)
+	}
+
+	wan := checker.TestWAN(context.Background(), 25565, netip.AddrFrom4([4]byte{192, 0, 2, 10}))
+	if wan != portcheck.Open {
+		t.Fatalf("WAN check = %v, want open", wan)
+	}
+	if !wanProbeCalled {
+		t.Fatal("WAN checker was not used")
+	}
+	if checker.wan.Interface != "pppoe-wan_cmcc" {
+		t.Fatalf("WAN checker interface = %q", checker.wan.Interface)
 	}
 }
 

@@ -2,6 +2,7 @@ package forward
 
 type StartOptions struct {
 	IP         string
+	SNATIP     string
 	Port       int
 	TargetIP   string
 	TargetPort int

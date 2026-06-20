@@ -32,16 +32,17 @@ func TestNftablesDNATRuleMatchesPythonFormat(t *testing.T) {
 	}
 }
 
-func TestNftablesSNATRuleMatchesPythonFormat(t *testing.T) {
+func TestNftablesSNATRuleUsesRouteSourceIP(t *testing.T) {
 	rule := NftablesSNATRule(StartOptions{
 		IP:         "198.51.100.73",
+		SNATIP:     "10.10.10.1",
 		Port:       8931,
 		TargetIP:   "10.10.10.10",
 		TargetPort: 51413,
 		UDP:        true,
 	})
 
-	want := "insert rule ip natter natter_snat ip daddr 10.10.10.10 udp dport 51413 snat to 198.51.100.73"
+	want := "insert rule ip natter natter_snat ip daddr 10.10.10.10 udp dport 51413 snat to 10.10.10.1"
 	if rule != want {
 		t.Fatalf("SNAT rule = %q, want %q", rule, want)
 	}

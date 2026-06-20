@@ -2,6 +2,7 @@ package forward
 
 import (
 	"fmt"
+	"net/netip"
 	"os"
 	"os/exec"
 	"regexp"
@@ -27,6 +28,7 @@ type NftablesForwarder struct {
 	SNATHandle    int
 	ReadIPForward func() (string, error)
 	CheckVersion  func() error
+	RouteSourceIP func(string) (string, error)
 }
 
 func (f *NftablesForwarder) Start(options StartOptions) error {
@@ -58,7 +60,13 @@ func (f *NftablesForwarder) Start(options StartOptions) error {
 	f.DNATHandle = handle
 
 	if f.SNAT {
-		output, err = runner.Run(NftablesSNATRule(options))
+		snatOptions := options
+		if snatOptions.SNATIP == "" {
+			if sourceIP, sourceErr := f.routeSourceIP(options.TargetIP); sourceErr == nil && sourceIP != "" {
+				snatOptions.SNATIP = sourceIP
+			}
+		}
+		output, err = runner.Run(NftablesSNATRule(snatOptions))
 		if err != nil {
 			_ = f.Stop()
 			return err
@@ -72,6 +80,14 @@ func (f *NftablesForwarder) Start(options StartOptions) error {
 	}
 
 	return nil
+}
+
+func (f *NftablesForwarder) routeSourceIP(target string) (string, error) {
+	routeSource := f.RouteSourceIP
+	if routeSource == nil {
+		routeSource = defaultRouteSourceIP
+	}
+	return routeSource(target)
 }
 
 func (f *NftablesForwarder) Stop() error {
@@ -168,4 +184,26 @@ func (c DefaultNftablesVersionChecker) Check() error {
 func nftCommandOutput(name string, args ...string) (string, error) {
 	output, err := exec.Command(name, args...).CombinedOutput()
 	return string(output), err
+}
+
+func defaultRouteSourceIP(target string) (string, error) {
+	output, err := exec.Command("ip", "-4", "route", "get", target).CombinedOutput()
+	if err != nil {
+		return "", err
+	}
+	return parseRouteSourceIP(string(output))
+}
+
+func parseRouteSourceIP(output string) (string, error) {
+	fields := strings.Fields(output)
+	for i := 0; i+1 < len(fields); i++ {
+		if fields[i] != "src" {
+			continue
+		}
+		if _, err := netip.ParseAddr(fields[i+1]); err != nil {
+			return "", err
+		}
+		return fields[i+1], nil
+	}
+	return "", fmt.Errorf("route source address not found")
 }

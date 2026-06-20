@@ -34,14 +34,22 @@ func TestNftablesForwarderStartAndStopDNAT(t *testing.T) {
 
 func TestNftablesForwarderStartAndStopSNAT(t *testing.T) {
 	options := nftTestOptions()
+	snatOptions := options
+	snatOptions.SNATIP = "10.10.10.1"
 	runner := &fakeNftRunner{
 		outputs: map[string]string{
 			NftablesDNATRule(options): "insert rule ip natter natter_dnat # handle 42\n",
-			NftablesSNATRule(options): "insert rule ip natter natter_snat # handle 77\n",
+			NftablesSNATRule(snatOptions): "insert rule ip natter natter_snat # handle 77\n",
 		},
 	}
 	f := testNftablesForwarder(runner)
 	f.SNAT = true
+	f.RouteSourceIP = func(target string) (string, error) {
+		if target != options.TargetIP {
+			t.Fatalf("RouteSourceIP target = %q, want %q", target, options.TargetIP)
+		}
+		return snatOptions.SNATIP, nil
+	}
 
 	if err := f.Start(options); err != nil {
 		t.Fatalf("Start returned error: %v", err)
@@ -56,7 +64,7 @@ func TestNftablesForwarderStartAndStopSNAT(t *testing.T) {
 	wantCalls := []string{
 		"list table ip natter",
 		NftablesDNATRule(options),
-		NftablesSNATRule(options),
+		NftablesSNATRule(snatOptions),
 		"delete rule ip natter natter_dnat handle 42",
 		"delete rule ip natter natter_snat handle 77",
 	}
@@ -182,9 +190,11 @@ func TestNftablesForwarderSkipsIPForwardCheckForSameIPForward(t *testing.T) {
 
 func TestNftablesForwarderRollsBackDNATWhenSNATFails(t *testing.T) {
 	options := nftTestOptions()
+	snatOptions := options
+	snatOptions.SNATIP = "10.10.10.1"
 	runner := &fakeNftRunner{
 		errors: map[string]error{
-			NftablesSNATRule(options): errors.New("snat failed"),
+			NftablesSNATRule(snatOptions): errors.New("snat failed"),
 		},
 		outputs: map[string]string{
 			NftablesDNATRule(options): "insert rule ip natter natter_dnat # handle 42\n",
@@ -192,6 +202,9 @@ func TestNftablesForwarderRollsBackDNATWhenSNATFails(t *testing.T) {
 	}
 	f := testNftablesForwarder(runner)
 	f.SNAT = true
+	f.RouteSourceIP = func(target string) (string, error) {
+		return snatOptions.SNATIP, nil
+	}
 
 	if err := f.Start(options); err == nil {
 		t.Fatal("Start returned nil when SNAT insertion failed")
@@ -203,6 +216,22 @@ func TestNftablesForwarderRollsBackDNATWhenSNATFails(t *testing.T) {
 	}
 	if f.DNATHandle != 0 || f.SNATHandle != 0 {
 		t.Fatalf("handles after rollback = %d/%d, want 0/0", f.DNATHandle, f.SNATHandle)
+	}
+}
+
+func TestParseRouteSourceIP(t *testing.T) {
+	source, err := parseRouteSourceIP("10.10.10.180 dev eth1 src 10.10.10.1 uid 0")
+	if err != nil {
+		t.Fatalf("parseRouteSourceIP returned error: %v", err)
+	}
+	if source != "10.10.10.1" {
+		t.Fatalf("source = %q, want 10.10.10.1", source)
+	}
+}
+
+func TestParseRouteSourceIPRejectsMissingSource(t *testing.T) {
+	if _, err := parseRouteSourceIP("10.10.10.180 dev eth1"); err == nil {
+		t.Fatal("parseRouteSourceIP accepted route without src")
 	}
 }
 

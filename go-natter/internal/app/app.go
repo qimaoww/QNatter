@@ -157,7 +157,8 @@ func runEngineWithLog(ctx context.Context, cfg config.Config, log io.Writer) err
 	if err != nil {
 		return err
 	}
-	portChecker := portcheck.Checker{Interface: bind.Interface}
+	lanPortChecker := portcheck.Checker{}
+	wanPortChecker := portcheck.Checker{Interface: bind.Interface}
 	deps := engine.Dependencies{
 		STUN: stunClient,
 		NewKeepAlive: func(mapping stun.Mapping) (engine.KeepAlive, error) {
@@ -180,8 +181,8 @@ func runEngineWithLog(ctx context.Context, cfg config.Config, log io.Writer) err
 		OnUPnPError: func(operation string, err error) {
 			logUPnPError(log, operation, err)
 		},
-		PortCheck:    portChecker,
-		InitialCheck: portChecker,
+		PortCheck:    lanPortChecker,
+		InitialCheck: splitPortChecker{lan: lanPortChecker, wan: wanPortChecker},
 	}
 	if cfg.UPnP {
 		logUPnPScanning(log)
