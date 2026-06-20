@@ -58,9 +58,10 @@ type Dependencies struct {
 }
 
 type Result struct {
-	Method  string
-	Mapping stun.Mapping
-	Target  netip.AddrPort
+	Method   string
+	Mapping  stun.Mapping
+	Target   netip.AddrPort
+	Unstable bool
 }
 
 type Session struct {
@@ -186,7 +187,12 @@ func StartSession(ctx context.Context, cfg config.Config, deps Dependencies) (*S
 		}
 	}
 
-	result := Result{Method: method, Mapping: mapping, Target: target}
+	result := Result{
+		Method:   method,
+		Mapping:  mapping,
+		Target:   target,
+		Unstable: first.Outer.IsValid() && mapping.Outer.IsValid() && first.Outer != mapping.Outer,
+	}
 	if deps.OnMapped != nil {
 		deps.OnMapped(result)
 	}

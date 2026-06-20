@@ -182,6 +182,10 @@ func logMapping(w io.Writer, cfg config.Config, result engine.Result) {
 		protocol = "udp"
 	}
 
+	if result.Unstable {
+		logLine(w, "W", "Network is unstable, or not full cone")
+	}
+
 	route := ""
 	if result.Method != "none" && result.Method != "test" {
 		route += fmt.Sprintf("%s://%s <--%s--> ", protocol, result.Target, result.Method)

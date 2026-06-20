@@ -278,6 +278,23 @@ func TestLogMappingOmitsForwardSegmentForNoneMethod(t *testing.T) {
 	}
 }
 
+func TestLogMappingWarnsWhenMappingIsUnstable(t *testing.T) {
+	var stderr bytes.Buffer
+	logMapping(&stderr, config.Config{}, engine.Result{
+		Method:   "none",
+		Target:   mustAddrPort("10.10.10.2:40000"),
+		Unstable: true,
+		Mapping: stun.Mapping{
+			Inner: mustAddrPort("10.10.10.2:40000"),
+			Outer: mustAddrPort("203.0.113.10:62000"),
+		},
+	})
+
+	if !strings.Contains(stderr.String(), "[W] Network is unstable, or not full cone") {
+		t.Fatalf("stderr = %q, missing unstable network warning", stderr.String())
+	}
+}
+
 func TestRunWithContextPassesContextToEngine(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()

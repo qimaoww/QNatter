@@ -130,6 +130,37 @@ func TestRunOnceReportsMappedResultAfterForwarding(t *testing.T) {
 	}
 }
 
+func TestRunOnceMarksUnstableWhenOuterMappingChanges(t *testing.T) {
+	stunClient := &fakeSTUN{
+		mappings: []stun.Mapping{
+			{
+				Inner: netip.MustParseAddrPort("10.10.10.2:40000"),
+				Outer: netip.MustParseAddrPort("203.0.113.10:61000"),
+			},
+			{
+				Inner: netip.MustParseAddrPort("10.10.10.2:40000"),
+				Outer: netip.MustParseAddrPort("203.0.113.10:62000"),
+			},
+		},
+	}
+
+	result, err := RunOnce(context.Background(), config.Config{
+		ForwardMethod: "none",
+	}, Dependencies{
+		STUN:      stunClient,
+		KeepAlive: &fakeKeepAlive{},
+		NewForwarder: func(method string) (forward.Forwarder, error) {
+			return &fakeForwarder{}, nil
+		},
+	})
+	if err != nil {
+		t.Fatalf("RunOnce returned error: %v", err)
+	}
+	if !result.Unstable {
+		t.Fatalf("result unstable = false, want true when outer mapping changes")
+	}
+}
+
 func TestRunOnceNoneForwardTargetsNatterAddressForUDP(t *testing.T) {
 	stunClient := &fakeSTUN{
 		mappings: []stun.Mapping{
