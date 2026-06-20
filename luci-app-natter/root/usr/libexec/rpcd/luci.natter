@@ -16,7 +16,15 @@ json_arg_number() {
 }
 
 json_escape_stream() {
-	sed 's/\\/\\\\/g; s/"/\\"/g; s/$/\\n/' | tr -d '\n' | sed 's/\\n$//'
+	awk 'BEGIN { ORS = ""; tab = sprintf("%c", 9); cr = sprintf("%c", 13) } {
+		if (NR > 1)
+			printf "\\n"
+		gsub(/\\/, "\\\\")
+		gsub(/"/, "\\\"")
+		gsub(cr, "\\r")
+		gsub(tab, "\\t")
+		printf "%s", $0
+	}'
 }
 
 case "$1" in

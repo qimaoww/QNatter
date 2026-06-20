@@ -2,7 +2,7 @@ include $(TOPDIR)/rules.mk
 
 PKG_NAME:=luci-app-natter
 PKG_VERSION:=1.0.0
-PKG_RELEASE:=2
+PKG_RELEASE:=3
 
 LUCI_TITLE:=LuCI Support for Natter
 LUCI_DEPENDS:=+natter +luci-base +rpcd +uhttpd +uhttpd-mod-ubus +uci

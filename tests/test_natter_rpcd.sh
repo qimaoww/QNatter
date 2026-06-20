@@ -26,13 +26,14 @@ cat > "$log_bin" <<EOF
 #!/bin/sh
 printf '%s %s %s\n' "\$1" "\$2" "\$3" >> "$log_calls"
 case "\$1" in
-	read)
-		printf 'alpha "quoted"\n'
-		printf 'beta \\\\ slash\n'
-		;;
-	clear)
-		printf '{"ok":true}\n'
-		;;
+read)
+	printf 'alpha "quoted"\n'
+	printf 'beta \\\\ slash\n'
+	printf 'gamma\tcarriage\rreturn\n'
+	;;
+clear)
+	printf '{"ok":true}\n'
+	;;
 esac
 EOF
 chmod 0755 "$log_bin"
@@ -47,7 +48,7 @@ status_output="$(
 log_output="$(
 	printf '{"instance":"wan_ct","lines":25}\n' | NATTER_STATUS_BIN="$status_bin" NATTER_LOG_BIN="$log_bin" "$rpcd" call log
 )"
-expected_log='{"log":"alpha \"quoted\"\nbeta \\ slash"}'
+expected_log='{"log":"alpha \"quoted\"\nbeta \\ slash\ngamma\tcarriage\rreturn"}'
 [ "$log_output" = "$expected_log" ] || fail "log output was not escaped correctly: $log_output"
 grep -Fqx 'read wan_ct 25' "$log_calls" || fail "log helper was not called with requested instance and lines"
 
