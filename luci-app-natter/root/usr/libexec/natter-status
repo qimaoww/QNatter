@@ -2,6 +2,7 @@
 
 : "${NATTER_FUNCTIONS_SH:=/lib/functions.sh}"
 : "${NATTER_COMMON_SH:=/usr/share/natter/natter-common.sh}"
+: "${NATTER_RUN_DIR:=/var/run/natter}"
 
 . "$NATTER_FUNCTIONS_SH"
 . "$NATTER_COMMON_SH"
@@ -61,7 +62,7 @@ emit_instance() {
 	config_get qb_forward "$section" qbittorrent_forward "0"
 
 	slug="$(natter_slug "$section")"
-	file="/var/run/natter/${slug}.json"
+	file="${NATTER_RUN_DIR}/${slug}.json"
 	inner_ip="$(status_field "$file" inner_ip)"
 	inner_port="$(status_number_field "$file" inner_port)"
 	outer_ip="$(status_field "$file" outer_ip)"

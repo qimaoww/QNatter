@@ -11,6 +11,8 @@ fail() {
 
 tmp="$(mktemp -d)"
 trap 'rm -rf "$tmp"' EXIT
+run_dir="$tmp/run"
+mkdir -p "$run_dir"
 
 cat > "$tmp/functions.sh" <<'EOF'
 config_load() {
@@ -49,10 +51,15 @@ config_get() {
 }
 EOF
 
+cat > "$run_dir/wan_ct.json" <<'EOF'
+{"instance":"wan_ct","protocol":"tcp","inner_ip":"10.10.10.10","inner_port":51413,"outer_ip":"203.0.113.10","outer_port":62000,"updated_at":"2026-06-20 04:00:00","message":"mapped"}
+EOF
+
 stderr="$tmp/status.err"
 if ! output="$(
 	NATTER_FUNCTIONS_SH="$tmp/functions.sh" \
 	NATTER_COMMON_SH="$ROOT/natter/files/natter-common.sh" \
+	NATTER_RUN_DIR="$run_dir" \
 	"$ROOT/luci-app-natter/root/usr/libexec/natter-status"
 )" 2>"$stderr"; then
 	cat "$stderr" >&2
@@ -75,7 +82,12 @@ case "$output" in
 esac
 
 case "$output" in
-	*'"inner_port":0'*'"outer_port":0'*) : ;;
+	*'"inner_ip":"10.10.10.10"'*'"inner_port":51413'*'"outer_ip":"203.0.113.10"'*'"outer_port":62000'*'"message":"mapped"'*) : ;;
+	*) fail "status output is missing Telecom runtime mapping: $output" ;;
+esac
+
+case "$output" in
+	*'"name":"wan_cm"'*'"inner_port":0'*'"outer_port":0'*) : ;;
 	*) fail "status output must use zero ports when runtime status is absent: $output" ;;
 esac
 
