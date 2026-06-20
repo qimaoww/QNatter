@@ -5,6 +5,7 @@ set -u
 : "${NATTER_QBITTORRENT_SH:=/usr/share/natter/natter-qbittorrent.sh}"
 : "${NATTER_COMMON_SH:=/usr/share/natter/natter-common.sh}"
 : "${NATTER_LOGGER_BIN:=logger}"
+: "${NATTER_CURL_BIN:=curl}"
 
 . "$NATTER_QBITTORRENT_SH"
 . "$NATTER_COMMON_SH"
@@ -74,7 +75,7 @@ if ! natter_qb_valid_port "$listen_port"; then
 fi
 
 rm -f "$cookie"
-if ! curl -fsS -m "${QBITTORRENT_TIMEOUT:-8}" -c "$cookie" \
+if ! "$NATTER_CURL_BIN" -fsS -m "${QBITTORRENT_TIMEOUT:-8}" -c "$cookie" \
 	--data-urlencode "username=$username" \
 	--data-urlencode "password=$password" \
 	"$url/api/v2/auth/login" >/dev/null; then
@@ -85,7 +86,7 @@ if ! curl -fsS -m "${QBITTORRENT_TIMEOUT:-8}" -c "$cookie" \
 	exit 0
 fi
 
-if ! curl -fsS -m "${QBITTORRENT_TIMEOUT:-8}" -b "$cookie" \
+if ! "$NATTER_CURL_BIN" -fsS -m "${QBITTORRENT_TIMEOUT:-8}" -b "$cookie" \
 	--data-urlencode "json=$json" \
 	"$url/api/v2/app/setPreferences" >/dev/null; then
 	log "qBittorrent listen_port update failed for ${NATTER_INSTANCE:-default}: $listen_port"
