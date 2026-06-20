@@ -49,6 +49,8 @@ assert_file natter/files/natter-run
 assert_file natter/files/natter.config
 assert_file natter/files/natter.uci-default
 
+[ -x "$ROOT/natter/files/natter.uci-default" ] || fail "natter uci-defaults source is not executable"
+
 assert_file luci-app-natter/Makefile
 assert_file luci-app-natter/htdocs/luci-static/resources/view/natter/instances.js
 assert_file luci-app-natter/htdocs/luci-static/resources/view/natter/status.js
