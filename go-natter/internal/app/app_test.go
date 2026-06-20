@@ -278,6 +278,44 @@ func TestLogMappingOmitsForwardSegmentForNoneMethod(t *testing.T) {
 	}
 }
 
+func TestLogMappingPrintsTestModeNotice(t *testing.T) {
+	var stderr bytes.Buffer
+	logMapping(&stderr, config.Config{}, engine.Result{
+		Method: "test",
+		Target: mustAddrPort("10.10.10.2:40000"),
+		Mapping: stun.Mapping{
+			Inner: mustAddrPort("10.10.10.2:40000"),
+			Outer: mustAddrPort("203.0.113.10:62000"),
+		},
+	})
+
+	for _, want := range []string{
+		"[I] Test mode is on.",
+		"[I] Please check [ http://203.0.113.10:62000 ]",
+	} {
+		if !strings.Contains(stderr.String(), want) {
+			t.Fatalf("stderr = %q, missing %q", stderr.String(), want)
+		}
+	}
+}
+
+func TestLogMappingPrintsUDPTestModeNotice(t *testing.T) {
+	var stderr bytes.Buffer
+	logMapping(&stderr, config.Config{UDP: true}, engine.Result{
+		Method: "test",
+		Target: mustAddrPort("10.0.0.2:50000"),
+		Mapping: stun.Mapping{
+			Inner: mustAddrPort("10.0.0.2:50000"),
+			Outer: mustAddrPort("198.51.100.8:62001"),
+		},
+	})
+
+	want := "[I] Please check [ udp://198.51.100.8:62001 ]"
+	if !strings.Contains(stderr.String(), want) {
+		t.Fatalf("stderr = %q, missing %q", stderr.String(), want)
+	}
+}
+
 func TestLogMappingWarnsWhenMappingIsUnstable(t *testing.T) {
 	var stderr bytes.Buffer
 	logMapping(&stderr, config.Config{}, engine.Result{

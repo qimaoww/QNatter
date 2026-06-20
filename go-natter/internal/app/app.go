@@ -201,6 +201,15 @@ func logMapping(w io.Writer, cfg config.Config, result engine.Result) {
 	route += fmt.Sprintf("%s://%s <--Natter--> %s://%s", protocol, result.Mapping.Inner, protocol, result.Mapping.Outer)
 	logLine(w, "I", "%s", route)
 
+	if result.Method == "test" {
+		scheme := "http"
+		if cfg.UDP {
+			scheme = "udp"
+		}
+		logLine(w, "I", "Test mode is on.")
+		logLine(w, "I", "Please check [ %s://%s ]", scheme, result.Mapping.Outer)
+	}
+
 	if result.Ports.Checked {
 		switch {
 		case result.Ports.TargetLAN == engine.PortClosed:
