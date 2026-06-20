@@ -42,8 +42,13 @@ const (
 	PortOpen    = portcheck.Open
 )
 
-type PortChecker interface {
+type LANPortChecker interface {
 	TestLAN(context.Context, netip.AddrPort, netip.Addr) PortResult
+}
+
+type PortChecker interface {
+	LANPortChecker
+	TestWAN(context.Context, int, netip.Addr) PortResult
 }
 
 type Dependencies struct {
@@ -51,7 +56,8 @@ type Dependencies struct {
 	KeepAlive    KeepAlive
 	NewKeepAlive func(stun.Mapping) (KeepAlive, error)
 	NewForwarder func(string) (forward.Forwarder, error)
-	PortCheck    PortChecker
+	PortCheck    LANPortChecker
+	InitialCheck PortChecker
 	Notify       func(status.Mapping) error
 	OnMapped     func(Result)
 	UPnP         UPnPMapper
@@ -62,6 +68,15 @@ type Result struct {
 	Mapping  stun.Mapping
 	Target   netip.AddrPort
 	Unstable bool
+	Ports    PortReport
+}
+
+type PortReport struct {
+	Checked   bool
+	TargetLAN PortResult
+	NatterLAN PortResult
+	OuterLAN  PortResult
+	OuterWAN  PortResult
 }
 
 type Session struct {
@@ -187,11 +202,13 @@ func StartSession(ctx context.Context, cfg config.Config, deps Dependencies) (*S
 		}
 	}
 
+	portReport := checkInitialPorts(ctx, cfg, deps, target, mapping)
 	result := Result{
 		Method:   method,
 		Mapping:  mapping,
 		Target:   target,
 		Unstable: first.Outer.IsValid() && mapping.Outer.IsValid() && first.Outer != mapping.Outer,
+		Ports:    portReport,
 	}
 	if deps.OnMapped != nil {
 		deps.OnMapped(result)
@@ -203,11 +220,33 @@ func StartSession(ctx context.Context, cfg config.Config, deps Dependencies) (*S
 		KeepAlive: keepAlive,
 		UPnP:      activeUPnP,
 	}
-	if cfg.RetryTarget && !cfg.UDP && targetPortClosed(ctx, deps, session) {
+	if cfg.RetryTarget && !cfg.UDP && targetClosed(ctx, deps, session, portReport) {
 		_ = session.Close()
 		return nil, ErrTargetClosed
 	}
 	return session, nil
+}
+
+func checkInitialPorts(ctx context.Context, cfg config.Config, deps Dependencies, target netip.AddrPort, mapping stun.Mapping) PortReport {
+	if cfg.UDP || deps.InitialCheck == nil {
+		return PortReport{}
+	}
+	checker := deps.InitialCheck
+	source := mapping.Inner.Addr()
+	return PortReport{
+		Checked:   true,
+		TargetLAN: checker.TestLAN(ctx, target, source),
+		NatterLAN: checker.TestLAN(ctx, mapping.Inner, source),
+		OuterLAN:  checker.TestLAN(ctx, mapping.Outer, source),
+		OuterWAN:  checker.TestWAN(ctx, int(mapping.Outer.Port()), source),
+	}
+}
+
+func targetClosed(ctx context.Context, deps Dependencies, session *Session, report PortReport) bool {
+	if report.Checked {
+		return report.TargetLAN == PortClosed
+	}
+	return targetPortClosed(ctx, deps, session)
 }
 
 func resolveTarget(cfg config.Config, method string, mapping stun.Mapping) netip.AddrPort {

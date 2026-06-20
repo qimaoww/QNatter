@@ -161,6 +161,53 @@ func TestRunOnceMarksUnstableWhenOuterMappingChanges(t *testing.T) {
 	}
 }
 
+func TestRunOnceReportsInitialTCPPortChecks(t *testing.T) {
+	stunClient := &fakeSTUN{
+		mappings: []stun.Mapping{
+			{
+				Inner: netip.MustParseAddrPort("10.10.10.2:40000"),
+				Outer: netip.MustParseAddrPort("203.0.113.10:62000"),
+			},
+			{
+				Inner: netip.MustParseAddrPort("10.10.10.2:40000"),
+				Outer: netip.MustParseAddrPort("203.0.113.10:62000"),
+			},
+		},
+	}
+	checker := sequencePortCheck{
+		lan: []PortResult{PortClosed, PortOpen, PortClosed},
+		wan: []PortResult{PortUnknown},
+	}
+
+	result, err := RunOnce(context.Background(), config.Config{
+		ForwardMethod: "socket",
+		TargetIP:      "10.10.10.10",
+		TargetPort:    51413,
+	}, Dependencies{
+		STUN:      stunClient,
+		KeepAlive: &fakeKeepAlive{},
+		NewForwarder: func(method string) (forward.Forwarder, error) {
+			return &fakeForwarder{}, nil
+		},
+		InitialCheck: &checker,
+	})
+	if err != nil {
+		t.Fatalf("RunOnce returned error: %v", err)
+	}
+	if result.Ports.TargetLAN != PortClosed {
+		t.Fatalf("target LAN check = %v, want closed", result.Ports.TargetLAN)
+	}
+	if result.Ports.NatterLAN != PortOpen {
+		t.Fatalf("natter LAN check = %v, want open", result.Ports.NatterLAN)
+	}
+	if result.Ports.OuterLAN != PortClosed {
+		t.Fatalf("outer LAN check = %v, want closed", result.Ports.OuterLAN)
+	}
+	if result.Ports.OuterWAN != PortUnknown {
+		t.Fatalf("outer WAN check = %v, want unknown", result.Ports.OuterWAN)
+	}
+}
+
 func TestRunOnceNoneForwardTargetsNatterAddressForUDP(t *testing.T) {
 	stunClient := &fakeSTUN{
 		mappings: []stun.Mapping{
@@ -367,6 +414,29 @@ type fakeUPnP struct {
 	events   *[]string
 	err      error
 	renewErr error
+}
+
+type sequencePortCheck struct {
+	lan []PortResult
+	wan []PortResult
+}
+
+func (p *sequencePortCheck) TestLAN(context.Context, netip.AddrPort, netip.Addr) PortResult {
+	if len(p.lan) == 0 {
+		return PortUnknown
+	}
+	result := p.lan[0]
+	p.lan = p.lan[1:]
+	return result
+}
+
+func (p *sequencePortCheck) TestWAN(context.Context, int, netip.Addr) PortResult {
+	if len(p.wan) == 0 {
+		return PortUnknown
+	}
+	result := p.wan[0]
+	p.wan = p.wan[1:]
+	return result
 }
 
 func (u *fakeUPnP) Forward(_ context.Context, mapping UPnPMapping) error {

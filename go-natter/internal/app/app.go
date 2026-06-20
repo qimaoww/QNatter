@@ -13,6 +13,7 @@ import (
 	"natter-openwrt/go-natter/internal/engine"
 	"natter-openwrt/go-natter/internal/forward"
 	"natter-openwrt/go-natter/internal/notify"
+	"natter-openwrt/go-natter/internal/portcheck"
 	"natter-openwrt/go-natter/internal/status"
 	"natter-openwrt/go-natter/internal/stun"
 )
@@ -142,6 +143,11 @@ func runEngineWithLog(ctx context.Context, cfg config.Config, log io.Writer) err
 	if err != nil {
 		return err
 	}
+	bind, err := engine.BindFromConfig(cfg)
+	if err != nil {
+		return err
+	}
+	portChecker := portcheck.Checker{Interface: bind.Interface}
 	deps := engine.Dependencies{
 		STUN: stunClient,
 		NewKeepAlive: func(mapping stun.Mapping) (engine.KeepAlive, error) {
@@ -159,6 +165,8 @@ func runEngineWithLog(ctx context.Context, cfg config.Config, log io.Writer) err
 		OnMapped: func(result engine.Result) {
 			logMapping(log, cfg, result)
 		},
+		PortCheck:    portChecker,
+		InitialCheck: portChecker,
 	}
 	if cfg.UPnP {
 		upnpMapper, err := engine.NewUPnPMapperFromConfig(cfg)
@@ -192,4 +200,15 @@ func logMapping(w io.Writer, cfg config.Config, result engine.Result) {
 	}
 	route += fmt.Sprintf("%s://%s <--Natter--> %s://%s", protocol, result.Mapping.Inner, protocol, result.Mapping.Outer)
 	logLine(w, "I", "%s", route)
+
+	if result.Ports.Checked {
+		switch {
+		case result.Ports.TargetLAN == engine.PortClosed:
+			logLine(w, "W", "!! Target port is closed !!")
+		case result.Ports.TargetLAN == engine.PortOpen && result.Ports.OuterLAN == engine.PortClosed && result.Ports.OuterWAN == engine.PortClosed:
+			logLine(w, "W", "!! Hole punching failed !!")
+		case result.Ports.OuterLAN == engine.PortOpen && result.Ports.OuterWAN == engine.PortClosed:
+			logLine(w, "W", "!! You may be behind a firewall !!")
+		}
+	}
 }

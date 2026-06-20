@@ -295,6 +295,66 @@ func TestLogMappingWarnsWhenMappingIsUnstable(t *testing.T) {
 	}
 }
 
+func TestLogMappingWarnsWhenTargetPortIsClosed(t *testing.T) {
+	var stderr bytes.Buffer
+	logMapping(&stderr, config.Config{}, engine.Result{
+		Method: "socket",
+		Target: mustAddrPort("10.10.10.10:51413"),
+		Ports:  engine.PortReport{Checked: true, TargetLAN: engine.PortClosed},
+		Mapping: stun.Mapping{
+			Inner: mustAddrPort("10.10.10.2:40000"),
+			Outer: mustAddrPort("203.0.113.10:62000"),
+		},
+	})
+
+	if !strings.Contains(stderr.String(), "[W] !! Target port is closed !!") {
+		t.Fatalf("stderr = %q, missing target port warning", stderr.String())
+	}
+}
+
+func TestLogMappingWarnsWhenHolePunchingFails(t *testing.T) {
+	var stderr bytes.Buffer
+	logMapping(&stderr, config.Config{}, engine.Result{
+		Method: "socket",
+		Target: mustAddrPort("10.10.10.10:51413"),
+		Ports: engine.PortReport{
+			Checked:   true,
+			TargetLAN: engine.PortOpen,
+			OuterLAN:  engine.PortClosed,
+			OuterWAN:  engine.PortClosed,
+		},
+		Mapping: stun.Mapping{
+			Inner: mustAddrPort("10.10.10.2:40000"),
+			Outer: mustAddrPort("203.0.113.10:62000"),
+		},
+	})
+
+	if !strings.Contains(stderr.String(), "[W] !! Hole punching failed !!") {
+		t.Fatalf("stderr = %q, missing hole punching warning", stderr.String())
+	}
+}
+
+func TestLogMappingWarnsWhenBehindFirewall(t *testing.T) {
+	var stderr bytes.Buffer
+	logMapping(&stderr, config.Config{}, engine.Result{
+		Method: "socket",
+		Target: mustAddrPort("10.10.10.10:51413"),
+		Ports: engine.PortReport{
+			Checked:  true,
+			OuterLAN: engine.PortOpen,
+			OuterWAN: engine.PortClosed,
+		},
+		Mapping: stun.Mapping{
+			Inner: mustAddrPort("10.10.10.2:40000"),
+			Outer: mustAddrPort("203.0.113.10:62000"),
+		},
+	})
+
+	if !strings.Contains(stderr.String(), "[W] !! You may be behind a firewall !!") {
+		t.Fatalf("stderr = %q, missing firewall warning", stderr.String())
+	}
+}
+
 func TestRunWithContextPassesContextToEngine(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
