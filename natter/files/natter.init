@@ -170,6 +170,7 @@ natter_start_instance() {
 	procd_set_param respawn 3600 5 5
 	procd_set_param file /etc/config/natter
 	procd_set_param env NATTER_INSTANCE="$section"
+	procd_set_param env NATTER_STATUS_FILE="$status_file"
 	procd_set_param limits nofile="4096 4096"
 	procd_set_param user root
 	procd_set_param term_timeout 10

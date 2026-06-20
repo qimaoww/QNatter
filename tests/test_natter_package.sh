@@ -198,6 +198,9 @@ cp "$ROOT/natter/files/natter-qbittorrent.sh" "$tmp/"
 	. "$ROOT/natter/files/natter-common.sh"
 	old_path="$PATH"
 
+	[ "$(natter_slug wan_ct)" = "wan_ct" ] || exit 26
+	[ "$(natter_slug 'wan-ct')" = "wan_ct" ] || exit 27
+
 	NATTER_FORWARD_METHOD=iptables
 	natter_build_args
 	case "$NATTER_ARGS" in *iptables*|*'-m'*) exit 21 ;; esac

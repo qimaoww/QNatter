@@ -78,7 +78,7 @@ natter_build_args() {
 }
 
 natter_slug() {
-	echo "${1:-default}" | tr -c 'A-Za-z0-9_' '_'
+	printf '%s' "${1:-default}" | tr -c 'A-Za-z0-9_' '_'
 }
 
 natter_json_escape() {

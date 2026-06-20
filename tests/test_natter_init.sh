@@ -119,5 +119,7 @@ fi
 
 grep -Fqx 'wan_ct set env NATTER_INSTANCE=wan_ct' "$procd_log" || fail "Telecom instance env missing"
 grep -Fqx 'wan_cm set env NATTER_INSTANCE=wan_cm' "$procd_log" || fail "Mobile instance env missing"
+grep -Fqx "wan_ct set env NATTER_STATUS_FILE=$tmp/run/wan_ct.json" "$procd_log" || fail "Telecom status file env missing"
+grep -Fqx "wan_cm set env NATTER_STATUS_FILE=$tmp/run/wan_cm.json" "$procd_log" || fail "Mobile status file env missing"
 
 printf 'natter init checks passed\n'
