@@ -29,6 +29,13 @@ type mappingJSON struct {
 }
 
 func WriteMapping(path string, mapping Mapping) error {
+	if mapping.Instance == "" {
+		mapping.Instance = "default"
+	}
+	if mapping.Message == "" {
+		mapping.Message = "mapped"
+	}
+
 	now := mapping.Now
 	if now == nil {
 		now = func() string {

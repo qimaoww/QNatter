@@ -42,6 +42,31 @@ func TestWriteMappingStatusMatchesLuCIContract(t *testing.T) {
 	assertString(t, got, "message", "mapped")
 }
 
+func TestWriteMappingDefaultsInstanceAndMessage(t *testing.T) {
+	file := t.TempDir() + "/default.json"
+	mapping := Mapping{
+		Protocol: "udp",
+		Inner:    netip.MustParseAddrPort("192.0.2.10:50000"),
+		Outer:    netip.MustParseAddrPort("198.51.100.20:62000"),
+		Now:      func() string { return "2026-06-20 04:30:00" },
+	}
+
+	if err := WriteMapping(file, mapping); err != nil {
+		t.Fatalf("WriteMapping returned error: %v", err)
+	}
+
+	raw, err := os.ReadFile(file)
+	if err != nil {
+		t.Fatalf("ReadFile returned error: %v", err)
+	}
+	var got map[string]any
+	if err := json.Unmarshal(raw, &got); err != nil {
+		t.Fatalf("status JSON is invalid: %v\n%s", err, raw)
+	}
+	assertString(t, got, "instance", "default")
+	assertString(t, got, "message", "mapped")
+}
+
 func assertString(t *testing.T, got map[string]any, key string, want string) {
 	t.Helper()
 	if got[key] != want {
