@@ -48,6 +48,7 @@ config_foreach() {
 	[ "$type" = "instance" ] || return 0
 	"$callback" wan_ct
 	"$callback" wan_cm
+	"$callback" wan_qb
 }
 
 config_get_bool() {
@@ -79,6 +80,18 @@ config_get() {
 		wan_cm:forward_method) value="none" ;;
 		wan_cm:target_ip) value="10.10.10.20" ;;
 		wan_cm:target_port) value="51414" ;;
+		wan_qb:enabled) value="1" ;;
+		wan_qb:label) value="qBittorrent" ;;
+		wan_qb:protocol) value="tcp" ;;
+		wan_qb:network) value="wan" ;;
+		wan_qb:bind_value) value="pppoe-qb" ;;
+		wan_qb:forward_method) value="none" ;;
+		wan_qb:target_ip) value="10.10.10.99" ;;
+		wan_qb:target_port) value="40000" ;;
+		wan_qb:qbittorrent_forward) value="1" ;;
+		wan_qb:qbittorrent_target_ip) value="10.10.10.30" ;;
+		wan_qb:qbittorrent_target_port) value="51415" ;;
+		wan_qb:qbittorrent_forward_method) value="nftables" ;;
 	esac
 
 	eval "$__var=\$value"
@@ -108,6 +121,14 @@ grep -Fqx 'wan_ct append command -i' "$procd_log" || fail "Telecom instance did 
 grep -Fqx 'wan_ct append command pppoe-wan' "$procd_log" || fail "Telecom instance did not bind pppoe-wan"
 grep -Fqx 'wan_cm append command -i' "$procd_log" || fail "Mobile instance did not pass -i"
 grep -Fqx 'wan_cm append command eth1.2' "$procd_log" || fail "Mobile instance did not bind eth1.2"
+grep -Fqx 'wan_qb append command -i' "$procd_log" || fail "qBittorrent instance did not pass -i"
+grep -Fqx 'wan_qb append command pppoe-qb' "$procd_log" || fail "qBittorrent instance did not bind pppoe-qb"
+grep -Fqx 'wan_qb append command -m' "$procd_log" || fail "qBittorrent instance did not pass forwarding method flag"
+grep -Fqx 'wan_qb append command nftables' "$procd_log" || fail "qBittorrent instance did not pass nftables forwarding"
+grep -Fqx 'wan_qb append command -t' "$procd_log" || fail "qBittorrent instance did not pass target IP flag"
+grep -Fqx 'wan_qb append command 10.10.10.30' "$procd_log" || fail "qBittorrent instance did not pass target IP"
+grep -Fqx 'wan_qb append command -p' "$procd_log" || fail "qBittorrent instance did not pass target port flag"
+grep -Fqx 'wan_qb append command 51415' "$procd_log" || fail "qBittorrent instance did not pass target port"
 
 if grep -Fq 'wan_ct append command eth1.2' "$procd_log"; then
 	fail "Telecom instance received Mobile bind value"
