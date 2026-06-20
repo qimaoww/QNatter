@@ -220,10 +220,27 @@ func parsePort(value string) (int, error) {
 func parseHostPortDefault(value string, defaultPort int) (string, int, error) {
 	host := value
 	port := defaultPort
-	if idx := strings.LastIndex(value, ":"); idx >= 0 {
+	if strings.HasPrefix(value, "[") {
+		end := strings.LastIndex(value, "]")
+		if end < 0 {
+			return "", 0, fmt.Errorf("empty host")
+		}
+		host = value[1:end]
+		if rest := value[end+1:]; rest != "" {
+			if !strings.HasPrefix(rest, ":") {
+				return "", 0, fmt.Errorf("invalid port in %q", value)
+			}
+			parsed, err := parsePort(rest[1:])
+			if err != nil {
+				return "", 0, fmt.Errorf("invalid port in %q", value)
+			}
+			port = parsed
+		}
+	} else if strings.Count(value, ":") == 1 {
+		idx := strings.LastIndex(value, ":")
 		host = value[:idx]
-		parsed, err := strconv.Atoi(value[idx+1:])
-		if err != nil || parsed < 1 || parsed > 65535 {
+		parsed, err := parsePort(value[idx+1:])
+		if err != nil {
 			return "", 0, fmt.Errorf("invalid port in %q", value)
 		}
 		port = parsed

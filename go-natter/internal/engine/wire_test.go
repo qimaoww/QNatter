@@ -109,6 +109,46 @@ func TestNewKeepAliveFromConfigUsesMappingSourceAndDefaultPorts(t *testing.T) {
 	}
 }
 
+func TestNewKeepAliveFromConfigParsesIPv6Servers(t *testing.T) {
+	tests := []struct {
+		name   string
+		server string
+		udp    bool
+		host   string
+		port   int
+	}{
+		{name: "bare tcp", server: "2001:db8::1", host: "2001:db8::1", port: 80},
+		{name: "bracketed udp", server: "[2001:db8::2]", udp: true, host: "2001:db8::2", port: 53},
+		{name: "bracketed with port", server: "[2001:db8::3]:443", host: "2001:db8::3", port: 443},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			client, err := NewKeepAliveFromConfig(config.Config{
+				UDP:             tc.udp,
+				KeepAliveServer: tc.server,
+			}, stun.Mapping{
+				Inner: netip.MustParseAddrPort("192.0.2.10:41000"),
+			})
+			if err != nil {
+				t.Fatalf("NewKeepAliveFromConfig returned error: %v", err)
+			}
+			switch keepaliveClient := client.(type) {
+			case *keepalive.TCPClient:
+				if keepaliveClient.Host != tc.host || keepaliveClient.Port != tc.port {
+					t.Fatalf("tcp endpoint = %s:%d, want %s:%d", keepaliveClient.Host, keepaliveClient.Port, tc.host, tc.port)
+				}
+			case *keepalive.UDPClient:
+				if keepaliveClient.Host != tc.host || keepaliveClient.Port != tc.port {
+					t.Fatalf("udp endpoint = %s:%d, want %s:%d", keepaliveClient.Host, keepaliveClient.Port, tc.host, tc.port)
+				}
+			default:
+				t.Fatalf("keepalive client = %T", client)
+			}
+		})
+	}
+}
+
 func TestNewUPnPMapperFromConfigUsesBindInterface(t *testing.T) {
 	mapper, err := NewUPnPMapperFromConfig(config.Config{
 		BindValue: "pppoe-wan_cmcc",

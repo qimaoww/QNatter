@@ -124,6 +124,20 @@ func TestParseArgsAcceptsIPv6STUNServers(t *testing.T) {
 	}
 }
 
+func TestParseArgsAcceptsIPv6KeepAliveServers(t *testing.T) {
+	for _, server := range []string{"2001:db8::1", "[2001:db8::2]", "[2001:db8::3]:443"} {
+		t.Run(server, func(t *testing.T) {
+			cfg, err := ParseArgs([]string{"-h", server})
+			if err != nil {
+				t.Fatalf("ParseArgs returned error: %v", err)
+			}
+			if cfg.KeepAliveServer != server {
+				t.Fatalf("keepalive server = %q, want %q", cfg.KeepAliveServer, server)
+			}
+		})
+	}
+}
+
 func TestParseArgsRejectsInvalidValues(t *testing.T) {
 	tests := []struct {
 		name string
