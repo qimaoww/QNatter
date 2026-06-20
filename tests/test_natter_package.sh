@@ -181,6 +181,8 @@ assert_not_contains natter/Makefile '\+python3-light'
 assert_not_contains natter/Makefile 'natter.py'
 assert_not_contains natter/Makefile './files/Natter'
 assert_not_contains natter/Makefile 'natter-python-wrapper.py'
+luci_release="$(sed -n 's/^PKG_RELEASE:=//p' "$ROOT/luci-app-natter/Makefile")"
+[ "$luci_release" -gt 1 ] || fail "luci-app-natter package release must increase when LuCI files change"
 assert_contains luci-app-natter/Makefile 'LUCI_DEPENDS:=.*\+natter'
 assert_contains luci-app-natter/Makefile 'LUCI_DEPENDS:=.*\+luci-base'
 assert_contains luci-app-natter/Makefile 'LUCI_DEPENDS:=.*\+rpcd'

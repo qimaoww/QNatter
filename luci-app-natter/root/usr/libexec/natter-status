@@ -19,7 +19,7 @@ json_pair() {
 json_bool_pair() {
 	local key="$1"
 	local value="$2"
-	[ "$value" = "1" ] && printf '"%s":true' "$key" || printf '"%s":false' "$key"
+	natter_bool "$value" && printf '"%s":true' "$key" || printf '"%s":false' "$key"
 }
 
 status_field() {

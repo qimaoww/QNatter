@@ -45,10 +45,12 @@ config_get() {
 		wan_ct:bind_value) value="pppoe-wan" ;;
 		wan_ct:protocol) value="tcp" ;;
 		wan_cm:label) value="Mobile WAN" ;;
-		wan_cm:enabled) value="1" ;;
+		wan_cm:enabled) value="true" ;;
 		wan_cm:network) value="wan2" ;;
 		wan_cm:bind_value) value="eth1.2" ;;
 		wan_cm:protocol) value="udp" ;;
+		wan_cm:qbittorrent_enabled) value="yes" ;;
+		wan_cm:qbittorrent_forward) value="on" ;;
 		dot.name:label) value="Dotted WAN" ;;
 		dot.name:enabled) value="1" ;;
 		dot.name:network) value="wan3" ;;
@@ -97,6 +99,15 @@ case "$output" in
 	*'"name":"wan_cm"'*'"label":"Mobile WAN"'*'"bind_value":"eth1.2"'*) : ;;
 	*) fail "status output is missing Mobile instance: $output" ;;
 esac
+
+printf '%s\n' "$output" | grep -Fq '"name":"wan_cm"' || \
+	fail "status output is missing Mobile instance name: $output"
+printf '%s\n' "$output" | grep -Fq '"enabled":true' || \
+	fail "status output must parse UCI-style enabled boolean: $output"
+printf '%s\n' "$output" | grep -Fq '"qbittorrent_enabled":true' || \
+	fail "status output must parse UCI-style qBittorrent boolean: $output"
+printf '%s\n' "$output" | grep -Fq '"qbittorrent_forward":true' || \
+	fail "status output must parse UCI-style qBittorrent forwarding boolean: $output"
 
 printf '%s\n' "$output" | grep -Fq '"inner_ip":"10.10.10.10"' || \
 	fail "status output is missing Telecom inner IP: $output"
