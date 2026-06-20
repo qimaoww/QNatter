@@ -4,6 +4,7 @@ import (
 	"encoding/binary"
 	"flag"
 	"fmt"
+	"io"
 	"net"
 	"os"
 	"strconv"
@@ -53,6 +54,7 @@ func ParseArgs(args []string) (Config, error) {
 	var stunValues stringList
 
 	fs := flag.NewFlagSet("natter", flag.ContinueOnError)
+	fs.SetOutput(io.Discard)
 	fs.BoolVar(&cfg.Verbose, "v", false, "")
 	fs.BoolVar(&cfg.ExitWhenChanged, "q", false, "")
 	fs.BoolVar(&cfg.UDP, "u", false, "")

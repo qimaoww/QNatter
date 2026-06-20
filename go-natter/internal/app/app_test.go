@@ -146,6 +146,37 @@ func TestRunRejectsInvalidArguments(t *testing.T) {
 	}
 }
 
+func TestRunRejectsUnknownArgumentsWithoutWritingGlobalStderr(t *testing.T) {
+	originalStderr := os.Stderr
+	readEnd, writeEnd, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("Pipe returned error: %v", err)
+	}
+	os.Stderr = writeEnd
+	defer func() {
+		os.Stderr = originalStderr
+		_ = readEnd.Close()
+	}()
+
+	var stderr bytes.Buffer
+	code := Run([]string{"--bad-flag"}, &bytes.Buffer{}, &stderr)
+	_ = writeEnd.Close()
+	raw, err := io.ReadAll(readEnd)
+	if err != nil {
+		t.Fatalf("ReadAll returned error: %v", err)
+	}
+
+	if code == 0 {
+		t.Fatal("Run accepted unknown arguments")
+	}
+	if string(raw) != "" {
+		t.Fatalf("global stderr = %q, want empty", string(raw))
+	}
+	if !strings.Contains(stderr.String(), "natter:") {
+		t.Fatalf("stderr = %q, want natter error", stderr.String())
+	}
+}
+
 func TestRunWithStartsEngineForMapping(t *testing.T) {
 	var got config.Config
 	var stderr bytes.Buffer
