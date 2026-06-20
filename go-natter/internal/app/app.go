@@ -166,11 +166,12 @@ func runEngineWithLog(ctx context.Context, cfg config.Config, log io.Writer) err
 		NewForwarder: forward.NewForwarder,
 		Notify: func(mapping status.Mapping) error {
 			logNotifyScript(log, cfg.NotifyPath)
-			_, err := notify.Run(notify.Options{
+			result, err := notify.Run(notify.Options{
 				Instance:   os.Getenv("NATTER_INSTANCE"),
 				StatusFile: os.Getenv("NATTER_STATUS_FILE"),
 				UserScript: cfg.NotifyPath,
 			}, mapping)
+			logNotifyResult(log, result)
 			return err
 		},
 		OnMapped: func(result engine.Result) {
@@ -200,6 +201,13 @@ func logNotifyScript(w io.Writer, path string) {
 		return
 	}
 	logLine(w, "I", "Calling script: %s", path)
+}
+
+func logNotifyResult(w io.Writer, result notify.Result) {
+	if result.UserNotifyError == "" {
+		return
+	}
+	logLine(w, "W", "%s", result.UserNotifyError)
 }
 
 func logMapping(w io.Writer, cfg config.Config, result engine.Result) {

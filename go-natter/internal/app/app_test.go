@@ -15,6 +15,7 @@ import (
 
 	"natter-openwrt/go-natter/internal/config"
 	"natter-openwrt/go-natter/internal/engine"
+	"natter-openwrt/go-natter/internal/notify"
 	"natter-openwrt/go-natter/internal/stun"
 )
 
@@ -250,6 +251,24 @@ func TestLogNotifyScriptPrintsPathWhenConfigured(t *testing.T) {
 func TestLogNotifyScriptSkipsEmptyPath(t *testing.T) {
 	var stderr bytes.Buffer
 	logNotifyScript(&stderr, "")
+
+	if stderr.Len() != 0 {
+		t.Fatalf("stderr = %q, want empty", stderr.String())
+	}
+}
+
+func TestLogNotifyResultWarnsOnUserNotifyError(t *testing.T) {
+	var stderr bytes.Buffer
+	logNotifyResult(&stderr, notify.Result{UserNotifyError: "notify script failed: exit status 1"})
+
+	if !strings.Contains(stderr.String(), "[W] notify script failed: exit status 1") {
+		t.Fatalf("stderr = %q, missing notify failure warning", stderr.String())
+	}
+}
+
+func TestLogNotifyResultSkipsSuccessfulResult(t *testing.T) {
+	var stderr bytes.Buffer
+	logNotifyResult(&stderr, notify.Result{})
 
 	if stderr.Len() != 0 {
 		t.Fatalf("stderr = %q, want empty", stderr.String())
