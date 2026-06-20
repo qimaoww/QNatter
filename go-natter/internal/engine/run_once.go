@@ -171,7 +171,9 @@ func StartSession(ctx context.Context, cfg config.Config, deps Dependencies) (*S
 		TargetPort:    int(target.Port()),
 		UDP:           cfg.UDP,
 		Interface:     bind.Interface,
-		RouteIdentity: cfg.InstanceID,
+		RouteMark:     cfg.RouteMark,
+		RouteTable:    cfg.RouteTable,
+		RoutePriority: cfg.RoutePriority,
 	}
 	if err := fwd.Start(options); err != nil {
 		return nil, err

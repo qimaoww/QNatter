@@ -16,6 +16,7 @@ LOG_DIR="${NATTER_LOG_DIR:-/var/log/natter}"
 : "${NATTER_QBITTORRENT_SH:=/usr/share/natter/natter-qbittorrent.sh}"
 : "${NATTER_NFT_BIN:=nft}"
 : "${NATTER_IP_BIN:=ip}"
+: "${NATTER_UCI_BIN:=uci}"
 
 . "$NATTER_FUNCTIONS_SH"
 . "$NATTER_NETWORK_SH"
@@ -84,6 +85,105 @@ natter_flush_route_rules() {
 		"$NATTER_IP_BIN" rule del priority "$priority" >/dev/null 2>&1 || true
 		"$NATTER_IP_BIN" route flush table "$table" >/dev/null 2>&1 || true
 	done
+}
+
+natter_route_slot_valid() {
+	local slot="$1"
+
+	case "$slot" in
+		''|*[!0-9]*) return 1 ;;
+	esac
+	case "$slot" in
+		0|[1-9]*) ;;
+		*) return 1 ;;
+	esac
+	[ "$slot" -le 4095 ] || return 1
+}
+
+natter_route_slot_used() {
+	case " ${NATTER_ROUTE_USED_SLOTS:-} " in
+		*" $1 "*) return 0 ;;
+	esac
+	return 1
+}
+
+natter_record_route_slot() {
+	NATTER_ROUTE_USED_SLOTS="${NATTER_ROUTE_USED_SLOTS:-} $1"
+}
+
+natter_next_route_slot() {
+	local slot=0
+
+	while [ "$slot" -le 4095 ]; do
+		if ! natter_route_slot_used "$slot"; then
+			printf '%s\n' "$slot"
+			return 0
+		fi
+		slot="$((slot + 1))"
+	done
+
+	return 1
+}
+
+natter_set_config_route_slot() {
+	local section="$1"
+	local slot="$2"
+
+	if command -v config_set >/dev/null 2>&1; then
+		config_set "$section" route_slot "$slot"
+	fi
+}
+
+natter_prepare_route_slot() {
+	local section="$1"
+	local slot new_slot
+
+	config_get slot "$section" route_slot ""
+	if natter_route_slot_valid "$slot" && ! natter_route_slot_used "$slot"; then
+		natter_record_route_slot "$slot"
+		return 0
+	fi
+
+	new_slot="$(natter_next_route_slot)" || return 1
+	"$NATTER_UCI_BIN" set "${CONF}.${section}.route_slot=${new_slot}" >/dev/null 2>&1 || return 1
+	natter_set_config_route_slot "$section" "$new_slot"
+	NATTER_ROUTE_SLOTS_CHANGED=1
+	natter_record_route_slot "$new_slot"
+}
+
+natter_prepare_route_slots() {
+	command -v "$NATTER_UCI_BIN" >/dev/null 2>&1 || return 0
+
+	NATTER_ROUTE_USED_SLOTS=""
+	NATTER_ROUTE_SLOTS_CHANGED=0
+	config_foreach natter_prepare_route_slot instance || {
+		unset NATTER_ROUTE_USED_SLOTS NATTER_ROUTE_SLOTS_CHANGED
+		return 1
+	}
+
+	if [ "$NATTER_ROUTE_SLOTS_CHANGED" = "1" ]; then
+		"$NATTER_UCI_BIN" commit "$CONF" >/dev/null 2>&1 || {
+			unset NATTER_ROUTE_USED_SLOTS NATTER_ROUTE_SLOTS_CHANGED
+			return 1
+		}
+	fi
+
+	unset NATTER_ROUTE_USED_SLOTS NATTER_ROUTE_SLOTS_CHANGED
+	return 0
+}
+
+natter_assign_route_policy() {
+	local slot="$1"
+
+	if ! natter_route_slot_valid "$slot"; then
+		slot="${NATTER_ROUTE_SLOT:-0}"
+		natter_route_slot_valid "$slot" || return 1
+		NATTER_ROUTE_SLOT="$((slot + 1))"
+	fi
+
+	NATTER_ROUTE_MARK="$(printf '0x4e000%03x' "$slot")"
+	NATTER_ROUTE_TABLE="$((20000 + slot))"
+	NATTER_ROUTE_PRIORITY="$((20000 + slot))"
 }
 
 natter_firewall_dest_zone() {
@@ -189,6 +289,9 @@ natter_write_runtime_fingerprint() {
 		printf 'runner=%s\n' "$RUNNER"
 		printf 'network=%s\n' "$network"
 		printf 'log_file=%s\n' "$log_file"
+		printf 'route_mark=%s\n' "${NATTER_ROUTE_MARK:-}"
+		printf 'route_table=%s\n' "${NATTER_ROUTE_TABLE:-}"
+		printf 'route_priority=%s\n' "${NATTER_ROUTE_PRIORITY:-}"
 		while IFS= read -r arg; do
 			[ -n "$arg" ] || continue
 			printf 'arg=%s\n' "$arg"
@@ -210,10 +313,12 @@ natter_start_instance() {
 	local enabled protocol network bind_value bind_port public_ip_mode forward_method
 	local target_ip target_port keepalive_interval keepalive_server notify_script retry_target exit_when_changed
 	local upnp verbose qb_enabled qb_forward qb_target_ip qb_target_port qb_forward_method
-	local stun_servers slug log_file notify_env notify_wrapper status_file runtime_file resolved_bind
+	local stun_servers slug log_file notify_env notify_wrapper status_file runtime_file resolved_bind route_slot
 
 	config_get_bool enabled "$section" enabled 0
 	[ "$enabled" = "1" ] || return 0
+	config_get route_slot "$section" route_slot ""
+	natter_assign_route_policy "$route_slot" || return 1
 
 	config_get protocol "$section" protocol "tcp"
 	config_get network "$section" network "wan"
@@ -293,7 +398,12 @@ natter_start_instance() {
 	EOF
 	procd_set_param respawn 3600 5 5
 	procd_set_param file /etc/config/natter
-	procd_set_param env NATTER_INSTANCE="$section" NATTER_STATUS_FILE="$status_file"
+	procd_set_param env \
+		NATTER_INSTANCE="$section" \
+		NATTER_STATUS_FILE="$status_file" \
+		NATTER_ROUTE_MARK="$NATTER_ROUTE_MARK" \
+		NATTER_ROUTE_TABLE="$NATTER_ROUTE_TABLE" \
+		NATTER_ROUTE_PRIORITY="$NATTER_ROUTE_PRIORITY"
 	procd_set_param limits nofile="4096 4096"
 	procd_set_param user root
 	procd_set_param term_timeout 10
@@ -309,6 +419,7 @@ start_service() {
 	config_load "$CONF"
 	config_get_bool enabled global enabled 0
 	[ "$enabled" = "1" ] || return 0
+	natter_prepare_route_slots || return 1
 	mkdir -p "$RUN_DIR"
 	natter_flush_runtime_rules
 	natter_flush_route_rules
@@ -317,14 +428,17 @@ start_service() {
 	NATTER_PREPARE_ONLY=0
 	NATTER_RUNTIME_DIR="$RUN_DIR"
 	NATTER_RUNTIME_LIST="$runtime_list_tmp"
+	NATTER_ROUTE_SLOT=0
 	config_foreach natter_start_instance instance
 	mv "$runtime_list_tmp" "${RUN_DIR}/.runtime-instances"
-	unset NATTER_PREPARE_ONLY NATTER_RUNTIME_DIR NATTER_RUNTIME_LIST
+	unset NATTER_PREPARE_ONLY NATTER_RUNTIME_DIR NATTER_RUNTIME_LIST NATTER_ROUTE_SLOT NATTER_ROUTE_MARK NATTER_ROUTE_TABLE NATTER_ROUTE_PRIORITY
 }
 
 natter_hot_reload_service() {
 	local tmp runtime_list old_list slug
 
+	config_load "$CONF"
+	natter_prepare_route_slots || return 1
 	mkdir -p "$RUN_DIR"
 	tmp="$(mktemp -d "${RUN_DIR}/.reload.XXXXXX")" || return 1
 	runtime_list="${tmp}/.runtime-instances"
@@ -332,12 +446,13 @@ natter_hot_reload_service() {
 	NATTER_PREPARE_ONLY=1
 	NATTER_RUNTIME_DIR="$tmp"
 	NATTER_RUNTIME_LIST="$runtime_list"
+	NATTER_ROUTE_SLOT=0
 	config_foreach natter_start_instance instance || {
 		rm -rf "$tmp"
-		unset NATTER_PREPARE_ONLY NATTER_RUNTIME_DIR NATTER_RUNTIME_LIST
+		unset NATTER_PREPARE_ONLY NATTER_RUNTIME_DIR NATTER_RUNTIME_LIST NATTER_ROUTE_SLOT NATTER_ROUTE_MARK NATTER_ROUTE_TABLE NATTER_ROUTE_PRIORITY
 		return 1
 	}
-	unset NATTER_PREPARE_ONLY NATTER_RUNTIME_DIR NATTER_RUNTIME_LIST
+	unset NATTER_PREPARE_ONLY NATTER_RUNTIME_DIR NATTER_RUNTIME_LIST NATTER_ROUTE_SLOT NATTER_ROUTE_MARK NATTER_ROUTE_TABLE NATTER_ROUTE_PRIORITY
 
 	old_list="${RUN_DIR}/.runtime-instances"
 	if ! cmp -s "$old_list" "$runtime_list"; then

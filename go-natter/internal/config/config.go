@@ -20,6 +20,9 @@ type STUNServer struct {
 
 type Config struct {
 	InstanceID        string
+	RouteMark         string
+	RouteTable        string
+	RoutePriority     string
 	UDP               bool
 	Verbose           bool
 	ExitWhenChanged   bool
@@ -51,6 +54,9 @@ func (s *stringList) Set(value string) error {
 func ParseArgs(args []string) (Config, error) {
 	cfg := Config{
 		InstanceID:        os.Getenv("NATTER_INSTANCE"),
+		RouteMark:         os.Getenv("NATTER_ROUTE_MARK"),
+		RouteTable:        os.Getenv("NATTER_ROUTE_TABLE"),
+		RoutePriority:     os.Getenv("NATTER_ROUTE_PRIORITY"),
 		KeepAliveInterval: 15,
 		BindValue:         "0.0.0.0",
 		TargetIP:          "0.0.0.0",
@@ -110,6 +116,9 @@ func ParseArgs(args []string) (Config, error) {
 }
 
 func validateConfig(cfg *Config) error {
+	if err := validateRoutePolicy(cfg); err != nil {
+		return err
+	}
 	if cfg.KeepAliveInterval <= 0 {
 		return fmt.Errorf("not a positive integer: %d", cfg.KeepAliveInterval)
 	}
@@ -134,6 +143,25 @@ func validateConfig(cfg *Config) error {
 		return fmt.Errorf("invalid IP address: %s", cfg.TargetIP)
 	}
 	cfg.TargetIP = normalizedTarget
+	return nil
+}
+
+func validateRoutePolicy(cfg *Config) error {
+	if cfg.RouteMark == "" && cfg.RouteTable == "" && cfg.RoutePriority == "" {
+		return nil
+	}
+	if cfg.RouteMark == "" || cfg.RouteTable == "" || cfg.RoutePriority == "" {
+		return fmt.Errorf("incomplete route policy")
+	}
+	if _, err := strconv.ParseUint(cfg.RouteMark, 0, 32); err != nil {
+		return fmt.Errorf("invalid route mark: %s", cfg.RouteMark)
+	}
+	if _, err := strconv.ParseUint(cfg.RouteTable, 10, 32); err != nil {
+		return fmt.Errorf("invalid route table: %s", cfg.RouteTable)
+	}
+	if _, err := strconv.ParseUint(cfg.RoutePriority, 10, 32); err != nil {
+		return fmt.Errorf("invalid route priority: %s", cfg.RoutePriority)
+	}
 	return nil
 }
 

@@ -34,6 +34,9 @@ func TestRunOnceEstablishesSocketForwardAndNotifies(t *testing.T) {
 	result, err := RunOnce(context.Background(), config.Config{
 		InstanceID:    "mc_ct",
 		BindValue:     "pppoe-wan_cmcc",
+		RouteMark:     "0x4e000002",
+		RouteTable:    "20002",
+		RoutePriority: "20002",
 		TargetIP:      "10.10.10.10",
 		ForwardMethod: "socket",
 	}, Dependencies{
@@ -66,7 +69,9 @@ func TestRunOnceEstablishesSocketForwardAndNotifies(t *testing.T) {
 		TargetIP:      "10.10.10.10",
 		TargetPort:    62000,
 		Interface:     "pppoe-wan_cmcc",
-		RouteIdentity: "mc_ct",
+		RouteMark:     "0x4e000002",
+		RouteTable:    "20002",
+		RoutePriority: "20002",
 	}
 	if fwd.start != wantStart {
 		t.Fatalf("forward start = %+v, want %+v", fwd.start, wantStart)

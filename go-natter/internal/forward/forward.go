@@ -8,7 +8,9 @@ type StartOptions struct {
 	TargetPort    int
 	UDP           bool
 	Interface     string
-	RouteIdentity string
+	RouteMark     string
+	RouteTable    string
+	RoutePriority string
 }
 
 type None struct{}

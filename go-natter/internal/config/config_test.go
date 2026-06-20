@@ -91,6 +91,20 @@ func TestParseArgsReadsInstanceIDFromEnvironment(t *testing.T) {
 	}
 }
 
+func TestParseArgsReadsRoutePolicyFromEnvironment(t *testing.T) {
+	t.Setenv("NATTER_ROUTE_MARK", "0x4e000002")
+	t.Setenv("NATTER_ROUTE_TABLE", "20002")
+	t.Setenv("NATTER_ROUTE_PRIORITY", "20002")
+
+	cfg, err := ParseArgs(nil)
+	if err != nil {
+		t.Fatalf("ParseArgs returned error: %v", err)
+	}
+	if cfg.RouteMark != "0x4e000002" || cfg.RouteTable != "20002" || cfg.RoutePriority != "20002" {
+		t.Fatalf("route policy = %s/%s/%s, want 0x4e000002/20002/20002", cfg.RouteMark, cfg.RouteTable, cfg.RoutePriority)
+	}
+}
+
 func TestParseArgsNormalizesIPv4LikePython(t *testing.T) {
 	cfg, err := ParseArgs([]string{"-i", "10.1", "-t", "127.1"})
 	if err != nil {

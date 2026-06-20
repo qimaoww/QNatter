@@ -4,6 +4,61 @@
 : "${NATTER_UCI_DEFAULT:=/etc/config/natter.default}"
 : "${NATTER_UCI_BIN:=uci}"
 
+natter_route_slot_valid() {
+	local slot="$1"
+
+	case "$slot" in
+		''|*[!0-9]*) return 1 ;;
+	esac
+	case "$slot" in
+		0|[1-9]*) ;;
+		*) return 1 ;;
+	esac
+	[ "$slot" -le 4095 ] || return 1
+}
+
+natter_route_slot_used() {
+	case " ${NATTER_ROUTE_USED_SLOTS:-} " in
+		*" $1 "*) return 0 ;;
+	esac
+	return 1
+}
+
+natter_record_route_slot() {
+	NATTER_ROUTE_USED_SLOTS="${NATTER_ROUTE_USED_SLOTS:-} $1"
+}
+
+natter_next_route_slot() {
+	local slot=0
+
+	while [ "$slot" -le 4095 ]; do
+		if ! natter_route_slot_used "$slot"; then
+			printf '%s\n' "$slot"
+			return 0
+		fi
+		slot="$((slot + 1))"
+	done
+
+	return 1
+}
+
+natter_migrate_route_slot() {
+	local section="$1"
+	local slot new_slot
+
+	slot="$("$NATTER_UCI_BIN" -q get "natter.${section}.route_slot" 2>/dev/null || true)"
+	if natter_route_slot_valid "$slot" && ! natter_route_slot_used "$slot"; then
+		natter_record_route_slot "$slot"
+		return 0
+	fi
+
+	new_slot="$(natter_next_route_slot)" || return 0
+	if "$NATTER_UCI_BIN" set "natter.${section}.route_slot=${new_slot}" >/dev/null 2>&1; then
+		changed=1
+		natter_record_route_slot "$new_slot"
+	fi
+}
+
 if [ ! -e "$NATTER_UCI_CONFIG" ]; then
 	[ -r "$NATTER_UCI_DEFAULT" ] || exit 0
 	cp "$NATTER_UCI_DEFAULT" "$NATTER_UCI_CONFIG"
@@ -11,12 +66,15 @@ fi
 
 if command -v "$NATTER_UCI_BIN" >/dev/null 2>&1; then
 	changed=0
+	NATTER_ROUTE_USED_SLOTS=""
 	if ! "$NATTER_UCI_BIN" -q get natter.global.hot_reload >/dev/null 2>&1; then
 		"$NATTER_UCI_BIN" set natter.global.hot_reload='1' >/dev/null 2>&1 && changed=1
 	fi
 	for section in $("$NATTER_UCI_BIN" -q show natter 2>/dev/null | sed -n 's/^natter\.\([A-Za-z0-9_][A-Za-z0-9_]*\)=instance$/\1/p'); do
 		"$NATTER_UCI_BIN" -q delete "natter.${section}.label" >/dev/null 2>&1 && changed=1
+		natter_migrate_route_slot "$section"
 	done
+	unset NATTER_ROUTE_USED_SLOTS
 	[ "$changed" = "1" ] && "$NATTER_UCI_BIN" commit natter >/dev/null 2>&1
 fi
 exit 0

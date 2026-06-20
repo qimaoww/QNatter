@@ -16,7 +16,13 @@ procd_log="$tmp/procd.log"
 trigger_log="$tmp/triggers.log"
 nft_log="$tmp/nft.log"
 ip_log="$tmp/ip.log"
+uci_log="$tmp/uci.log"
 current_instance=""
+ROUTE_SLOT_wan_ct=2
+ROUTE_SLOT_wan_cm=2
+ROUTE_SLOT_wan_qb=bad
+ROUTE_SLOT_wan_auto=
+ROUTE_SLOT_disabled_lan=
 
 procd_open_instance() {
 	current_instance="$1"
@@ -86,6 +92,7 @@ config_get() {
 		wan_ct:protocol) value="tcp" ;;
 		wan_ct:network) value="wan" ;;
 		wan_ct:bind_value) value="pppoe-wan" ;;
+		wan_ct:route_slot) value="${ROUTE_SLOT_wan_ct:-}" ;;
 		wan_ct:forward_method) value="none" ;;
 		wan_ct:auto_firewall) value="1" ;;
 		wan_ct:target_ip) value="10.10.10.10" ;;
@@ -100,6 +107,7 @@ config_get() {
 		wan_cm:protocol) value="udp" ;;
 		wan_cm:network) value="wan2" ;;
 		wan_cm:bind_value) value="eth1.2" ;;
+		wan_cm:route_slot) value="${ROUTE_SLOT_wan_cm:-}" ;;
 		wan_cm:forward_method) value="none" ;;
 		wan_cm:target_ip) value="10.10.10.20" ;;
 		wan_cm:target_port) value="51414" ;;
@@ -108,6 +116,7 @@ config_get() {
 		wan_qb:protocol) value="tcp" ;;
 		wan_qb:network) value="wan" ;;
 		wan_qb:bind_value) value="pppoe-qb" ;;
+		wan_qb:route_slot) value="${ROUTE_SLOT_wan_qb:-}" ;;
 		wan_qb:forward_method) value="none" ;;
 		wan_qb:target_ip) value="10.10.10.99" ;;
 		wan_qb:target_port) value="40000" ;;
@@ -120,6 +129,7 @@ config_get() {
 		wan_auto:protocol) value="tcp" ;;
 		wan_auto:network) value="wan3" ;;
 		wan_auto:bind_value) value="" ;;
+		wan_auto:route_slot) value="${ROUTE_SLOT_wan_auto:-}" ;;
 		wan_auto:forward_method) value="none" ;;
 		wan_auto:target_ip) value="10.10.10.40" ;;
 		wan_auto:target_port) value="51416" ;;
@@ -127,9 +137,19 @@ config_get() {
 		disabled_lan:label) value="Disabled LAN" ;;
 		disabled_lan:network) value="lan" ;;
 		disabled_lan:bind_value) value="br-lan" ;;
+		disabled_lan:route_slot) value="${ROUTE_SLOT_disabled_lan:-}" ;;
 	esac
 
 	eval "$__var=\$value"
+}
+
+config_set() {
+	local section="$1"
+	local option="$2"
+	local value="$3"
+
+	[ "$option" = "route_slot" ] || return 0
+	eval "ROUTE_SLOT_${section}=\$value"
 }
 
 config_list_foreach() {
@@ -162,6 +182,13 @@ printf '%s\n' "$*" >> "$NATTER_TEST_IP_LOG"
 EOF
 chmod +x "$tmp/ip"
 
+cat > "$tmp/uci" <<'EOF'
+#!/bin/sh
+printf '%s\n' "$*" >> "$NATTER_TEST_UCI_LOG"
+exit 0
+EOF
+chmod +x "$tmp/uci"
+
 NATTER_FUNCTIONS_SH="$tmp/functions.sh"
 NATTER_NETWORK_SH="$tmp/network.sh"
 NATTER_COMMON_SH="$ROOT/natter/files/natter-common.sh"
@@ -170,9 +197,11 @@ NATTER_RUN_DIR="$tmp/run"
 NATTER_LOG_DIR="$tmp/log"
 NATTER_NFT_BIN="$tmp/nft"
 NATTER_IP_BIN="$tmp/ip"
+NATTER_UCI_BIN="$tmp/uci"
 NATTER_TEST_NFT_LOG="$nft_log"
 NATTER_TEST_IP_LOG="$ip_log"
-export NATTER_FUNCTIONS_SH NATTER_NETWORK_SH NATTER_COMMON_SH NATTER_QBITTORRENT_SH NATTER_RUN_DIR NATTER_LOG_DIR NATTER_NFT_BIN NATTER_IP_BIN NATTER_TEST_NFT_LOG NATTER_TEST_IP_LOG
+NATTER_TEST_UCI_LOG="$uci_log"
+export NATTER_FUNCTIONS_SH NATTER_NETWORK_SH NATTER_COMMON_SH NATTER_QBITTORRENT_SH NATTER_RUN_DIR NATTER_LOG_DIR NATTER_NFT_BIN NATTER_IP_BIN NATTER_UCI_BIN NATTER_TEST_NFT_LOG NATTER_TEST_IP_LOG NATTER_TEST_UCI_LOG
 
 . "$ROOT/natter/files/natter.init"
 start_service
@@ -188,6 +217,12 @@ grep -Fqx 'route flush table 20253' "$ip_log" || fail "start_service did not flu
 if grep -Fq 'priority 100' "$ip_log" || grep -Fq 'priority 24000' "$ip_log"; then
 	fail "start_service deleted non-Natter policy rules"
 fi
+
+grep -Fqx 'set natter.wan_cm.route_slot=0' "$uci_log" || fail "duplicate route slot was not repaired"
+grep -Fqx 'set natter.wan_qb.route_slot=1' "$uci_log" || fail "invalid route slot was not repaired"
+grep -Fqx 'set natter.wan_auto.route_slot=3' "$uci_log" || fail "missing route slot was not repaired"
+grep -Fqx 'set natter.disabled_lan.route_slot=4' "$uci_log" || fail "disabled instance route slot was not prepared"
+grep -Fqx 'commit natter' "$uci_log" || fail "route slot repair was not committed"
 
 grep -Fqx 'wan_ct append command -i' "$procd_log" || fail "Telecom instance did not pass -i"
 grep -Fqx 'wan_ct append command pppoe-wan' "$procd_log" || fail "Telecom instance did not bind pppoe-wan"
@@ -210,8 +245,10 @@ if grep -Fq 'wan_cm append command pppoe-wan' "$procd_log"; then
 	fail "Mobile instance received Telecom bind value"
 fi
 
-grep -Fqx "wan_ct set env NATTER_INSTANCE=wan_ct NATTER_STATUS_FILE=$tmp/run/wan_ct.json" "$procd_log" || fail "Telecom instance env missing"
-grep -Fqx "wan_cm set env NATTER_INSTANCE=wan_cm NATTER_STATUS_FILE=$tmp/run/wan_cm.json" "$procd_log" || fail "Mobile instance env missing"
+grep -Fqx "wan_ct set env NATTER_INSTANCE=wan_ct NATTER_STATUS_FILE=$tmp/run/wan_ct.json NATTER_ROUTE_MARK=0x4e000002 NATTER_ROUTE_TABLE=20002 NATTER_ROUTE_PRIORITY=20002" "$procd_log" || fail "Telecom instance env missing"
+grep -Fqx "wan_cm set env NATTER_INSTANCE=wan_cm NATTER_STATUS_FILE=$tmp/run/wan_cm.json NATTER_ROUTE_MARK=0x4e000000 NATTER_ROUTE_TABLE=20000 NATTER_ROUTE_PRIORITY=20000" "$procd_log" || fail "Mobile instance env missing"
+grep -Fqx "wan_qb set env NATTER_INSTANCE=wan_qb NATTER_STATUS_FILE=$tmp/run/wan_qb.json NATTER_ROUTE_MARK=0x4e000001 NATTER_ROUTE_TABLE=20001 NATTER_ROUTE_PRIORITY=20001" "$procd_log" || fail "qBittorrent instance env missing"
+grep -Fqx "wan_auto set env NATTER_INSTANCE=wan_auto NATTER_STATUS_FILE=$tmp/run/wan_auto.json NATTER_ROUTE_MARK=0x4e000003 NATTER_ROUTE_TABLE=20003 NATTER_ROUTE_PRIORITY=20003" "$procd_log" || fail "Auto WAN instance env missing"
 
 grep -Fq "NATTER_LOG_FILE='$tmp/log/wan_ct.log'" "$tmp/run/wan_ct.env" || fail "Telecom notify env missing instance log file"
 grep -Fq "NATTER_AUTO_FIREWALL='1'" "$tmp/run/wan_ct.env" || fail "Telecom notify env missing auto firewall flag"

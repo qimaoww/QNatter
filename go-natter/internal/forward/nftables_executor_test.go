@@ -32,11 +32,17 @@ func TestNftablesForwarderStartAndStopDNAT(t *testing.T) {
 	assertNftCalls(t, runner.calls, wantCalls)
 }
 
-func TestNftablesForwarderMarksRepliesForRouteIdentity(t *testing.T) {
+func TestNftablesForwarderMarksRepliesWithExplicitRoutePolicy(t *testing.T) {
 	options := nftTestOptions()
 	options.Interface = "pppoe-wan"
-	options.RouteIdentity = "mc_ct"
-	policy := natterRoutePolicy(options.RouteIdentity)
+	options.RouteMark = "0x4e000002"
+	options.RouteTable = "20002"
+	options.RoutePriority = "20002"
+	policy := routePolicy{
+		Mark:     options.RouteMark,
+		Table:    options.RouteTable,
+		Priority: options.RoutePriority,
+	}
 	runner := &fakeNftRunner{
 		outputs: map[string]string{
 			NftablesDNATRule(options):                   "insert rule ip natter natter_dnat # handle 42\n",
@@ -76,9 +82,9 @@ func TestNftablesForwarderMarksRepliesForRouteIdentity(t *testing.T) {
 	})
 }
 
-func TestNatterRoutePolicySeparatesInstancesOnSameInterface(t *testing.T) {
-	mc := natterRoutePolicy("mc_ct")
-	qb := natterRoutePolicy("qb_ct")
+func TestNatterRoutePolicySeparatesInstanceSlots(t *testing.T) {
+	mc := natterRoutePolicy(2)
+	qb := natterRoutePolicy(0)
 
 	if mc.Mark == qb.Mark {
 		t.Fatalf("same-interface instances share mark %s", mc.Mark)

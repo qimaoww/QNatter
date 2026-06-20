@@ -219,6 +219,7 @@ assert_contains natter/files/natter.hotplug 'if \[ -n "\$bind_value" \]; then'
 assert_contains natter/files/natter.hotplug '\[ "\$bind_value" = "\$DEVICE" \] && MATCHED=1'
 assert_contains natter/files/natter.config "option forward_method 'auto'"
 assert_contains natter/files/natter.config "option hot_reload '1'"
+assert_contains natter/files/natter.config "option route_slot '0'"
 assert_not_contains natter/files/natter.config "option label"
 assert_contains natter/files/natter.config "option auto_firewall '0'"
 assert_contains natter/files/natter.config "option cloudflare_enabled '0'"
@@ -230,6 +231,9 @@ assert_not_contains natter/files/natter.config "^[[:space:]]*list[[:space:]]+stu
 assert_contains natter/files/natter-common.sh 'natter_forward_method_or_auto'
 assert_contains natter/files/natter-common.sh '\[ "\$forward_method" != "auto" \]'
 assert_contains natter/files/natter.init 'NATTER_STATUS_FILE'
+assert_contains natter/files/natter.init 'NATTER_ROUTE_MARK'
+assert_contains natter/files/natter.init 'natter_prepare_route_slots'
+assert_contains natter/files/natter.init 'config_get route_slot "\$section" route_slot ""'
 assert_contains natter/files/natter.init 'NATTER_LOG_FILE'
 assert_contains natter/files/natter.init 'hot_reload'
 assert_contains natter/files/natter.init 'runtime'
@@ -288,7 +292,7 @@ assert_contains natter/Makefile 'go build .* -o \$\(PKG_BUILD_DIR\)/natter-go ./
 assert_contains natter/Makefile '\$\(INSTALL_BIN\) \$\(PKG_BUILD_DIR\)/natter-go \$\(1\)/usr/bin/natter-go'
 assert_contains natter/Makefile '\$\(LN\) natter-go \$\(1\)/usr/bin/Natter'
 natter_release="$(sed -n 's/^PKG_RELEASE:=//p' "$ROOT/natter/Makefile")"
-[ "$natter_release" -ge 27 ] || fail "natter package release must increase when package files change"
+[ "$natter_release" -ge 29 ] || fail "natter package release must increase when package files change"
 assert_contains natter/Makefile '\$\(INSTALL_CONF\) ./files/natter.config \$\(1\)/etc/config/natter.default'
 assert_contains natter/Makefile '\$\(INSTALL_DIR\) \$\(1\)/etc/uci-defaults'
 assert_contains natter/Makefile '\$\(INSTALL_BIN\) ./files/natter.uci-default \$\(1\)/etc/uci-defaults/99-natter'
@@ -342,6 +346,8 @@ assert_contains natter/files/natter.uci-default 'NATTER_UCI_CONFIG:=/etc/config/
 assert_contains natter/files/natter.uci-default 'NATTER_UCI_DEFAULT:=/etc/config/natter.default'
 assert_contains natter/files/natter.uci-default 'NATTER_UCI_BIN:=uci'
 assert_contains natter/files/natter.uci-default 'natter.global.hot_reload'
+assert_contains natter/files/natter.uci-default 'natter_migrate_route_slot'
+assert_contains natter/files/natter.uci-default 'route_slot'
 assert_contains natter/files/natter.uci-default 'delete "natter\.\$\{section\}\.label"'
 assert_contains natter/files/natter.uci-default 'cp "\$NATTER_UCI_DEFAULT" "\$NATTER_UCI_CONFIG"'
 

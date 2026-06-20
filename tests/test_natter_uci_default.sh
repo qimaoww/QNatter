@@ -40,11 +40,22 @@ case "\$*" in
 	"-q get natter.global.hot_reload")
 		exit 1
 		;;
-	"-q show natter")
-		printf '%s\n' 'natter.global=global' 'natter.wan_ct=instance' 'natter.wan_cm=instance'
+	"-q get natter.wan_ct.route_slot")
+		exit 1
+		;;
+	"-q get natter.wan_cm.route_slot")
+		printf '%s\n' '0'
 		exit 0
 		;;
-	"set natter.global.hot_reload=1"|"-q delete natter.wan_ct.label"|"-q delete natter.wan_cm.label"|"commit natter")
+	"-q get natter.wan_qb.route_slot")
+		printf '%s\n' 'bad'
+		exit 0
+		;;
+	"-q show natter")
+		printf '%s\n' 'natter.global=global' 'natter.wan_ct=instance' 'natter.wan_cm=instance' 'natter.wan_qb=instance'
+		exit 0
+		;;
+	"set natter.global.hot_reload=1"|"-q delete natter.wan_ct.label"|"-q delete natter.wan_cm.label"|"-q delete natter.wan_qb.label"|"set natter.wan_ct.route_slot=0"|"set natter.wan_cm.route_slot=1"|"set natter.wan_qb.route_slot=2"|"commit natter")
 		exit 0
 		;;
 esac
@@ -64,6 +75,13 @@ for want in \
 	'-q show natter' \
 	'-q delete natter.wan_ct.label' \
 	'-q delete natter.wan_cm.label' \
+	'-q delete natter.wan_qb.label' \
+	'-q get natter.wan_ct.route_slot' \
+	'set natter.wan_ct.route_slot=0' \
+	'-q get natter.wan_cm.route_slot' \
+	'set natter.wan_cm.route_slot=1' \
+	'-q get natter.wan_qb.route_slot' \
+	'set natter.wan_qb.route_slot=2' \
 	'commit natter'
 do
 	grep -Fqx -- "$want" "$uci_calls" || fail "uci-defaults migration did not run: $want"

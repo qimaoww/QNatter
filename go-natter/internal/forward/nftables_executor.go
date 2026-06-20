@@ -2,7 +2,6 @@ package forward
 
 import (
 	"fmt"
-	"hash/fnv"
 	"net/netip"
 	"os"
 	"os/exec"
@@ -83,7 +82,7 @@ func (f *NftablesForwarder) Start(options StartOptions) error {
 		f.SNATHandle = handle
 	}
 	if options.Interface != "" {
-		policy := natterRoutePolicy(routePolicyIdentity(options.RouteIdentity))
+		policy := routePolicyFromOptions(options)
 		if err := f.ensureRoutePolicy(options.Interface, policy); err != nil {
 			_ = f.Stop()
 			return err
@@ -284,22 +283,23 @@ type routePolicy struct {
 	Priority string
 }
 
-func natterRoutePolicy(identity string) routePolicy {
-	hash := fnv.New32a()
-	_, _ = hash.Write([]byte(identity))
-	suffix := int(hash.Sum32() & 0x0fff)
+func natterRoutePolicy(slot int) routePolicy {
 	return routePolicy{
-		Mark:     fmt.Sprintf("0x%x", 0x4e000000|suffix),
-		Table:    strconv.Itoa(20000 + suffix),
-		Priority: strconv.Itoa(20000 + suffix),
+		Mark:     fmt.Sprintf("0x4e000%03x", slot),
+		Table:    strconv.Itoa(20000 + slot),
+		Priority: strconv.Itoa(20000 + slot),
 	}
 }
 
-func routePolicyIdentity(identity string) string {
-	if identity != "" {
-		return identity
+func routePolicyFromOptions(options StartOptions) routePolicy {
+	if options.RouteMark != "" && options.RouteTable != "" && options.RoutePriority != "" {
+		return routePolicy{
+			Mark:     options.RouteMark,
+			Table:    options.RouteTable,
+			Priority: options.RoutePriority,
+		}
 	}
-	return "default"
+	return natterRoutePolicy(0)
 }
 
 func defaultRouteSourceIP(target string) (string, error) {
