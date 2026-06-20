@@ -82,7 +82,7 @@ natter_slug() {
 }
 
 natter_json_escape() {
-	printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g'
+	printf '%s' "$1" | sed ':a; N; $!ba; s/\\/\\\\/g; s/"/\\"/g; s/\n/\\n/g'
 }
 
 natter_write_status_json() {

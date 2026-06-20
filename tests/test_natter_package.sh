@@ -230,6 +230,8 @@ cp "$ROOT/natter/files/natter-qbittorrent.sh" "$tmp/"
 
 	[ "$(natter_slug wan_ct)" = "wan_ct" ] || exit 26
 	[ "$(natter_slug 'wan-ct')" = "wan_ct" ] || exit 27
+	json_input="$(printf 'line "one"\\\nline two')"
+	[ "$(natter_json_escape "$json_input")" = 'line \"one\"\\\nline two' ] || exit 28
 
 	NATTER_FORWARD_METHOD=iptables
 	natter_build_args
