@@ -16,6 +16,10 @@ status_file="$tmp/wan_ct.json"
 args_file="$tmp/user-args.txt"
 user_script="$tmp/user-notify.sh"
 env_file="$tmp/notify.env"
+uci_bin="$tmp/uci"
+uci_calls="$tmp/uci-calls.txt"
+firewall_bin="$tmp/firewall"
+firewall_calls="$tmp/firewall-calls.txt"
 
 cat > "$user_script" <<EOF
 #!/bin/sh
@@ -23,15 +27,35 @@ printf '%s\n' "\$@" > "$args_file"
 EOF
 chmod 0755 "$user_script"
 
+cat > "$uci_bin" <<EOF
+#!/bin/sh
+printf '%s\n' "\$*" >> "$uci_calls"
+exit 0
+EOF
+chmod 0755 "$uci_bin"
+
+cat > "$firewall_bin" <<EOF
+#!/bin/sh
+printf '%s\n' "\$*" >> "$firewall_calls"
+exit 0
+EOF
+chmod 0755 "$firewall_bin"
+
 cat > "$env_file" <<EOF
 NATTER_INSTANCE='wan_ct'
 NATTER_STATUS_FILE='$status_file'
 NATTER_USER_NOTIFY='$user_script'
+NATTER_AUTO_FIREWALL='1'
+NATTER_FIREWALL_SECTION='natter_wan_ct'
+NATTER_FIREWALL_NAME='Natter WAN CT'
+NATTER_FIREWALL_SRC='wan'
 QBITTORRENT_ENABLED='0'
 EOF
 
 NATTER_COMMON_SH="$ROOT/natter/files/natter-common.sh" \
 NATTER_QBITTORRENT_SH="$ROOT/natter/files/natter-qbittorrent.sh" \
+NATTER_UCI_BIN="$uci_bin" \
+NATTER_FIREWALL_INIT="$firewall_bin" \
 NATTER_NOTIFY_ENV="$env_file" \
 	"$ROOT/natter/files/natter-notify" tcp 10.10.10.10 51413 203.0.113.10 62000
 
@@ -59,6 +83,20 @@ tcp
 EOF
 
 cmp -s "$expected_args" "$args_file" || fail "user notify args did not match mapping"
+
+for want in \
+	'-q delete firewall.natter_wan_ct' \
+	'set firewall.natter_wan_ct=rule' \
+	'set firewall.natter_wan_ct.name=Natter WAN CT' \
+	'set firewall.natter_wan_ct.src=wan' \
+	'set firewall.natter_wan_ct.proto=tcp' \
+	'set firewall.natter_wan_ct.dest_port=51413' \
+	'set firewall.natter_wan_ct.target=ACCEPT' \
+	'commit firewall'
+do
+	grep -Fqx -- "$want" "$uci_calls" || fail "auto firewall did not run uci command: $want"
+done
+grep -Fqx 'reload' "$firewall_calls" || fail "auto firewall did not reload firewall"
 
 qb_status_file="$tmp/wan_cm.json"
 qb_args_file="$tmp/qb-user-args.txt"

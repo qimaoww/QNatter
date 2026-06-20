@@ -106,6 +106,10 @@ return view.extend({
 			o.value('gost', 'gost');
 		o.default = 'auto';
 
+		o = hideInGrid(s.option(form.Flag, 'auto_firewall', _('Auto firewall')));
+		o.default = '0';
+		o.description = _('Automatically opens this instance current Natter port on the WAN firewall.');
+
 		o = hideInGrid(s.option(form.Value, 'target_ip', _('Forward target IP')));
 		o.datatype = 'ip4addr';
 		o.placeholder = '0.0.0.0';

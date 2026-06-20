@@ -85,6 +85,7 @@ config_get() {
 		wan_ct:network) value="wan" ;;
 		wan_ct:bind_value) value="pppoe-wan" ;;
 		wan_ct:forward_method) value="none" ;;
+		wan_ct:auto_firewall) value="1" ;;
 		wan_ct:target_ip) value="10.10.10.10" ;;
 		wan_ct:target_port) value="51413" ;;
 		wan_cm:enabled) value="1" ;;
@@ -170,6 +171,12 @@ grep -Fqx 'wan_ct set env NATTER_INSTANCE=wan_ct' "$procd_log" || fail "Telecom 
 grep -Fqx 'wan_cm set env NATTER_INSTANCE=wan_cm' "$procd_log" || fail "Mobile instance env missing"
 grep -Fqx "wan_ct set env NATTER_STATUS_FILE=$tmp/run/wan_ct.json" "$procd_log" || fail "Telecom status file env missing"
 grep -Fqx "wan_cm set env NATTER_STATUS_FILE=$tmp/run/wan_cm.json" "$procd_log" || fail "Mobile status file env missing"
+
+grep -Fq "NATTER_AUTO_FIREWALL='1'" "$tmp/run/wan_ct.env" || fail "Telecom notify env missing auto firewall flag"
+grep -Fq "NATTER_FIREWALL_SECTION='natter_wan_ct'" "$tmp/run/wan_ct.env" || fail "Telecom notify env missing firewall section"
+grep -Fq "NATTER_FIREWALL_NAME='Natter Telecom'" "$tmp/run/wan_ct.env" || fail "Telecom notify env missing firewall name"
+grep -Fq "NATTER_FIREWALL_SRC='wan'" "$tmp/run/wan_ct.env" || fail "Telecom notify env missing firewall source zone"
+grep -Fq "NATTER_AUTO_FIREWALL='0'" "$tmp/run/wan_cm.env" || fail "Mobile notify env should disable auto firewall by default"
 
 grep -Fqx 'reload natter' "$trigger_log" || fail "config reload trigger missing"
 grep -Fqx 'interface interface.* wan3 /etc/init.d/natter reload' "$trigger_log" || fail "unbound instance network trigger missing"

@@ -6,6 +6,8 @@ set -u
 : "${NATTER_COMMON_SH:=/usr/share/natter/natter-common.sh}"
 : "${NATTER_LOGGER_BIN:=logger}"
 : "${NATTER_CURL_BIN:=curl}"
+: "${NATTER_UCI_BIN:=uci}"
+: "${NATTER_FIREWALL_INIT:=/etc/init.d/firewall}"
 
 . "$NATTER_QBITTORRENT_SH"
 . "$NATTER_COMMON_SH"
@@ -29,6 +31,53 @@ log() {
 runtime_slug="$(natter_runtime_slug "${NATTER_INSTANCE:-default}")"
 status_file="${NATTER_STATUS_FILE:-/var/run/natter/${runtime_slug}.json}"
 natter_write_status_json "$status_file" "${NATTER_INSTANCE:-default}" "$protocol" "$inner_ip" "$inner_port" "$outer_ip" "$outer_port" "mapped"
+
+update_auto_firewall() {
+	local enabled="${NATTER_AUTO_FIREWALL:-0}"
+	local section="${NATTER_FIREWALL_SECTION:-natter_${runtime_slug}}"
+	local name="${NATTER_FIREWALL_NAME:-Natter ${NATTER_INSTANCE:-default}}"
+	local src="${NATTER_FIREWALL_SRC:-wan}"
+	local port proto
+
+	natter_bool "$enabled" || return 0
+	case "$section" in
+		''|*[!A-Za-z0-9_]*)
+			section="natter_${runtime_slug}"
+			;;
+	esac
+	port="$(natter_status_port "$inner_port")"
+	[ "$port" != "0" ] || {
+		log "auto firewall skipped for ${NATTER_INSTANCE:-default}: invalid port $inner_port"
+		return 0
+	}
+	case "$protocol" in
+		tcp|udp) proto="$protocol" ;;
+		*) proto="tcp" ;;
+	esac
+
+	if ! command -v "$NATTER_UCI_BIN" >/dev/null 2>&1; then
+		log "auto firewall skipped for ${NATTER_INSTANCE:-default}: uci not found"
+		return 0
+	fi
+
+	"$NATTER_UCI_BIN" -q delete "firewall.${section}" >/dev/null 2>&1 || true
+	if ! "$NATTER_UCI_BIN" set "firewall.${section}=rule" ||
+		! "$NATTER_UCI_BIN" set "firewall.${section}.name=${name}" ||
+		! "$NATTER_UCI_BIN" set "firewall.${section}.src=${src}" ||
+		! "$NATTER_UCI_BIN" set "firewall.${section}.proto=${proto}" ||
+		! "$NATTER_UCI_BIN" set "firewall.${section}.dest_port=${port}" ||
+		! "$NATTER_UCI_BIN" set "firewall.${section}.target=ACCEPT" ||
+		! "$NATTER_UCI_BIN" commit firewall; then
+		log "auto firewall update failed for ${NATTER_INSTANCE:-default}"
+		return 0
+	fi
+
+	if [ -x "$NATTER_FIREWALL_INIT" ]; then
+		"$NATTER_FIREWALL_INIT" reload >/dev/null 2>&1 || log "firewall reload failed for ${NATTER_INSTANCE:-default}"
+	fi
+}
+
+update_auto_firewall
 
 run_user_notify() {
 	local script="${NATTER_USER_NOTIFY:-}"

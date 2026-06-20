@@ -76,6 +76,12 @@ msgstr "无"
 msgid "Test server"
 msgstr "测试服务器"
 
+msgid "Auto firewall"
+msgstr "自动防火墙"
+
+msgid "Automatically opens this instance current Natter port on the WAN firewall."
+msgstr "自动在 WAN 防火墙上放行此实例当前的 Natter 端口。"
+
 msgid "Forward target IP"
 msgstr "转发目标 IP"
 

@@ -98,6 +98,7 @@ assert_contains luci-app-natter/htdocs/luci-static/resources/view/natter/instanc
 assert_contains luci-app-natter/htdocs/luci-static/resources/view/natter/instances.js 'tools\.gost'
 assert_not_contains luci-app-natter/htdocs/luci-static/resources/view/natter/instances.js "o\\.value\\('iptables'"
 assert_not_contains luci-app-natter/htdocs/luci-static/resources/view/natter/instances.js "o\\.value\\('iptables-snat'"
+assert_contains luci-app-natter/htdocs/luci-static/resources/view/natter/instances.js "hideInGrid\\(s\\.option\\(form\\.Flag, 'auto_firewall'"
 assert_contains luci-app-natter/htdocs/luci-static/resources/view/natter/instances.js "hideInGrid\\(s\\.option\\(form\\.Value, 'target_ip'"
 assert_not_contains luci-app-natter/htdocs/luci-static/resources/view/natter/instances.js 'Port 0 forwards to the Natter mapped internal port\.'
 assert_contains luci-app-natter/htdocs/luci-static/resources/view/natter/instances.js "hideInGrid\\(s\\.option\\(form\\.DynamicList, 'stun_server'"
@@ -134,10 +135,16 @@ assert_contains natter/files/natter.hotplug 'config_get bind_value "\$section" b
 assert_contains natter/files/natter.hotplug 'if \[ -n "\$bind_value" \]; then'
 assert_contains natter/files/natter.hotplug '\[ "\$bind_value" = "\$DEVICE" \] && MATCHED=1'
 assert_contains natter/files/natter.config "option forward_method 'auto'"
+assert_contains natter/files/natter.config "option auto_firewall '0'"
 assert_not_contains natter/files/natter.config "^[[:space:]]*list[[:space:]]+stun_server"
 assert_contains natter/files/natter-common.sh 'natter_forward_method_or_auto'
 assert_contains natter/files/natter-common.sh '\[ "\$forward_method" != "auto" \]'
 assert_contains natter/files/natter.init 'NATTER_STATUS_FILE'
+assert_contains natter/files/natter.init 'NATTER_AUTO_FIREWALL'
+assert_contains natter/files/natter.init 'NATTER_FIREWALL_SECTION'
+assert_contains natter/files/natter-notify 'NATTER_AUTO_FIREWALL'
+assert_contains natter/files/natter-notify 'NATTER_UCI_BIN'
+assert_contains natter/files/natter-notify 'firewall\.\$\{section\}\.dest_port=\$\{port\}'
 assert_not_contains natter/files/natter.config 'option runtime'
 assert_not_contains natter/files/natter.init 'config_get runtime'
 assert_not_contains natter/files/natter.init 'NATTER_RUNTIME'
@@ -200,6 +207,8 @@ assert_po_translation 'Runtime' '运行时'
 assert_po_translation 'WAN interface' 'WAN 接口'
 assert_po_translation 'Leave empty to bind to the default WAN device.' '留空则自动绑定默认 WAN 设备。'
 assert_po_translation 'Forward method' '转发方式'
+assert_po_translation 'Auto firewall' '自动防火墙'
+assert_po_translation 'Automatically opens this instance current Natter port on the WAN firewall.' '自动在 WAN 防火墙上放行此实例当前的 Natter 端口。'
 assert_po_translation 'Forward target port' '转发目标端口'
 assert_not_contains luci-app-natter/po/zh_Hans/natter.po 'Port 0 forwards to the Natter mapped internal port\.'
 assert_po_translation 'Port 0 forwards to the port Natter reports after punching.' '端口 0 会转发到 Natter 打洞后报告的端口。'
