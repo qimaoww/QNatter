@@ -238,6 +238,24 @@ func TestRunVerboseLogsRuntimeConfig(t *testing.T) {
 	}
 }
 
+func TestLogNotifyScriptPrintsPathWhenConfigured(t *testing.T) {
+	var stderr bytes.Buffer
+	logNotifyScript(&stderr, "/var/run/natter/default.notify")
+
+	if !strings.Contains(stderr.String(), "[I] Calling script: /var/run/natter/default.notify") {
+		t.Fatalf("stderr = %q, missing notify script log", stderr.String())
+	}
+}
+
+func TestLogNotifyScriptSkipsEmptyPath(t *testing.T) {
+	var stderr bytes.Buffer
+	logNotifyScript(&stderr, "")
+
+	if stderr.Len() != 0 {
+		t.Fatalf("stderr = %q, want empty", stderr.String())
+	}
+}
+
 func TestLogMappingPrintsRouteInformation(t *testing.T) {
 	var stderr bytes.Buffer
 	logMapping(&stderr, config.Config{}, engine.Result{

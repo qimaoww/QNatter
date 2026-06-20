@@ -165,6 +165,7 @@ func runEngineWithLog(ctx context.Context, cfg config.Config, log io.Writer) err
 		},
 		NewForwarder: forward.NewForwarder,
 		Notify: func(mapping status.Mapping) error {
+			logNotifyScript(log, cfg.NotifyPath)
 			_, err := notify.Run(notify.Options{
 				Instance:   os.Getenv("NATTER_INSTANCE"),
 				StatusFile: os.Getenv("NATTER_STATUS_FILE"),
@@ -192,6 +193,13 @@ func runEngineWithLog(ctx context.Context, cfg config.Config, log io.Writer) err
 			logLine(log, "W", "%v; retrying in %s", err, delay)
 		},
 	})
+}
+
+func logNotifyScript(w io.Writer, path string) {
+	if path == "" {
+		return
+	}
+	logLine(w, "I", "Calling script: %s", path)
 }
 
 func logMapping(w io.Writer, cfg config.Config, result engine.Result) {
