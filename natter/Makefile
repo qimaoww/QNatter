@@ -53,7 +53,9 @@ define Package/natter/install
 	$(INSTALL_BIN) ./files/natter-run $(1)/usr/share/natter/natter-run
 
 	$(INSTALL_DIR) $(1)/etc/config
-	$(INSTALL_CONF) ./files/natter.config $(1)/etc/config/natter
+	$(INSTALL_CONF) ./files/natter.config $(1)/etc/config/natter.default
+	$(INSTALL_DIR) $(1)/etc/uci-defaults
+	$(INSTALL_BIN) ./files/natter.uci-default $(1)/etc/uci-defaults/99-natter
 
 	$(INSTALL_DIR) $(1)/etc/init.d
 	$(INSTALL_BIN) ./files/natter.init $(1)/etc/init.d/natter
