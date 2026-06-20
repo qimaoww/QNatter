@@ -108,6 +108,22 @@ func TestParseArgsAcceptsSTUNServerSchemePrefixes(t *testing.T) {
 	}
 }
 
+func TestParseArgsAcceptsIPv6STUNServers(t *testing.T) {
+	cfg, err := ParseArgs([]string{
+		"-s", "[2001:db8::1]:5349",
+		"-s", "2001:db8::2",
+	})
+	if err != nil {
+		t.Fatalf("ParseArgs returned error: %v", err)
+	}
+	if cfg.STUNServers[0].Host != "2001:db8::1" || cfg.STUNServers[0].Port != 5349 {
+		t.Fatalf("first STUN = %+v, want 2001:db8::1:5349", cfg.STUNServers[0])
+	}
+	if cfg.STUNServers[1].Host != "2001:db8::2" || cfg.STUNServers[1].Port != 3478 {
+		t.Fatalf("second STUN = %+v, want 2001:db8::2:3478", cfg.STUNServers[1])
+	}
+}
+
 func TestParseArgsRejectsInvalidValues(t *testing.T) {
 	tests := []struct {
 		name string
