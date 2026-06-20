@@ -2,7 +2,10 @@
 
 [ "$ACTION" = "ifup" ] || [ "$ACTION" = "ifupdate" ] || exit 0
 
-. /lib/functions.sh
+: "${NATTER_FUNCTIONS_SH:=/lib/functions.sh}"
+: "${NATTER_INIT_BIN:=/etc/init.d/natter}"
+
+. "$NATTER_FUNCTIONS_SH"
 
 MATCHED=0
 
@@ -23,4 +26,4 @@ config_load natter
 config_foreach natter_match_interface instance
 
 [ "$MATCHED" = "1" ] || exit 0
-/etc/init.d/natter enabled && /etc/init.d/natter reload
+"$NATTER_INIT_BIN" enabled && "$NATTER_INIT_BIN" reload

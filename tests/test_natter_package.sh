@@ -236,6 +236,7 @@ sh -n "$ROOT/natter/files/natter-qbittorrent.sh"
 sh -n "$ROOT/natter/files/natter-notify"
 sh -n "$ROOT/natter/files/natter-run"
 sh -n "$ROOT/natter/files/natter.init"
+sh -n "$ROOT/tests/test_natter_hotplug.sh"
 sh -n "$ROOT/luci-app-natter/root/usr/libexec/natter-status"
 sh -n "$ROOT/luci-app-natter/root/usr/libexec/natter-log"
 sh -n "$ROOT/luci-app-natter/root/usr/libexec/rpcd/luci.natter"
@@ -260,6 +261,7 @@ sh -n "$ROOT/tests/test_natter_uci_default.sh"
 )
 
 (cd "$ROOT/go-natter" && go test ./...)
+"$ROOT/tests/test_natter_hotplug.sh"
 "$ROOT/tests/test_natter_init.sh"
 "$ROOT/tests/test_natter_log.sh"
 "$ROOT/tests/test_natter_notify.sh"
