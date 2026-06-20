@@ -165,12 +165,13 @@ func StartSession(ctx context.Context, cfg config.Config, deps Dependencies) (*S
 	}
 	target := resolveTarget(cfg, method, mapping)
 	options := forward.StartOptions{
-		IP:         mapping.Inner.Addr().String(),
-		Port:       int(mapping.Inner.Port()),
-		TargetIP:   target.Addr().String(),
-		TargetPort: int(target.Port()),
-		UDP:        cfg.UDP,
-		Interface:  bind.Interface,
+		IP:            mapping.Inner.Addr().String(),
+		Port:          int(mapping.Inner.Port()),
+		TargetIP:      target.Addr().String(),
+		TargetPort:    int(target.Port()),
+		UDP:           cfg.UDP,
+		Interface:     bind.Interface,
+		RouteIdentity: cfg.InstanceID,
 	}
 	if err := fwd.Start(options); err != nil {
 		return nil, err

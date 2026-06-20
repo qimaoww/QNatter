@@ -32,6 +32,7 @@ func TestRunOnceEstablishesSocketForwardAndNotifies(t *testing.T) {
 	var notifyMapping status.Mapping
 
 	result, err := RunOnce(context.Background(), config.Config{
+		InstanceID:    "mc_ct",
 		BindValue:     "pppoe-wan_cmcc",
 		TargetIP:      "10.10.10.10",
 		ForwardMethod: "socket",
@@ -60,11 +61,12 @@ func TestRunOnceEstablishesSocketForwardAndNotifies(t *testing.T) {
 		t.Fatalf("events = %#v, want %#v", events, wantEvents)
 	}
 	wantStart := forward.StartOptions{
-		IP:         "10.10.10.2",
-		Port:       40000,
-		TargetIP:   "10.10.10.10",
-		TargetPort: 62000,
-		Interface:  "pppoe-wan_cmcc",
+		IP:            "10.10.10.2",
+		Port:          40000,
+		TargetIP:      "10.10.10.10",
+		TargetPort:    62000,
+		Interface:     "pppoe-wan_cmcc",
+		RouteIdentity: "mc_ct",
 	}
 	if fwd.start != wantStart {
 		t.Fatalf("forward start = %+v, want %+v", fwd.start, wantStart)

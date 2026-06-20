@@ -19,6 +19,7 @@ type STUNServer struct {
 }
 
 type Config struct {
+	InstanceID        string
 	UDP               bool
 	Verbose           bool
 	ExitWhenChanged   bool
@@ -49,6 +50,7 @@ func (s *stringList) Set(value string) error {
 
 func ParseArgs(args []string) (Config, error) {
 	cfg := Config{
+		InstanceID:        os.Getenv("NATTER_INSTANCE"),
 		KeepAliveInterval: 15,
 		BindValue:         "0.0.0.0",
 		TargetIP:          "0.0.0.0",

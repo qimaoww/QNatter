@@ -79,6 +79,18 @@ func TestParseArgsDefaults(t *testing.T) {
 	}
 }
 
+func TestParseArgsReadsInstanceIDFromEnvironment(t *testing.T) {
+	t.Setenv("NATTER_INSTANCE", "mc_ct")
+
+	cfg, err := ParseArgs(nil)
+	if err != nil {
+		t.Fatalf("ParseArgs returned error: %v", err)
+	}
+	if cfg.InstanceID != "mc_ct" {
+		t.Fatalf("instance ID = %q, want mc_ct", cfg.InstanceID)
+	}
+}
+
 func TestParseArgsNormalizesIPv4LikePython(t *testing.T) {
 	cfg, err := ParseArgs([]string{"-i", "10.1", "-t", "127.1"})
 	if err != nil {

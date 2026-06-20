@@ -83,7 +83,7 @@ func (f *NftablesForwarder) Start(options StartOptions) error {
 		f.SNATHandle = handle
 	}
 	if options.Interface != "" {
-		policy := natterRoutePolicy(options.Interface)
+		policy := natterRoutePolicy(routePolicyIdentity(options.RouteIdentity))
 		if err := f.ensureRoutePolicy(options.Interface, policy); err != nil {
 			_ = f.Stop()
 			return err
@@ -284,15 +284,22 @@ type routePolicy struct {
 	Priority string
 }
 
-func natterRoutePolicy(iface string) routePolicy {
+func natterRoutePolicy(identity string) routePolicy {
 	hash := fnv.New32a()
-	_, _ = hash.Write([]byte(iface))
+	_, _ = hash.Write([]byte(identity))
 	suffix := int(hash.Sum32() & 0x0fff)
 	return routePolicy{
 		Mark:     fmt.Sprintf("0x%x", 0x4e000000|suffix),
 		Table:    strconv.Itoa(20000 + suffix),
 		Priority: strconv.Itoa(20000 + suffix),
 	}
+}
+
+func routePolicyIdentity(identity string) string {
+	if identity != "" {
+		return identity
+	}
+	return "default"
 }
 
 func defaultRouteSourceIP(target string) (string, error) {

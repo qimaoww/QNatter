@@ -15,6 +15,7 @@ trap 'rm -rf "$tmp"' EXIT
 procd_log="$tmp/procd.log"
 trigger_log="$tmp/triggers.log"
 nft_log="$tmp/nft.log"
+ip_log="$tmp/ip.log"
 current_instance=""
 
 procd_open_instance() {
@@ -146,6 +147,21 @@ printf '%s\n' "$*" >> "$NATTER_TEST_NFT_LOG"
 EOF
 chmod +x "$tmp/nft"
 
+cat > "$tmp/ip" <<'EOF'
+#!/bin/sh
+if [ "$1 $2" = "rule show" ]; then
+	cat <<'RULES'
+100:	from all fwmark 0x1 lookup 100
+20192:	from all fwmark 0x4e0000c0 lookup 20192
+20253:	from all fwmark 0x4e0000fd lookup 20253
+24000:	from all fwmark 0x4e001000 lookup 24000
+RULES
+	exit 0
+fi
+printf '%s\n' "$*" >> "$NATTER_TEST_IP_LOG"
+EOF
+chmod +x "$tmp/ip"
+
 NATTER_FUNCTIONS_SH="$tmp/functions.sh"
 NATTER_NETWORK_SH="$tmp/network.sh"
 NATTER_COMMON_SH="$ROOT/natter/files/natter-common.sh"
@@ -153,8 +169,10 @@ NATTER_QBITTORRENT_SH="$ROOT/natter/files/natter-qbittorrent.sh"
 NATTER_RUN_DIR="$tmp/run"
 NATTER_LOG_DIR="$tmp/log"
 NATTER_NFT_BIN="$tmp/nft"
+NATTER_IP_BIN="$tmp/ip"
 NATTER_TEST_NFT_LOG="$nft_log"
-export NATTER_FUNCTIONS_SH NATTER_NETWORK_SH NATTER_COMMON_SH NATTER_QBITTORRENT_SH NATTER_RUN_DIR NATTER_LOG_DIR NATTER_NFT_BIN NATTER_TEST_NFT_LOG
+NATTER_TEST_IP_LOG="$ip_log"
+export NATTER_FUNCTIONS_SH NATTER_NETWORK_SH NATTER_COMMON_SH NATTER_QBITTORRENT_SH NATTER_RUN_DIR NATTER_LOG_DIR NATTER_NFT_BIN NATTER_IP_BIN NATTER_TEST_NFT_LOG NATTER_TEST_IP_LOG
 
 . "$ROOT/natter/files/natter.init"
 start_service
@@ -163,6 +181,13 @@ service_triggers
 grep -Fqx 'flush chain ip natter natter_dnat' "$nft_log" || fail "start_service did not flush stale DNAT rules"
 grep -Fqx 'flush chain ip natter natter_snat' "$nft_log" || fail "start_service did not flush stale SNAT rules"
 grep -Fqx 'flush chain ip natter natter_mark' "$nft_log" || fail "start_service did not flush stale mark rules"
+grep -Fqx 'rule del priority 20192' "$ip_log" || fail "start_service did not delete stale Natter rule 20192"
+grep -Fqx 'route flush table 20192' "$ip_log" || fail "start_service did not flush stale Natter table 20192"
+grep -Fqx 'rule del priority 20253' "$ip_log" || fail "start_service did not delete stale Natter rule 20253"
+grep -Fqx 'route flush table 20253' "$ip_log" || fail "start_service did not flush stale Natter table 20253"
+if grep -Fq 'priority 100' "$ip_log" || grep -Fq 'priority 24000' "$ip_log"; then
+	fail "start_service deleted non-Natter policy rules"
+fi
 
 grep -Fqx 'wan_ct append command -i' "$procd_log" || fail "Telecom instance did not pass -i"
 grep -Fqx 'wan_ct append command pppoe-wan' "$procd_log" || fail "Telecom instance did not bind pppoe-wan"
@@ -185,10 +210,8 @@ if grep -Fq 'wan_cm append command pppoe-wan' "$procd_log"; then
 	fail "Mobile instance received Telecom bind value"
 fi
 
-grep -Fqx 'wan_ct set env NATTER_INSTANCE=wan_ct' "$procd_log" || fail "Telecom instance env missing"
-grep -Fqx 'wan_cm set env NATTER_INSTANCE=wan_cm' "$procd_log" || fail "Mobile instance env missing"
-grep -Fqx "wan_ct set env NATTER_STATUS_FILE=$tmp/run/wan_ct.json" "$procd_log" || fail "Telecom status file env missing"
-grep -Fqx "wan_cm set env NATTER_STATUS_FILE=$tmp/run/wan_cm.json" "$procd_log" || fail "Mobile status file env missing"
+grep -Fqx "wan_ct set env NATTER_INSTANCE=wan_ct NATTER_STATUS_FILE=$tmp/run/wan_ct.json" "$procd_log" || fail "Telecom instance env missing"
+grep -Fqx "wan_cm set env NATTER_INSTANCE=wan_cm NATTER_STATUS_FILE=$tmp/run/wan_cm.json" "$procd_log" || fail "Mobile instance env missing"
 
 grep -Fq "NATTER_LOG_FILE='$tmp/log/wan_ct.log'" "$tmp/run/wan_ct.env" || fail "Telecom notify env missing instance log file"
 grep -Fq "NATTER_AUTO_FIREWALL='1'" "$tmp/run/wan_ct.env" || fail "Telecom notify env missing auto firewall flag"

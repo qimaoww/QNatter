@@ -32,10 +32,11 @@ func TestNftablesForwarderStartAndStopDNAT(t *testing.T) {
 	assertNftCalls(t, runner.calls, wantCalls)
 }
 
-func TestNftablesForwarderMarksRepliesForBoundInterface(t *testing.T) {
+func TestNftablesForwarderMarksRepliesForRouteIdentity(t *testing.T) {
 	options := nftTestOptions()
-	options.Interface = "pppoe-wan_cmcc"
-	policy := natterRoutePolicy(options.Interface)
+	options.Interface = "pppoe-wan"
+	options.RouteIdentity = "mc_ct"
+	policy := natterRoutePolicy(options.RouteIdentity)
 	runner := &fakeNftRunner{
 		outputs: map[string]string{
 			NftablesDNATRule(options):                   "insert rule ip natter natter_dnat # handle 42\n",
@@ -69,10 +70,25 @@ func TestNftablesForwarderMarksRepliesForBoundInterface(t *testing.T) {
 	}
 	assertNftCalls(t, runner.calls, wantCalls)
 	assertIPCalls(t, ip.calls, []string{
-		"route replace default dev pppoe-wan_cmcc table " + policy.Table,
+		"route replace default dev pppoe-wan table " + policy.Table,
 		"rule del priority " + policy.Priority + " fwmark " + policy.Mark + " lookup " + policy.Table,
 		"rule add priority " + policy.Priority + " fwmark " + policy.Mark + " lookup " + policy.Table,
 	})
+}
+
+func TestNatterRoutePolicySeparatesInstancesOnSameInterface(t *testing.T) {
+	mc := natterRoutePolicy("mc_ct")
+	qb := natterRoutePolicy("qb_ct")
+
+	if mc.Mark == qb.Mark {
+		t.Fatalf("same-interface instances share mark %s", mc.Mark)
+	}
+	if mc.Table == qb.Table {
+		t.Fatalf("same-interface instances share table %s", mc.Table)
+	}
+	if mc.Priority == qb.Priority {
+		t.Fatalf("same-interface instances share priority %s", mc.Priority)
+	}
 }
 
 func TestNftablesForwarderStartAndStopSNAT(t *testing.T) {
