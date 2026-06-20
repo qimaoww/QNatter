@@ -27,6 +27,16 @@ status_field() {
 	local key="$2"
 	[ -r "$file" ] || return 0
 	awk -v key="$key" '
+		function html_unicode_escape(hex) {
+			hex = tolower(hex)
+			if (hex == "003c")
+				return "<"
+			if (hex == "003e")
+				return ">"
+			if (hex == "0026")
+				return "&"
+			return ""
+		}
 		function emit_unescaped(value,    out, i, char, escaped) {
 			out = ""
 			escaped = 0
@@ -39,6 +49,15 @@ status_field() {
 						out = out "\r"
 					else if (char == "t")
 						out = out "\t"
+					else if (char == "u") {
+						replacement = html_unicode_escape(substr(value, i + 1, 4))
+						if (replacement != "") {
+							out = out replacement
+							i += 4
+						} else {
+							out = out "\\u"
+						}
+					}
 					else
 						out = out char
 					escaped = 0
