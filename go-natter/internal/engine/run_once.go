@@ -60,6 +60,7 @@ type Dependencies struct {
 	InitialCheck PortChecker
 	Notify       func(status.Mapping) error
 	OnMapped     func(Result)
+	OnUPnPError  func(string, error)
 	UPnP         UPnPMapper
 }
 
@@ -184,6 +185,8 @@ func StartSession(ctx context.Context, cfg config.Config, deps Dependencies) (*S
 			LeaseDuration:  cfg.KeepAliveInterval * 3,
 		}); err == nil {
 			activeUPnP = deps.UPnP
+		} else if deps.OnUPnPError != nil {
+			deps.OnUPnPError("forward port", err)
 		}
 	}
 

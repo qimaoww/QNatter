@@ -329,6 +329,7 @@ func TestRunLoopRenewsActiveUPnPMappingOnTicks(t *testing.T) {
 func TestRunLoopContinuesWhenUPnPRenewFails(t *testing.T) {
 	events := []string{}
 	upnp := &fakeUPnP{events: &events, renewErr: errors.New("renew failed")}
+	var upnpErr error
 	ticks := make(chan time.Time)
 	ctx, cancel := context.WithCancel(context.Background())
 
@@ -358,6 +359,10 @@ func TestRunLoopContinuesWhenUPnPRenewFails(t *testing.T) {
 				return &fakeForwarder{events: &events}, nil
 			},
 			UPnP: upnp,
+			OnUPnPError: func(operation string, err error) {
+				events = append(events, "upnp-error:"+operation)
+				upnpErr = err
+			},
 		}, LoopOptions{Ticks: ticks})
 	}()
 
@@ -369,6 +374,12 @@ func TestRunLoopContinuesWhenUPnPRenewFails(t *testing.T) {
 	}
 	if !containsEvent(events, "upnp-renew") {
 		t.Fatalf("events = %#v, want upnp-renew", events)
+	}
+	if !containsEvent(events, "upnp-error:renew upnp") {
+		t.Fatalf("events = %#v, want upnp renew error callback", events)
+	}
+	if upnpErr == nil || upnpErr.Error() != "renew failed" {
+		t.Fatalf("UPnP error = %v, want renew failed", upnpErr)
 	}
 }
 

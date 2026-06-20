@@ -177,6 +177,9 @@ func runEngineWithLog(ctx context.Context, cfg config.Config, log io.Writer) err
 		OnMapped: func(result engine.Result) {
 			logMapping(log, cfg, result)
 		},
+		OnUPnPError: func(operation string, err error) {
+			logUPnPError(log, operation, err)
+		},
 		PortCheck:    portChecker,
 		InitialCheck: portChecker,
 	}
@@ -208,6 +211,13 @@ func logNotifyResult(w io.Writer, result notify.Result) {
 		return
 	}
 	logLine(w, "W", "%s", result.UserNotifyError)
+}
+
+func logUPnPError(w io.Writer, operation string, err error) {
+	if err == nil {
+		return
+	}
+	logLine(w, "E", "upnp: failed to %s: %v", operation, err)
 }
 
 func logMapping(w io.Writer, cfg config.Config, result engine.Result) {

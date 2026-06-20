@@ -165,6 +165,7 @@ func TestStartSessionUsesActualLocalPortForUPnPWhenBindPortIsZero(t *testing.T) 
 
 func TestStartSessionContinuesWhenUPnPForwardFails(t *testing.T) {
 	events := []string{}
+	var upnpErr error
 
 	session, err := StartSession(context.Background(), config.Config{
 		UPnP:              true,
@@ -191,6 +192,10 @@ func TestStartSessionContinuesWhenUPnPForwardFails(t *testing.T) {
 			return &fakeForwarder{events: &events}, nil
 		},
 		UPnP: &fakeUPnP{events: &events, err: errors.New("upnp conflict")},
+		OnUPnPError: func(operation string, err error) {
+			events = append(events, "upnp-error:"+operation)
+			upnpErr = err
+		},
 	})
 	if err != nil {
 		t.Fatalf("StartSession returned error: %v", err)
@@ -205,9 +210,13 @@ func TestStartSessionContinuesWhenUPnPForwardFails(t *testing.T) {
 		"forwarder:none",
 		"forward",
 		"upnp-forward",
+		"upnp-error:forward port",
 	}
 	if !reflect.DeepEqual(events, wantEvents) {
 		t.Fatalf("events = %#v, want %#v", events, wantEvents)
+	}
+	if upnpErr == nil || upnpErr.Error() != "upnp conflict" {
+		t.Fatalf("UPnP error = %v, want upnp conflict", upnpErr)
 	}
 }
 

@@ -59,7 +59,9 @@ func RunLoop(ctx context.Context, cfg config.Config, deps Dependencies, options 
 				return fmt.Errorf("%w: %v", ErrKeepAliveFailed, err)
 			}
 			if session.UPnP != nil {
-				_ = session.UPnP.Renew(ctx)
+				if err := session.UPnP.Renew(ctx); err != nil && deps.OnUPnPError != nil {
+					deps.OnUPnPError("renew upnp", err)
+				}
 			}
 			count++
 			if count >= recheckEvery {

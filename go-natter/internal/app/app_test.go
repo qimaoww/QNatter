@@ -275,6 +275,24 @@ func TestLogNotifyResultSkipsSuccessfulResult(t *testing.T) {
 	}
 }
 
+func TestLogUPnPErrorPrintsOperation(t *testing.T) {
+	var stderr bytes.Buffer
+	logUPnPError(&stderr, "forward port", errors.New("conflict"))
+
+	if !strings.Contains(stderr.String(), "[E] upnp: failed to forward port: conflict") {
+		t.Fatalf("stderr = %q, missing UPnP error", stderr.String())
+	}
+}
+
+func TestLogUPnPErrorSkipsNilError(t *testing.T) {
+	var stderr bytes.Buffer
+	logUPnPError(&stderr, "renew upnp", nil)
+
+	if stderr.Len() != 0 {
+		t.Fatalf("stderr = %q, want empty", stderr.String())
+	}
+}
+
 func TestLogMappingPrintsRouteInformation(t *testing.T) {
 	var stderr bytes.Buffer
 	logMapping(&stderr, config.Config{}, engine.Result{
