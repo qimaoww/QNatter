@@ -28,10 +28,12 @@ service_triggers() {
 
 natter_add_interface_trigger() {
 	local section="$1"
-	local enabled network
+	local enabled network bind_value
 
 	config_get_bool enabled "$section" enabled 0
 	[ "$enabled" = "1" ] || return 0
+	config_get bind_value "$section" bind_value ""
+	[ -n "$bind_value" ] && return 0
 	config_get network "$section" network "wan"
 	[ -n "$network" ] || network="wan"
 	procd_add_interface_trigger "interface.*" "$network" /etc/init.d/natter reload

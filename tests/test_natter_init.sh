@@ -62,6 +62,7 @@ config_foreach() {
 	"$callback" wan_ct
 	"$callback" wan_cm
 	"$callback" wan_qb
+	"$callback" wan_auto
 	"$callback" disabled_lan
 }
 
@@ -106,6 +107,14 @@ config_get() {
 		wan_qb:qbittorrent_target_ip) value="10.10.10.30" ;;
 		wan_qb:qbittorrent_target_port) value="51415" ;;
 		wan_qb:qbittorrent_forward_method) value="nftables" ;;
+		wan_auto:enabled) value="1" ;;
+		wan_auto:label) value="Auto WAN" ;;
+		wan_auto:protocol) value="tcp" ;;
+		wan_auto:network) value="wan3" ;;
+		wan_auto:bind_value) value="" ;;
+		wan_auto:forward_method) value="none" ;;
+		wan_auto:target_ip) value="10.10.10.40" ;;
+		wan_auto:target_port) value="51416" ;;
 		disabled_lan:enabled) value="0" ;;
 		disabled_lan:label) value="Disabled LAN" ;;
 		disabled_lan:network) value="lan" ;;
@@ -163,8 +172,13 @@ grep -Fqx "wan_ct set env NATTER_STATUS_FILE=$tmp/run/wan_ct.json" "$procd_log" 
 grep -Fqx "wan_cm set env NATTER_STATUS_FILE=$tmp/run/wan_cm.json" "$procd_log" || fail "Mobile status file env missing"
 
 grep -Fqx 'reload natter' "$trigger_log" || fail "config reload trigger missing"
-grep -Fqx 'interface interface.* wan /etc/init.d/natter reload' "$trigger_log" || fail "wan interface trigger missing"
-grep -Fqx 'interface interface.* wan2 /etc/init.d/natter reload' "$trigger_log" || fail "wan2 interface trigger missing"
+grep -Fqx 'interface interface.* wan3 /etc/init.d/natter reload' "$trigger_log" || fail "unbound instance network trigger missing"
+if grep -Fqx 'interface interface.* wan /etc/init.d/natter reload' "$trigger_log"; then
+	fail "bound wan instance must not register network trigger"
+fi
+if grep -Fqx 'interface interface.* wan2 /etc/init.d/natter reload' "$trigger_log"; then
+	fail "bound wan2 instance must not register network trigger"
+fi
 if grep -Fq ' lan ' "$trigger_log"; then
 	fail "disabled instance must not register interface trigger"
 fi

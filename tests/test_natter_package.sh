@@ -127,6 +127,8 @@ assert_not_contains natter/files/natter.init 'network_get_ipaddr ipaddr "\$netwo
 assert_not_contains natter/files/natter.init 'printf .*0\.0\.0\.0'
 assert_not_contains natter/files/natter.init 'ip rule add'
 assert_contains natter/files/natter.init 'bind=\$\{resolved_bind:-default route\}'
+assert_contains natter/files/natter.init 'config_get bind_value "\$section" bind_value ""'
+assert_contains natter/files/natter.init '\[ -n "\$bind_value" \] && return 0'
 assert_contains natter/files/natter.hotplug 'config_get bind_value "\$section" bind_value'
 assert_contains natter/files/natter.hotplug 'if \[ -n "\$bind_value" \]; then'
 assert_contains natter/files/natter.hotplug '\[ "\$bind_value" = "\$DEVICE" \] && MATCHED=1'
