@@ -738,24 +738,43 @@ func splitHostPortDefault(value string, defaultPort int) (string, int, error) {
 	}
 	host := value
 	port := defaultPort
-	if strings.Contains(value, ":") {
-		parsedHost, parsedPort, err := net.SplitHostPort(value)
-		if err != nil {
-			idx := strings.LastIndex(value, ":")
-			parsedHost = value[:idx]
-			parsedPort = value[idx+1:]
+	if strings.HasPrefix(value, "[") {
+		end := strings.LastIndex(value, "]")
+		if end < 0 {
+			return "", 0, errors.New("empty host")
 		}
-		parsed, err := strconv.Atoi(parsedPort)
-		if err != nil || parsed < 1 || parsed > 65535 {
+		host = value[1:end]
+		if rest := value[end+1:]; rest != "" {
+			if !strings.HasPrefix(rest, ":") {
+				return "", 0, fmt.Errorf("invalid port in %q", value)
+			}
+			parsed, err := parsePort(rest[1:])
+			if err != nil {
+				return "", 0, fmt.Errorf("invalid port in %q", value)
+			}
+			port = parsed
+		}
+	} else if strings.Count(value, ":") == 1 {
+		idx := strings.LastIndex(value, ":")
+		host = value[:idx]
+		parsed, err := parsePort(value[idx+1:])
+		if err != nil {
 			return "", 0, fmt.Errorf("invalid port in %q", value)
 		}
-		host = strings.Trim(parsedHost, "[]")
 		port = parsed
 	}
 	if host == "" {
 		return "", 0, errors.New("empty host")
 	}
 	return host, port, nil
+}
+
+func parsePort(value string) (int, error) {
+	parsed, err := strconv.Atoi(value)
+	if err != nil || parsed < 1 || parsed > 65535 {
+		return 0, fmt.Errorf("invalid port")
+	}
+	return parsed, nil
 }
 
 func bindFromConfig(cfg config.Config) (netip.Addr, string) {

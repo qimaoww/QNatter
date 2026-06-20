@@ -984,6 +984,32 @@ func TestRunWithDependenciesReportsUDPResolutionFailure(t *testing.T) {
 	}
 }
 
+func TestSplitHostPortDefaultAcceptsIPv6(t *testing.T) {
+	tests := []struct {
+		name        string
+		value       string
+		defaultPort int
+		wantHost    string
+		wantPort    int
+	}{
+		{name: "bare", value: "2001:db8::1", defaultPort: 80, wantHost: "2001:db8::1", wantPort: 80},
+		{name: "bracketed", value: "[2001:db8::2]", defaultPort: 53, wantHost: "2001:db8::2", wantPort: 53},
+		{name: "bracketed port", value: "[2001:db8::3]:443", defaultPort: 80, wantHost: "2001:db8::3", wantPort: 443},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			host, port, err := splitHostPortDefault(tc.value, tc.defaultPort)
+			if err != nil {
+				t.Fatalf("splitHostPortDefault returned error: %v", err)
+			}
+			if host != tc.wantHost || port != tc.wantPort {
+				t.Fatalf("splitHostPortDefault = %s:%d, want %s:%d", host, port, tc.wantHost, tc.wantPort)
+			}
+		})
+	}
+}
+
 func stunResponse(txid [16]byte, attrType uint16, attrValue []byte) []byte {
 	response := make([]byte, 24+len(attrValue))
 	binary.BigEndian.PutUint16(response[0:2], stunBindingResponse)
