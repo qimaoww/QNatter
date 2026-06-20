@@ -112,6 +112,7 @@ assert_contains luci-app-natter/htdocs/luci-static/resources/view/natter/log.js 
 assert_contains luci-app-natter/root/usr/share/luci/menu.d/luci-app-natter.json '"type"[[:space:]]*:[[:space:]]*"view"'
 assert_contains luci-app-natter/root/usr/libexec/rpcd/luci.natter '"instance":"String"'
 assert_contains luci-app-natter/root/usr/libexec/rpcd/luci.natter '"lines":"Integer"'
+assert_contains luci-app-natter/root/usr/libexec/natter-status 'grep -Fx'
 assert_contains luci-app-natter/htdocs/luci-static/resources/natter/natter.css 'theme-argon'
 assert_contains luci-app-natter/htdocs/luci-static/resources/natter/natter.css 'natter-theme-aurora'
 assert_contains luci-app-natter/htdocs/luci-static/resources/natter/natter.css 'overflow-wrap: anywhere'

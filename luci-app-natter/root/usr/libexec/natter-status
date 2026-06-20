@@ -40,7 +40,7 @@ instance_running() {
 	local proc env
 	for proc in /proc/[0-9]*; do
 		[ -r "$proc/environ" ] || continue
-		env="$({ tr '\0' '\n' < "$proc/environ"; } 2>/dev/null | grep -x "NATTER_INSTANCE=$name" || true)"
+		env="$({ tr '\0' '\n' < "$proc/environ"; } 2>/dev/null | grep -Fx "NATTER_INSTANCE=$name" || true)"
 		if [ -n "$env" ]; then
 			return 0
 		fi
