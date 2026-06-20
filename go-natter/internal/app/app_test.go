@@ -412,7 +412,8 @@ func TestRunWithContextPassesContextToEngine(t *testing.T) {
 }
 
 func TestRunWithContextTreatsExitWhenChangedAsCleanExit(t *testing.T) {
-	code := RunWithContext(context.Background(), []string{"-q"}, &bytes.Buffer{}, &bytes.Buffer{}, func(ctx context.Context, cfg config.Config) error {
+	var stderr bytes.Buffer
+	code := RunWithContext(context.Background(), []string{"-q"}, &bytes.Buffer{}, &stderr, func(ctx context.Context, cfg config.Config) error {
 		if !cfg.ExitWhenChanged {
 			t.Fatal("ExitWhenChanged = false, want true")
 		}
@@ -422,10 +423,14 @@ func TestRunWithContextTreatsExitWhenChangedAsCleanExit(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("RunWithContext returned code %d, want clean exit", code)
 	}
+	if !strings.Contains(stderr.String(), "[I] Natter is exiting because mapped address has changed") {
+		t.Fatalf("stderr = %q, missing mapped-address exit reason", stderr.String())
+	}
 }
 
 func TestRunWithContextTreatsLocalAddressChangeAsCleanExitWhenRequested(t *testing.T) {
-	code := RunWithContext(context.Background(), []string{"-q"}, &bytes.Buffer{}, &bytes.Buffer{}, func(ctx context.Context, cfg config.Config) error {
+	var stderr bytes.Buffer
+	code := RunWithContext(context.Background(), []string{"-q"}, &bytes.Buffer{}, &stderr, func(ctx context.Context, cfg config.Config) error {
 		if !cfg.ExitWhenChanged {
 			t.Fatal("ExitWhenChanged = false, want true")
 		}
@@ -434,6 +439,9 @@ func TestRunWithContextTreatsLocalAddressChangeAsCleanExitWhenRequested(t *testi
 
 	if code != 0 {
 		t.Fatalf("RunWithContext returned code %d, want clean exit", code)
+	}
+	if !strings.Contains(stderr.String(), "[I] Natter is exiting because local IP address has changed") {
+		t.Fatalf("stderr = %q, missing local-address exit reason", stderr.String())
 	}
 }
 

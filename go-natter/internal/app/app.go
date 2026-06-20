@@ -103,12 +103,22 @@ func runWithContext(ctx context.Context, args []string, stdout io.Writer, stderr
 	}
 	if err := run(ctx, cfg); err != nil {
 		if cfg.ExitWhenChanged && (errors.Is(err, engine.ErrMappingChanged) || errors.Is(err, engine.ErrLocalAddressChanged)) {
+			logExitReason(stderr, err)
 			return 0
 		}
 		logLine(stderr, "E", "natter: %v", err)
 		return 1
 	}
 	return 0
+}
+
+func logExitReason(stderr io.Writer, err error) {
+	switch {
+	case errors.Is(err, engine.ErrMappingChanged):
+		logLine(stderr, "I", "Natter is exiting because mapped address has changed")
+	case errors.Is(err, engine.ErrLocalAddressChanged):
+		logLine(stderr, "I", "Natter is exiting because local IP address has changed")
+	}
 }
 
 func printStartup(stderr io.Writer, showTip bool) {
