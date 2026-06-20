@@ -3,6 +3,7 @@
 : "${NATTER_FUNCTIONS_SH:=/lib/functions.sh}"
 : "${NATTER_COMMON_SH:=/usr/share/natter/natter-common.sh}"
 : "${NATTER_RUN_DIR:=/var/run/natter}"
+: "${NATTER_PROC_DIR:=/proc}"
 
 . "$NATTER_FUNCTIONS_SH"
 . "$NATTER_COMMON_SH"
@@ -38,7 +39,7 @@ status_number_field() {
 instance_running() {
 	local name="$1"
 	local proc env
-	for proc in /proc/[0-9]*; do
+	for proc in "$NATTER_PROC_DIR"/[0-9]*; do
 		[ -r "$proc/environ" ] || continue
 		env="$({ tr '\0' '\n' < "$proc/environ"; } 2>/dev/null | grep -Fx "NATTER_INSTANCE=$name" || true)"
 		if [ -n "$env" ]; then
