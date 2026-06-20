@@ -35,7 +35,9 @@ natter_qb_preferences_json() {
 
 natter_qb_normalize_url() {
 	local url="${1:-}"
-	url="${url%/}"
+	while [ "${url%/}" != "$url" ]; do
+		url="${url%/}"
+	done
 	printf '%s\n' "$url"
 }
 
