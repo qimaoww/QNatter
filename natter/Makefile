@@ -4,7 +4,7 @@ include $(TOPDIR)/rules.mk
 
 PKG_NAME:=natter
 PKG_VERSION:=2.2.1
-PKG_RELEASE:=2
+PKG_RELEASE:=3
 
 PKG_SOURCE:=$(PKG_NAME)-$(PKG_VERSION).tar.gz
 PKG_SOURCE_PROTO:=git
@@ -16,6 +16,8 @@ PKG_LICENSE:=GPL-3.0-or-later
 PKG_LICENSE_FILES:=LICENSE
 PKG_MAINTAINER:=qimaoww
 PKG_BUILD_DEPENDS:=golang/host
+NATTER_GOOS?=linux
+NATTER_GOARCH?=$(GO_ARCH)
 
 include $(INCLUDE_DIR)/package.mk
 
@@ -38,7 +40,7 @@ define Package/natter/conffiles
 endef
 
 define Build/Compile
-	cd $(CURDIR)/../go-natter && CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o $(PKG_BUILD_DIR)/natter-go ./cmd/natter
+	cd $(CURDIR)/../go-natter && CGO_ENABLED=0 GOOS="$(NATTER_GOOS)" GOARCH="$(NATTER_GOARCH)" go build -trimpath -ldflags="-s -w" -o $(PKG_BUILD_DIR)/natter-go ./cmd/natter
 endef
 
 define Package/natter/install
