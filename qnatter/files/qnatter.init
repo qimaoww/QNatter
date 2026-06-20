@@ -1,0 +1,492 @@
+#!/bin/sh /etc/rc.common
+
+USE_PROCD=1
+START=95
+STOP=10
+
+NAME="qnatter"
+RUNNER="/usr/share/qnatter/qnatter-run"
+CONF="qnatter"
+RUN_DIR="${QNATTER_RUN_DIR:-/var/run/qnatter}"
+LOG_DIR="${QNATTER_LOG_DIR:-/var/log/qnatter}"
+
+: "${QNATTER_FUNCTIONS_SH:=/lib/functions.sh}"
+: "${QNATTER_NETWORK_SH:=/lib/functions/network.sh}"
+: "${QNATTER_COMMON_SH:=/usr/share/qnatter/qnatter-common.sh}"
+: "${QNATTER_QBITTORRENT_SH:=/usr/share/qnatter/qnatter-qbittorrent.sh}"
+: "${QNATTER_NFT_BIN:=nft}"
+: "${QNATTER_IP_BIN:=ip}"
+: "${QNATTER_UCI_BIN:=uci}"
+
+. "$QNATTER_FUNCTIONS_SH"
+. "$QNATTER_NETWORK_SH"
+. "$QNATTER_COMMON_SH"
+. "$QNATTER_QBITTORRENT_SH"
+
+service_triggers() {
+	procd_add_reload_trigger "$CONF"
+	config_load "$CONF"
+	config_foreach qnatter_add_interface_trigger instance
+}
+
+qnatter_add_interface_trigger() {
+	local section="$1"
+	local enabled network bind_value
+
+	config_get_bool enabled "$section" enabled 0
+	[ "$enabled" = "1" ] || return 0
+	config_get bind_value "$section" bind_value ""
+	[ -n "$bind_value" ] && return 0
+	config_get network "$section" network "wan"
+	[ -n "$network" ] || network="wan"
+	procd_add_interface_trigger "interface.*" "$network" /etc/init.d/qnatter reload
+}
+
+qnatter_resolve_bind_value() {
+	local configured="$2"
+
+	if [ -n "$configured" ]; then
+		printf '%s\n' "$configured"
+		return 0
+	fi
+}
+
+qnatter_flush_runtime_rules() {
+	command -v "$QNATTER_NFT_BIN" >/dev/null 2>&1 || return 0
+
+	"$QNATTER_NFT_BIN" flush chain ip qnatter qnatter_dnat >/dev/null 2>&1 || true
+	"$QNATTER_NFT_BIN" flush chain ip qnatter qnatter_snat >/dev/null 2>&1 || true
+	"$QNATTER_NFT_BIN" flush chain ip qnatter qnatter_mark >/dev/null 2>&1 || true
+}
+
+qnatter_flush_route_rules() {
+	local line priority mark table
+
+	command -v "$QNATTER_IP_BIN" >/dev/null 2>&1 || return 0
+	"$QNATTER_IP_BIN" rule show 2>/dev/null | while IFS= read -r line; do
+		case "$line" in
+			*" fwmark 0x4e000"*" lookup "*) ;;
+			*) continue ;;
+		esac
+
+		priority="${line%%:*}"
+		mark="${line#* fwmark }"
+		mark="${mark%% *}"
+		table="${line##* lookup }"
+		table="${table%% *}"
+		case "$priority$table" in
+			''|*[!0-9]*) continue ;;
+		esac
+		case "$mark" in
+			0x4e000???) ;;
+			*) continue ;;
+		esac
+
+		"$QNATTER_IP_BIN" rule del priority "$priority" >/dev/null 2>&1 || true
+		"$QNATTER_IP_BIN" route flush table "$table" >/dev/null 2>&1 || true
+	done
+}
+
+qnatter_route_slot_valid() {
+	local slot="$1"
+
+	case "$slot" in
+		''|*[!0-9]*) return 1 ;;
+	esac
+	case "$slot" in
+		0|[1-9]*) ;;
+		*) return 1 ;;
+	esac
+	[ "$slot" -le 4095 ] || return 1
+}
+
+qnatter_route_slot_used() {
+	case " ${QNATTER_ROUTE_USED_SLOTS:-} " in
+		*" $1 "*) return 0 ;;
+	esac
+	return 1
+}
+
+qnatter_record_route_slot() {
+	QNATTER_ROUTE_USED_SLOTS="${QNATTER_ROUTE_USED_SLOTS:-} $1"
+}
+
+qnatter_next_route_slot() {
+	local slot=0
+
+	while [ "$slot" -le 4095 ]; do
+		if ! qnatter_route_slot_used "$slot"; then
+			printf '%s\n' "$slot"
+			return 0
+		fi
+		slot="$((slot + 1))"
+	done
+
+	return 1
+}
+
+qnatter_set_config_route_slot() {
+	local section="$1"
+	local slot="$2"
+
+	if command -v config_set >/dev/null 2>&1; then
+		config_set "$section" route_slot "$slot"
+	fi
+}
+
+qnatter_prepare_route_slot() {
+	local section="$1"
+	local slot new_slot
+
+	config_get slot "$section" route_slot ""
+	if qnatter_route_slot_valid "$slot" && ! qnatter_route_slot_used "$slot"; then
+		qnatter_record_route_slot "$slot"
+		return 0
+	fi
+
+	new_slot="$(qnatter_next_route_slot)" || return 1
+	"$QNATTER_UCI_BIN" set "${CONF}.${section}.route_slot=${new_slot}" >/dev/null 2>&1 || return 1
+	qnatter_set_config_route_slot "$section" "$new_slot"
+	QNATTER_ROUTE_SLOTS_CHANGED=1
+	qnatter_record_route_slot "$new_slot"
+}
+
+qnatter_prepare_route_slots() {
+	command -v "$QNATTER_UCI_BIN" >/dev/null 2>&1 || return 0
+
+	QNATTER_ROUTE_USED_SLOTS=""
+	QNATTER_ROUTE_SLOTS_CHANGED=0
+	config_foreach qnatter_prepare_route_slot instance || {
+		unset QNATTER_ROUTE_USED_SLOTS QNATTER_ROUTE_SLOTS_CHANGED
+		return 1
+	}
+
+	if [ "$QNATTER_ROUTE_SLOTS_CHANGED" = "1" ]; then
+		"$QNATTER_UCI_BIN" commit "$CONF" >/dev/null 2>&1 || {
+			unset QNATTER_ROUTE_USED_SLOTS QNATTER_ROUTE_SLOTS_CHANGED
+			return 1
+		}
+	fi
+
+	unset QNATTER_ROUTE_USED_SLOTS QNATTER_ROUTE_SLOTS_CHANGED
+	return 0
+}
+
+qnatter_assign_route_policy() {
+	local slot="$1"
+
+	if ! qnatter_route_slot_valid "$slot"; then
+		slot="${QNATTER_ROUTE_SLOT:-0}"
+		qnatter_route_slot_valid "$slot" || return 1
+		QNATTER_ROUTE_SLOT="$((slot + 1))"
+	fi
+
+	QNATTER_ROUTE_MARK="$(printf '0x4e000%03x' "$slot")"
+	QNATTER_ROUTE_TABLE="$((20000 + slot))"
+	QNATTER_ROUTE_PRIORITY="$((20000 + slot))"
+}
+
+qnatter_firewall_dest_zone() {
+	local forward_method="$1"
+	local target_ip="$2"
+	local qb_forward="$3"
+	local qb_target_ip="$4"
+
+	if [ "$qb_forward" = "1" ] && [ -n "$qb_target_ip" ] && [ "$qb_target_ip" != "0.0.0.0" ] && [ "$qb_target_ip" != "127.0.0.1" ]; then
+		printf '%s\n' "lan"
+		return 0
+	fi
+
+	case "$forward_method" in
+		none|test)
+			return 0
+			;;
+	esac
+
+	if [ -n "$target_ip" ] && [ "$target_ip" != "0.0.0.0" ] && [ "$target_ip" != "127.0.0.1" ]; then
+		printf '%s\n' "lan"
+	fi
+}
+
+qnatter_write_notify_env() {
+	local section="$1"
+	local env_file="$2"
+	local status_file="$3"
+	local log_file="${4:-}"
+	local notify_script qb_enabled qb_url qb_user qb_pass qb_forward qb_target_ip qb_target_port qb_forward_method
+	local auto_firewall firewall_section firewall_name firewall_src firewall_dest
+	local cf_enabled cf_api_url cf_api_token cf_zone_id cf_record_id
+	local forward_method target_ip
+
+	config_get notify_script "$section" notify_script ""
+	config_get_bool auto_firewall "$section" auto_firewall 0
+	config_get forward_method "$section" forward_method "auto"
+	config_get target_ip "$section" target_ip "0.0.0.0"
+	config_get_bool cf_enabled "$section" cloudflare_enabled 0
+	config_get cf_api_url "$section" cloudflare_api_url ""
+	config_get cf_api_token "$section" cloudflare_api_token ""
+	config_get cf_zone_id "$section" cloudflare_zone_id ""
+	config_get cf_record_id "$section" cloudflare_record_id ""
+	config_get_bool qb_enabled "$section" qbittorrent_enabled 0
+	config_get qb_url "$section" qbittorrent_url ""
+	config_get qb_user "$section" qbittorrent_username ""
+	config_get qb_pass "$section" qbittorrent_password ""
+	config_get_bool qb_forward "$section" qbittorrent_forward 0
+	config_get qb_target_ip "$section" qbittorrent_target_ip ""
+	config_get qb_target_port "$section" qbittorrent_target_port "0"
+	config_get qb_forward_method "$section" qbittorrent_forward_method "nftables"
+	firewall_section="qnatter_$(qnatter_runtime_slug "$section")"
+	firewall_name="QNatter ${section}"
+	firewall_src="wan"
+	firewall_dest="$(qnatter_firewall_dest_zone "$forward_method" "$target_ip" "$qb_forward" "$qb_target_ip")"
+
+	qnatter_qb_write_notify_env "$env_file" \
+		QNATTER_INSTANCE "$section" \
+		QNATTER_STATUS_FILE "$status_file" \
+		QNATTER_LOG_FILE "$log_file" \
+		QNATTER_USER_NOTIFY "$notify_script" \
+		QNATTER_AUTO_FIREWALL "$auto_firewall" \
+		QNATTER_FIREWALL_SECTION "$firewall_section" \
+		QNATTER_FIREWALL_NAME "$firewall_name" \
+		QNATTER_FIREWALL_SRC "$firewall_src" \
+		QNATTER_FIREWALL_DEST "$firewall_dest" \
+		CLOUDFLARE_SRV_ENABLED "$cf_enabled" \
+		CLOUDFLARE_API_URL "$cf_api_url" \
+		CLOUDFLARE_API_TOKEN "$cf_api_token" \
+		CLOUDFLARE_ZONE_ID "$cf_zone_id" \
+		CLOUDFLARE_RECORD_ID "$cf_record_id" \
+		QBITTORRENT_ENABLED "$qb_enabled" \
+		QBITTORRENT_URL "$qb_url" \
+		QBITTORRENT_USERNAME "$qb_user" \
+		QBITTORRENT_PASSWORD "$qb_pass" \
+		QBITTORRENT_FORWARD "$qb_forward" \
+		QBITTORRENT_TARGET_IP "$qb_target_ip" \
+		QBITTORRENT_TARGET_PORT "$qb_target_port" \
+		QBITTORRENT_FORWARD_METHOD "$qb_forward_method"
+}
+
+qnatter_add_stun_server() {
+	local item="$1"
+	[ -n "$item" ] || return 0
+	if [ -n "$stun_servers" ]; then
+		stun_servers="${stun_servers} ${item}"
+	else
+		stun_servers="$item"
+	fi
+}
+
+qnatter_write_runtime_fingerprint() {
+	local file="$1"
+	local section="$2"
+	local network="$3"
+	local log_file="$4"
+	local tmp="${file}.$$"
+	local arg
+
+	mkdir -p "$(dirname "$file")"
+	{
+		printf 'section=%s\n' "$section"
+		printf 'runner=%s\n' "$RUNNER"
+		printf 'network=%s\n' "$network"
+		printf 'log_file=%s\n' "$log_file"
+		printf 'route_mark=%s\n' "${QNATTER_ROUTE_MARK:-}"
+		printf 'route_table=%s\n' "${QNATTER_ROUTE_TABLE:-}"
+		printf 'route_priority=%s\n' "${QNATTER_ROUTE_PRIORITY:-}"
+		while IFS= read -r arg; do
+			[ -n "$arg" ] || continue
+			printf 'arg=%s\n' "$arg"
+		done <<-EOF
+			$QNATTER_ARGS
+		EOF
+	} > "$tmp" || {
+		rm -f "$tmp"
+		return 1
+	}
+	mv "$tmp" "$file" || {
+		rm -f "$tmp"
+		return 1
+	}
+}
+
+qnatter_start_instance() {
+	local section="$1"
+	local enabled protocol network bind_value bind_port public_ip_mode forward_method
+	local target_ip target_port keepalive_interval keepalive_server notify_script retry_target exit_when_changed
+	local upnp verbose qb_enabled qb_forward qb_target_ip qb_target_port qb_forward_method
+	local stun_servers slug log_file notify_env notify_wrapper status_file runtime_file resolved_bind route_slot
+
+	config_get_bool enabled "$section" enabled 0
+	[ "$enabled" = "1" ] || return 0
+	config_get route_slot "$section" route_slot ""
+	qnatter_assign_route_policy "$route_slot" || return 1
+
+	config_get protocol "$section" protocol "tcp"
+	config_get network "$section" network "wan"
+	config_get bind_value "$section" bind_value ""
+	config_get bind_port "$section" bind_port "0"
+	config_get public_ip_mode "$section" public_ip_mode "detected"
+	config_get forward_method "$section" forward_method "auto"
+	config_get target_ip "$section" target_ip "0.0.0.0"
+	config_get target_port "$section" target_port "0"
+	config_get keepalive_interval "$section" keepalive_interval "15"
+	config_get keepalive_server "$section" keepalive_server ""
+	config_get notify_script "$section" notify_script ""
+	config_get_bool retry_target "$section" retry_target 0
+	config_get_bool exit_when_changed "$section" exit_when_changed 0
+	config_get_bool upnp "$section" upnp 0
+	config_get_bool verbose "$section" verbose 0
+	config_get_bool qb_enabled "$section" qbittorrent_enabled 0
+	config_get_bool qb_forward "$section" qbittorrent_forward 0
+	config_get qb_target_ip "$section" qbittorrent_target_ip ""
+	config_get qb_target_port "$section" qbittorrent_target_port "0"
+	config_get qb_forward_method "$section" qbittorrent_forward_method "nftables"
+	stun_servers=""
+	config_list_foreach "$section" stun_server qnatter_add_stun_server
+
+	slug="$(qnatter_runtime_slug "$section")"
+	mkdir -p "$RUN_DIR" "$LOG_DIR"
+	log_file="${LOG_DIR}/${slug}.log"
+	notify_env="${RUN_DIR}/${slug}.env"
+	notify_wrapper="${RUN_DIR}/${slug}.notify"
+	status_file="${RUN_DIR}/${slug}.json"
+	runtime_file="${QNATTER_RUNTIME_DIR:-$RUN_DIR}/${slug}.runtime"
+	resolved_bind="$(qnatter_resolve_bind_value "$network" "$bind_value")"
+
+	QNATTER_PROTOCOL="$protocol"
+	QNATTER_VERBOSE="$verbose"
+	QNATTER_EXIT_WHEN_CHANGED="$exit_when_changed"
+	QNATTER_UPNP="$upnp"
+	QNATTER_KEEPALIVE_INTERVAL="$keepalive_interval"
+	QNATTER_STUN_SERVERS="$stun_servers"
+	QNATTER_KEEPALIVE_SERVER="$keepalive_server"
+	QNATTER_BIND_VALUE="$resolved_bind"
+	QNATTER_BIND_PORT="$bind_port"
+	QNATTER_FORWARD_METHOD="$forward_method"
+	QNATTER_TARGET_IP="$target_ip"
+	QNATTER_TARGET_PORT="$target_port"
+	QNATTER_RETRY_TARGET="$retry_target"
+	qnatter_write_notify_env "$section" "$notify_env" "$status_file" "$log_file"
+	cat > "$notify_wrapper" <<-EOF
+		#!/bin/sh
+		export QNATTER_NOTIFY_ENV='$notify_env'
+		exec /usr/share/qnatter/qnatter-notify "\$@"
+	EOF
+	chmod 0700 "$notify_wrapper"
+	QNATTER_NOTIFY_PATH="$notify_wrapper"
+
+	# Optional qBittorrent forwarding reuses QNatter's native forwarding: target
+	# port 0 means QNatter forwards to the port reported after punching.
+	if [ "$qb_forward" = "1" ] && [ -n "$qb_target_ip" ]; then
+		QNATTER_FORWARD_METHOD="$qb_forward_method"
+		QNATTER_TARGET_IP="$qb_target_ip"
+		QNATTER_TARGET_PORT="$qb_target_port"
+	fi
+
+	qnatter_build_args
+	qnatter_write_runtime_fingerprint "$runtime_file" "$section" "$network" "$log_file" || return 1
+	[ -n "${QNATTER_RUNTIME_LIST:-}" ] && printf '%s\n' "$slug" >> "$QNATTER_RUNTIME_LIST"
+	[ "${QNATTER_PREPARE_ONLY:-0}" = "1" ] && return 0
+
+	procd_open_instance "$section"
+	procd_set_param command "$RUNNER" "$log_file"
+	local arg
+	while IFS= read -r arg; do
+		[ -n "$arg" ] || continue
+		procd_append_param command "$arg"
+	done <<-EOF
+		$QNATTER_ARGS
+	EOF
+	procd_set_param respawn 3600 5 5
+	procd_set_param file /etc/config/qnatter
+	procd_set_param env \
+		QNATTER_INSTANCE="$section" \
+		QNATTER_STATUS_FILE="$status_file" \
+		QNATTER_ROUTE_MARK="$QNATTER_ROUTE_MARK" \
+		QNATTER_ROUTE_TABLE="$QNATTER_ROUTE_TABLE" \
+		QNATTER_ROUTE_PRIORITY="$QNATTER_ROUTE_PRIORITY"
+	procd_set_param limits nofile="4096 4096"
+	procd_set_param user root
+	procd_set_param term_timeout 10
+	procd_set_param nice 0
+	procd_close_instance
+
+	echo "$(date '+%Y-%m-%d %H:%M:%S') starting ${section}: bind=${resolved_bind:-default route} public_ip=${public_ip_mode}" >> "$log_file"
+}
+
+start_service() {
+	local enabled runtime_list_tmp
+
+	config_load "$CONF"
+	config_get_bool enabled global enabled 0
+	[ "$enabled" = "1" ] || return 0
+	qnatter_prepare_route_slots || return 1
+	mkdir -p "$RUN_DIR"
+	qnatter_flush_runtime_rules
+	qnatter_flush_route_rules
+	runtime_list_tmp="${RUN_DIR}/.runtime-instances.$$"
+	: > "$runtime_list_tmp"
+	QNATTER_PREPARE_ONLY=0
+	QNATTER_RUNTIME_DIR="$RUN_DIR"
+	QNATTER_RUNTIME_LIST="$runtime_list_tmp"
+	QNATTER_ROUTE_SLOT=0
+	config_foreach qnatter_start_instance instance
+	mv "$runtime_list_tmp" "${RUN_DIR}/.runtime-instances"
+	unset QNATTER_PREPARE_ONLY QNATTER_RUNTIME_DIR QNATTER_RUNTIME_LIST QNATTER_ROUTE_SLOT QNATTER_ROUTE_MARK QNATTER_ROUTE_TABLE QNATTER_ROUTE_PRIORITY
+}
+
+qnatter_hot_reload_service() {
+	local tmp runtime_list old_list slug
+
+	config_load "$CONF"
+	qnatter_prepare_route_slots || return 1
+	mkdir -p "$RUN_DIR"
+	tmp="$(mktemp -d "${RUN_DIR}/.reload.XXXXXX")" || return 1
+	runtime_list="${tmp}/.runtime-instances"
+	: > "$runtime_list"
+	QNATTER_PREPARE_ONLY=1
+	QNATTER_RUNTIME_DIR="$tmp"
+	QNATTER_RUNTIME_LIST="$runtime_list"
+	QNATTER_ROUTE_SLOT=0
+	config_foreach qnatter_start_instance instance || {
+		rm -rf "$tmp"
+		unset QNATTER_PREPARE_ONLY QNATTER_RUNTIME_DIR QNATTER_RUNTIME_LIST QNATTER_ROUTE_SLOT QNATTER_ROUTE_MARK QNATTER_ROUTE_TABLE QNATTER_ROUTE_PRIORITY
+		return 1
+	}
+	unset QNATTER_PREPARE_ONLY QNATTER_RUNTIME_DIR QNATTER_RUNTIME_LIST QNATTER_ROUTE_SLOT QNATTER_ROUTE_MARK QNATTER_ROUTE_TABLE QNATTER_ROUTE_PRIORITY
+
+	old_list="${RUN_DIR}/.runtime-instances"
+	if ! cmp -s "$old_list" "$runtime_list"; then
+		rm -rf "$tmp"
+		return 1
+	fi
+
+	while IFS= read -r slug; do
+		[ -n "$slug" ] || continue
+		if ! cmp -s "${RUN_DIR}/${slug}.runtime" "${tmp}/${slug}.runtime"; then
+			rm -rf "$tmp"
+			return 1
+		fi
+	done < "$runtime_list"
+
+	rm -rf "$tmp"
+	return 0
+}
+
+reload_service() {
+	local enabled hot_reload
+
+	config_load "$CONF"
+	config_get_bool enabled global enabled 0
+	if [ "$enabled" != "1" ]; then
+		stop
+		return 0
+	fi
+
+	config_get_bool hot_reload global hot_reload 1
+	if [ "$hot_reload" = "1" ] && qnatter_hot_reload_service; then
+		return 0
+	fi
+
+	stop
+	start
+}

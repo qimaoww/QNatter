@@ -1,0 +1,80 @@
+#!/bin/sh
+
+: "${QNATTER_UCI_CONFIG:=/etc/config/qnatter}"
+: "${QNATTER_UCI_DEFAULT:=/etc/config/qnatter.default}"
+: "${QNATTER_UCI_BIN:=uci}"
+
+qnatter_route_slot_valid() {
+	local slot="$1"
+
+	case "$slot" in
+		''|*[!0-9]*) return 1 ;;
+	esac
+	case "$slot" in
+		0|[1-9]*) ;;
+		*) return 1 ;;
+	esac
+	[ "$slot" -le 4095 ] || return 1
+}
+
+qnatter_route_slot_used() {
+	case " ${QNATTER_ROUTE_USED_SLOTS:-} " in
+		*" $1 "*) return 0 ;;
+	esac
+	return 1
+}
+
+qnatter_record_route_slot() {
+	QNATTER_ROUTE_USED_SLOTS="${QNATTER_ROUTE_USED_SLOTS:-} $1"
+}
+
+qnatter_next_route_slot() {
+	local slot=0
+
+	while [ "$slot" -le 4095 ]; do
+		if ! qnatter_route_slot_used "$slot"; then
+			printf '%s\n' "$slot"
+			return 0
+		fi
+		slot="$((slot + 1))"
+	done
+
+	return 1
+}
+
+qnatter_migrate_route_slot() {
+	local section="$1"
+	local slot new_slot
+
+	slot="$("$QNATTER_UCI_BIN" -q get "qnatter.${section}.route_slot" 2>/dev/null || true)"
+	if qnatter_route_slot_valid "$slot" && ! qnatter_route_slot_used "$slot"; then
+		qnatter_record_route_slot "$slot"
+		return 0
+	fi
+
+	new_slot="$(qnatter_next_route_slot)" || return 0
+	if "$QNATTER_UCI_BIN" set "qnatter.${section}.route_slot=${new_slot}" >/dev/null 2>&1; then
+		changed=1
+		qnatter_record_route_slot "$new_slot"
+	fi
+}
+
+if [ ! -e "$QNATTER_UCI_CONFIG" ]; then
+	[ -r "$QNATTER_UCI_DEFAULT" ] || exit 0
+	cp "$QNATTER_UCI_DEFAULT" "$QNATTER_UCI_CONFIG"
+fi
+
+if command -v "$QNATTER_UCI_BIN" >/dev/null 2>&1; then
+	changed=0
+	QNATTER_ROUTE_USED_SLOTS=""
+	if ! "$QNATTER_UCI_BIN" -q get qnatter.global.hot_reload >/dev/null 2>&1; then
+		"$QNATTER_UCI_BIN" set qnatter.global.hot_reload='1' >/dev/null 2>&1 && changed=1
+	fi
+	for section in $("$QNATTER_UCI_BIN" -q show qnatter 2>/dev/null | sed -n 's/^qnatter\.\([A-Za-z0-9_][A-Za-z0-9_]*\)=instance$/\1/p'); do
+		"$QNATTER_UCI_BIN" -q delete "qnatter.${section}.label" >/dev/null 2>&1 && changed=1
+		qnatter_migrate_route_slot "$section"
+	done
+	unset QNATTER_ROUTE_USED_SLOTS
+	[ "$changed" = "1" ] && "$QNATTER_UCI_BIN" commit qnatter >/dev/null 2>&1
+fi
+exit 0

@@ -1,0 +1,7 @@
+#!/bin/sh
+
+log_file="$1"
+shift
+
+mkdir -p "$(dirname "$log_file")"
+exec "${QNATTER_GO_BIN:-/usr/bin/QNatter}" "$@" >> "$log_file" 2>&1

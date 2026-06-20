@@ -1,0 +1,235 @@
+.qnatter-page {
+	box-sizing: border-box;
+	color: var(--text-color, #1f2933);
+	max-width: 100%;
+	min-width: 0;
+	overflow-x: hidden;
+}
+
+.qnatter-page *,
+.qnatter-page *::before,
+.qnatter-page *::after {
+	box-sizing: border-box;
+}
+
+.qnatter-page table,
+.qnatter-page .table,
+.qnatter-page .cbi-section,
+.qnatter-page .cbi-section-node,
+.qnatter-page .cbi-value,
+.qnatter-page .cbi-value-field,
+.qnatter-page .cbi-input-text,
+.qnatter-page .cbi-input-select,
+.qnatter-page .cbi-input-textarea {
+	max-width: 100%;
+	min-width: 0;
+}
+
+.qnatter-form-page .cbi-section-table {
+	table-layout: auto;
+	width: 100%;
+}
+
+.qnatter-form-page .cbi-section-table th,
+.qnatter-form-page .cbi-section-table td {
+	overflow-wrap: normal;
+	vertical-align: middle;
+	word-break: keep-all;
+}
+
+.qnatter-form-page .cbi-section-table-row {
+	min-height: 52px;
+}
+
+.qnatter-form-page .cbi-section {
+	overflow-x: auto;
+}
+
+.qnatter-toolbar {
+	align-items: center;
+	display: flex;
+	gap: 12px;
+	justify-content: space-between;
+	margin: 0 0 14px;
+	min-width: 0;
+}
+
+.qnatter-toolbar h2 {
+	font-size: 22px;
+	margin: 0;
+	min-width: 0;
+	overflow-wrap: anywhere;
+}
+
+.qnatter-toolbar-actions {
+	align-items: center;
+	display: flex;
+	gap: 10px;
+	justify-content: flex-end;
+}
+
+.qnatter-instance-select {
+	min-width: 160px;
+}
+
+.qnatter-grid {
+	display: grid;
+	gap: 12px;
+	grid-template-columns: repeat(auto-fit, minmax(min(280px, 100%), 1fr));
+	min-width: 0;
+}
+
+.qnatter-card {
+	background: rgba(255, 255, 255, 0.88);
+	border: 1px solid rgba(25, 35, 50, 0.12);
+	border-radius: 8px;
+	min-width: 0;
+	padding: 14px;
+}
+
+.qnatter-card-head {
+	align-items: center;
+	display: flex;
+	gap: 10px;
+	justify-content: space-between;
+	margin-bottom: 10px;
+}
+
+.qnatter-card h3 {
+	font-size: 17px;
+	margin: 0;
+	min-width: 0;
+	overflow-wrap: anywhere;
+}
+
+.qnatter-card dl {
+	display: grid;
+	gap: 7px 12px;
+	grid-template-columns: minmax(108px, 0.42fr) 1fr;
+	margin: 0;
+}
+
+.qnatter-card dt {
+	color: #667085;
+	font-weight: 600;
+	min-width: 0;
+	overflow-wrap: anywhere;
+}
+
+.qnatter-card dd {
+	margin: 0;
+	min-width: 0;
+	overflow-wrap: anywhere;
+}
+
+.qnatter-pill {
+	border-radius: 999px;
+	font-size: 12px;
+	font-weight: 700;
+	padding: 3px 8px;
+	white-space: nowrap;
+}
+
+.qnatter-pill.is-running {
+	background: #dcfce7;
+	color: #166534;
+}
+
+.qnatter-pill.is-stopped {
+	background: #fee2e2;
+	color: #991b1b;
+}
+
+.qnatter-empty {
+	background: rgba(255, 255, 255, 0.82);
+	border: 1px solid rgba(25, 35, 50, 0.12);
+	border-radius: 8px;
+	min-width: 0;
+	overflow-wrap: anywhere;
+	padding: 18px;
+}
+
+.qnatter-log {
+	box-sizing: border-box;
+	font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+	height: 640px;
+	max-width: 100%;
+	min-width: 0;
+	width: 100%;
+}
+
+.qnatter-theme-argon .qnatter-card,
+.qnatter-theme-argon .qnatter-empty {
+	background: rgba(255, 255, 255, 0.72);
+	border-color: rgba(95, 107, 255, 0.20);
+	box-shadow: 0 12px 32px rgba(31, 38, 135, 0.10);
+}
+
+.qnatter-theme-argon .qnatter-pill.is-running {
+	background: rgba(48, 209, 88, 0.18);
+	color: #12823b;
+}
+
+.qnatter-theme-aurora {
+	color: #edf6ff;
+}
+
+.qnatter-theme-aurora .qnatter-card,
+.qnatter-theme-aurora .qnatter-empty {
+	background: rgba(18, 24, 38, 0.72);
+	border-color: rgba(145, 196, 255, 0.22);
+	color: #edf6ff;
+}
+
+.qnatter-theme-aurora .qnatter-card dt {
+	color: #9cc7e8;
+}
+
+.qnatter-theme-aurora .qnatter-log,
+.qnatter-theme-aurora .cbi-input-text,
+.qnatter-theme-aurora .cbi-input-select,
+.qnatter-theme-aurora .cbi-input-textarea {
+	background: rgba(13, 18, 30, 0.78);
+	border-color: rgba(145, 196, 255, 0.24);
+	color: #edf6ff;
+}
+
+.qnatter-theme-aurora .cbi-section,
+.qnatter-theme-aurora .cbi-section-node {
+	background: transparent;
+}
+
+.qnatter-theme-aurora .cbi-value-title,
+.qnatter-theme-aurora .cbi-value-description {
+	color: #c7ddf1;
+}
+
+@media (max-width: 640px) {
+	.qnatter-toolbar {
+		align-items: stretch;
+		flex-direction: column;
+	}
+
+	.qnatter-toolbar-actions {
+		align-items: stretch;
+		flex-direction: column;
+	}
+
+	.qnatter-instance-select {
+		width: 100%;
+	}
+
+	.qnatter-card dl {
+		grid-template-columns: 1fr;
+	}
+
+	.qnatter-page .cbi-value {
+		display: block;
+	}
+
+	.qnatter-page .cbi-value-title,
+	.qnatter-page .cbi-value-field {
+		display: block;
+		width: 100%;
+	}
+}

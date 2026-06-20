@@ -1,0 +1,18 @@
+{
+	"luci-app-qnatter": {
+		"description": "Grant access to QNatter LuCI application",
+		"read": {
+			"uci": [ "qnatter", "network" ],
+			"ubus": {
+				"luci.qnatter": [ "status", "log", "cloudflare_zones", "cloudflare_srv_records" ],
+				"service": [ "list" ]
+			}
+		},
+		"write": {
+			"uci": [ "qnatter" ],
+			"ubus": {
+				"luci.qnatter": [ "clear_log", "rename_instance" ]
+			}
+		}
+	}
+}
