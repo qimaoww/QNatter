@@ -136,9 +136,11 @@ natter_write_status_json() {
 	local outer_port="$7"
 	local message="$8"
 	local now
+	local tmp
 
 	now="$(date '+%Y-%m-%d %H:%M:%S')"
 	mkdir -p "$(dirname "$file")"
+	tmp="${file}.$$"
 	printf '{"instance":"%s","protocol":"%s","inner_ip":"%s","inner_port":%s,"outer_ip":"%s","outer_port":%s,"updated_at":"%s","message":"%s"}\n' \
 		"$(natter_json_escape "$instance")" \
 		"$(natter_json_escape "$protocol")" \
@@ -147,5 +149,12 @@ natter_write_status_json() {
 		"$(natter_json_escape "$outer_ip")" \
 		"$(natter_status_port "$outer_port")" \
 		"$(natter_json_escape "$now")" \
-		"$(natter_json_escape "$message")" > "$file"
+		"$(natter_json_escape "$message")" > "$tmp" || {
+		rm -f "$tmp"
+		return 1
+	}
+	mv "$tmp" "$file" || {
+		rm -f "$tmp"
+		return 1
+	}
 }

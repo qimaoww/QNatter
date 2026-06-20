@@ -169,7 +169,7 @@ assert_contains natter/Makefile 'go build .* -o \$\(PKG_BUILD_DIR\)/natter-go ./
 assert_contains natter/Makefile '\$\(INSTALL_BIN\) \$\(PKG_BUILD_DIR\)/natter-go \$\(1\)/usr/bin/natter-go'
 assert_contains natter/Makefile '\$\(LN\) natter-go \$\(1\)/usr/bin/Natter'
 natter_release="$(sed -n 's/^PKG_RELEASE:=//p' "$ROOT/natter/Makefile")"
-[ "$natter_release" -gt 12 ] || fail "natter package release must increase when package files change"
+[ "$natter_release" -gt 13 ] || fail "natter package release must increase when package files change"
 assert_contains natter/Makefile '\$\(INSTALL_CONF\) ./files/natter.config \$\(1\)/etc/config/natter.default'
 assert_contains natter/Makefile '\$\(INSTALL_DIR\) \$\(1\)/etc/uci-defaults'
 assert_contains natter/Makefile '\$\(INSTALL_BIN\) ./files/natter.uci-default \$\(1\)/etc/uci-defaults/99-natter'
@@ -283,6 +283,12 @@ cp "$ROOT/natter/files/natter-qbittorrent.sh" "$tmp/"
 	natter_write_status_json "$status_json" wan tcp 192.0.2.10 not-a-port 198.51.100.10 999999999999999999999 mapped
 	grep -Fq '"inner_port":0' "$status_json" || exit 38
 	grep -Fq '"outer_port":0' "$status_json" || exit 39
+	atomic_status="$tmp/atomic-status.json"
+	atomic_link="$tmp/atomic-status-old.json"
+	printf 'old status\n' > "$atomic_status"
+	ln "$atomic_status" "$atomic_link" || exit 40
+	natter_write_status_json "$atomic_status" wan tcp 192.0.2.10 51413 198.51.100.10 62000 mapped
+	[ "$(cat "$atomic_link")" = "old status" ] || exit 41
 
 	NATTER_FORWARD_METHOD=iptables
 	natter_build_args
