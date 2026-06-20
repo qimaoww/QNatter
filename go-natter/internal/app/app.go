@@ -188,6 +188,11 @@ func runEngineWithLog(ctx context.Context, cfg config.Config, log io.Writer) err
 		if err != nil {
 			return err
 		}
+		if client, ok := upnpMapper.(*engine.UPnPClient); ok {
+			client.OnFoundRouter = func(ip string) {
+				logUPnPFoundRouter(log, ip)
+			}
+		}
 		deps.UPnP = upnpMapper
 	}
 	return engine.RunWithRetry(ctx, cfg, func(ctx context.Context) error {
@@ -218,6 +223,13 @@ func logUPnPError(w io.Writer, operation string, err error) {
 		return
 	}
 	logLine(w, "E", "upnp: failed to %s: %v", operation, err)
+}
+
+func logUPnPFoundRouter(w io.Writer, ip string) {
+	if ip == "" {
+		return
+	}
+	logLine(w, "I", "[UPnP] Found router %s", ip)
 }
 
 func logMapping(w io.Writer, cfg config.Config, result engine.Result) {

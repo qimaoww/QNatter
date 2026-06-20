@@ -11,6 +11,7 @@ import (
 type UPnPClient struct {
 	Client         upnp.Client
 	DiscoverRouter func(context.Context, upnp.Client) (*upnp.Device, error)
+	OnFoundRouter  func(string)
 
 	service *upnp.Service
 	mapping upnp.PortMapping
@@ -40,6 +41,9 @@ func (c *UPnPClient) Forward(ctx context.Context, mapping UPnPMapping) error {
 	if device == nil || device.ForwardService == nil {
 		c.service = nil
 		return nil
+	}
+	if c.OnFoundRouter != nil {
+		c.OnFoundRouter(device.IP)
 	}
 
 	portMapping := upnp.PortMapping{

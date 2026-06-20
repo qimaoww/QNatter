@@ -165,6 +165,10 @@ func TestUPnPClientForwardDiscoversAddsAndRenewsMapping(t *testing.T) {
 			}, nil
 		},
 	}
+	var foundRouter string
+	mapper.OnFoundRouter = func(ip string) {
+		foundRouter = ip
+	}
 
 	err := mapper.Forward(context.Background(), UPnPMapping{
 		ExternalPort:   51413,
@@ -175,6 +179,9 @@ func TestUPnPClientForwardDiscoversAddsAndRenewsMapping(t *testing.T) {
 	})
 	if err != nil {
 		t.Fatalf("Forward returned error: %v", err)
+	}
+	if foundRouter != "192.168.1.1" {
+		t.Fatalf("found router = %q, want 192.168.1.1", foundRouter)
 	}
 	if err := mapper.Renew(context.Background()); err != nil {
 		t.Fatalf("Renew returned error: %v", err)

@@ -293,6 +293,24 @@ func TestLogUPnPErrorSkipsNilError(t *testing.T) {
 	}
 }
 
+func TestLogUPnPFoundRouterPrintsIP(t *testing.T) {
+	var stderr bytes.Buffer
+	logUPnPFoundRouter(&stderr, "192.168.1.1")
+
+	if !strings.Contains(stderr.String(), "[I] [UPnP] Found router 192.168.1.1") {
+		t.Fatalf("stderr = %q, missing UPnP router log", stderr.String())
+	}
+}
+
+func TestLogUPnPFoundRouterSkipsEmptyIP(t *testing.T) {
+	var stderr bytes.Buffer
+	logUPnPFoundRouter(&stderr, "")
+
+	if stderr.Len() != 0 {
+		t.Fatalf("stderr = %q, want empty", stderr.String())
+	}
+}
+
 func TestLogMappingPrintsRouteInformation(t *testing.T) {
 	var stderr bytes.Buffer
 	logMapping(&stderr, config.Config{}, engine.Result{
