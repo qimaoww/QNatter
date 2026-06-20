@@ -164,8 +164,10 @@ assert_contains luci-app-natter/Makefile 'LUCI_DEPENDS:=.*\+rpcd'
 assert_contains luci-app-natter/Makefile 'LUCI_DEPENDS:=.*\+uhttpd'
 assert_contains luci-app-natter/Makefile 'LUCI_DEPENDS:=.*\+uhttpd-mod-ubus'
 assert_contains luci-app-natter/Makefile 'LUCI_DEPENDS:=.*\+uci'
-assert_contains natter/files/natter.uci-default '\[ -e /etc/config/natter \] && exit 0'
-assert_contains natter/files/natter.uci-default 'cp /etc/config/natter.default /etc/config/natter'
+assert_contains natter/files/natter.uci-default 'NATTER_UCI_CONFIG:=/etc/config/natter'
+assert_contains natter/files/natter.uci-default 'NATTER_UCI_DEFAULT:=/etc/config/natter.default'
+assert_contains natter/files/natter.uci-default '\[ -e "\$NATTER_UCI_CONFIG" \] && exit 0'
+assert_contains natter/files/natter.uci-default 'cp "\$NATTER_UCI_DEFAULT" "\$NATTER_UCI_CONFIG"'
 
 assert_po_translation 'Global Settings' '全局设置'
 assert_po_translation 'Expose ports behind full-cone NAT with optional forwarding and qBittorrent port updates.' '通过全锥形 NAT 暴露端口，并可选转发和更新 qBittorrent 监听端口。'
@@ -242,6 +244,7 @@ sh -n "$ROOT/tests/test_natter_log.sh"
 sh -n "$ROOT/tests/test_natter_notify.sh"
 sh -n "$ROOT/tests/test_natter_rpcd.sh"
 sh -n "$ROOT/tests/test_natter_status.sh"
+sh -n "$ROOT/tests/test_natter_uci_default.sh"
 
 (
 	printf '#!/bin/sh\necho "go:$*"\n' > "$tmp/natter-go-bin"
@@ -262,6 +265,7 @@ sh -n "$ROOT/tests/test_natter_status.sh"
 "$ROOT/tests/test_natter_notify.sh"
 "$ROOT/tests/test_natter_rpcd.sh"
 "$ROOT/tests/test_natter_status.sh"
+"$ROOT/tests/test_natter_uci_default.sh"
 
 dummy_natter_go="$tmp/natter-go"
 archive="$tmp/natter-openwrt-direct.tar.gz"

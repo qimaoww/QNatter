@@ -1,7 +1,10 @@
 #!/bin/sh
 
-[ -e /etc/config/natter ] && exit 0
-[ -r /etc/config/natter.default ] || exit 0
+: "${NATTER_UCI_CONFIG:=/etc/config/natter}"
+: "${NATTER_UCI_DEFAULT:=/etc/config/natter.default}"
 
-cp /etc/config/natter.default /etc/config/natter
+[ -e "$NATTER_UCI_CONFIG" ] && exit 0
+[ -r "$NATTER_UCI_DEFAULT" ] || exit 0
+
+cp "$NATTER_UCI_DEFAULT" "$NATTER_UCI_CONFIG"
 exit 0
