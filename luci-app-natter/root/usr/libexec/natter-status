@@ -59,7 +59,7 @@ status_field() {
 				next
 			emit_unescaped(substr($0, start + length(prefix)))
 		}
-	' "$file" | head -n 1
+	' "$file"
 }
 
 status_number_field() {
