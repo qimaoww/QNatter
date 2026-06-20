@@ -27,8 +27,8 @@ config_foreach() {
 	[ "$type" = "instance" ] || return 0
 	"$callback" wan_ct
 	"$callback" wan_cm
-	"$callback" wan_dot
-	"$callback" wanXct
+	"$callback" dot.name
+	"$callback" dotXname
 }
 
 config_get() {
@@ -49,24 +49,23 @@ config_get() {
 		wan_cm:network) value="wan2" ;;
 		wan_cm:bind_value) value="eth1.2" ;;
 		wan_cm:protocol) value="udp" ;;
-		wan_dot:label) value="Dotted WAN" ;;
-		wan_dot:enabled) value="1" ;;
-		wan_dot:network) value="wan3" ;;
-		wan_dot:bind_value) value="pppoe-wan.3" ;;
-		wan_dot:protocol) value="tcp" ;;
-		wanXct:label) value="Regex Trap WAN" ;;
-		wanXct:enabled) value="1" ;;
-		wanXct:network) value="wan4" ;;
-		wanXct:bind_value) value="pppoe-wan4" ;;
-		wanXct:protocol) value="tcp" ;;
+		dot.name:label) value="Dotted WAN" ;;
+		dot.name:enabled) value="1" ;;
+		dot.name:network) value="wan3" ;;
+		dot.name:bind_value) value="pppoe-wan.3" ;;
+		dot.name:protocol) value="tcp" ;;
+		dotXname:label) value="Regex Trap WAN" ;;
+		dotXname:enabled) value="1" ;;
+		dotXname:network) value="wan4" ;;
+		dotXname:bind_value) value="pppoe-wan4" ;;
+		dotXname:protocol) value="tcp" ;;
 	esac
 
 	eval "$__var=\$value"
 }
 EOF
 
-printf 'NATTER_INSTANCE=wan.ct\0' > "$proc_dir/100/environ"
-printf 'NATTER_INSTANCE=wanXct\0' > "$proc_dir/101/environ"
+printf 'NATTER_INSTANCE=dotXname\0' > "$proc_dir/100/environ"
 
 cat > "$run_dir/wan_ct.json" <<'EOF'
 {"instance":"wan_ct","protocol":"tcp","inner_ip":"10.10.10.10","inner_port":51413,"outer_ip":"203.0.113.10","outer_port":62000,"updated_at":"2026-06-20 04:00:00","message":"mapped"}
@@ -110,12 +109,12 @@ case "$output" in
 esac
 
 case "$output" in
-	*'"name":"wan_dot"'*'"running":false'*) : ;;
+	*'"name":"dot.name"'*'"running":false'*) : ;;
 	*) fail "status output must not treat regex-like instance names as running: $output" ;;
 esac
 
 case "$output" in
-	*'"name":"wanXct"'*'"running":true'*) : ;;
+	*'"name":"dotXname"'*'"running":true'*) : ;;
 	*) fail "status output must detect exact fake proc instance: $output" ;;
 esac
 
