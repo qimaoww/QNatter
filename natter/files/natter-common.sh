@@ -82,7 +82,7 @@ natter_slug() {
 }
 
 natter_json_escape() {
-	printf '%s' "$1" | sed ':a; N; $!ba; s/\\/\\\\/g; s/"/\\"/g; s/\n/\\n/g'
+	printf '%s' "$1" | awk 'BEGIN { ORS = ""; tab = sprintf("%c", 9); cr = sprintf("%c", 13) } { if (NR > 1) printf "\\n"; gsub(/\\/, "\\\\"); gsub(/"/, "\\\""); gsub(cr, "\\r"); gsub(tab, "\\t"); printf "%s", $0 }'
 }
 
 natter_write_status_json() {
