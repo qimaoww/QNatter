@@ -75,10 +75,11 @@ if ! natter_qb_valid_port "$listen_port"; then
 fi
 
 rm -f "$cookie"
-if ! "$NATTER_CURL_BIN" -fsS -m "${QBITTORRENT_TIMEOUT:-8}" -c "$cookie" \
+login_response="$("$NATTER_CURL_BIN" -fsS -m "${QBITTORRENT_TIMEOUT:-8}" -c "$cookie" \
 	--data-urlencode "username=$username" \
 	--data-urlencode "password=$password" \
-	"$url/api/v2/auth/login" >/dev/null; then
+	"$url/api/v2/auth/login")"
+if [ "$login_response" != "Ok." ]; then
 	log "qBittorrent login failed for ${NATTER_INSTANCE:-default} at $url"
 	natter_write_status_json "$status_file" "${NATTER_INSTANCE:-default}" "$protocol" "$inner_ip" "$inner_port" "$outer_ip" "$outer_port" "qBittorrent login failed"
 	rm -f "$cookie"

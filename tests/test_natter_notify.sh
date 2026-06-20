@@ -109,6 +109,51 @@ udp
 EOF
 cmp -s "$expected_args" "$qb_args_file" || fail "qBittorrent error path did not call user notify"
 
+qb_login_fail_status_file="$tmp/wan_login_fail.json"
+qb_login_fail_env_file="$tmp/qb-login-fail.env"
+curl_login_fail_bin="$tmp/curl-login-fail"
+curl_login_fail_calls="$tmp/curl-login-fail-calls.txt"
+
+cat > "$curl_login_fail_bin" <<EOF
+#!/bin/sh
+printf '%s\n' "\$*" >> "$curl_login_fail_calls"
+case "\$*" in
+	*/api/v2/auth/login*)
+		printf 'Fails.'
+		exit 0
+		;;
+	*/api/v2/app/setPreferences*)
+		exit 0
+		;;
+esac
+exit 1
+EOF
+chmod 0755 "$curl_login_fail_bin"
+
+cat > "$qb_login_fail_env_file" <<EOF
+NATTER_INSTANCE='wan_login_fail'
+NATTER_STATUS_FILE='$qb_login_fail_status_file'
+QBITTORRENT_ENABLED='1'
+QBITTORRENT_URL='http://127.0.0.1:9'
+QBITTORRENT_USERNAME='admin'
+QBITTORRENT_PASSWORD='wrong'
+QBITTORRENT_TARGET_PORT='0'
+QBITTORRENT_TIMEOUT='1'
+EOF
+
+NATTER_COMMON_SH="$ROOT/natter/files/natter-common.sh" \
+NATTER_QBITTORRENT_SH="$ROOT/natter/files/natter-qbittorrent.sh" \
+NATTER_LOGGER_BIN="$logger_bin" \
+NATTER_CURL_BIN="$curl_login_fail_bin" \
+NATTER_NOTIFY_ENV="$qb_login_fail_env_file" \
+	"$ROOT/natter/files/natter-notify" tcp 10.10.10.25 51416 203.0.113.25 62003
+
+grep -Fq '"message":"qBittorrent login failed"' "$qb_login_fail_status_file" || \
+	fail "qBittorrent login failure response was not written to status"
+if grep -Fq '/api/v2/app/setPreferences' "$curl_login_fail_calls"; then
+	fail "qBittorrent preferences API must not be called after login response Fails."
+fi
+
 qb_ok_status_file="$tmp/wan_ok.json"
 qb_ok_args_file="$tmp/qb-ok-user-args.txt"
 qb_ok_user_script="$tmp/qb-ok-user-notify.sh"
@@ -125,6 +170,9 @@ chmod 0755 "$qb_ok_user_script"
 cat > "$curl_bin" <<EOF
 #!/bin/sh
 printf '%s\n' "\$*" >> "$curl_calls"
+case "\$*" in
+	*/api/v2/auth/login*) printf 'Ok.' ;;
+esac
 exit 0
 EOF
 chmod 0755 "$curl_bin"
