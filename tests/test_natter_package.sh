@@ -133,6 +133,7 @@ assert_contains natter/files/natter.hotplug 'config_get bind_value "\$section" b
 assert_contains natter/files/natter.hotplug 'if \[ -n "\$bind_value" \]; then'
 assert_contains natter/files/natter.hotplug '\[ "\$bind_value" = "\$DEVICE" \] && MATCHED=1'
 assert_contains natter/files/natter.config "option forward_method 'auto'"
+assert_not_contains natter/files/natter.config "^[[:space:]]*list[[:space:]]+stun_server"
 assert_contains natter/files/natter-common.sh 'natter_forward_method_or_auto'
 assert_contains natter/files/natter-common.sh '\[ "\$forward_method" != "auto" \]'
 assert_contains natter/files/natter.init 'NATTER_STATUS_FILE'
