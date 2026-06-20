@@ -137,7 +137,7 @@ assert_not_contains natter/files/natter.init 'PROG="/usr/bin/natter.py"'
 assert_contains natter/files/natter.init 'qbittorrent_target_ip'
 assert_not_contains natter/files/natter-run 'NATTER_PY_BIN'
 assert_not_contains natter/files/natter-run 'NATTER_RUNTIME'
-assert_contains natter/files/natter-run 'NATTER_GO_BIN:-/usr/bin/natter-go'
+assert_contains natter/files/natter-run 'NATTER_GO_BIN:-/usr/bin/Natter'
 assert_no_path natter/files/Natter
 assert_no_path natter/files/natter-python-wrapper.py
 assert_contains natter/files/natter-qbittorrent.sh 'natter_qb_select_listen_port'
@@ -150,6 +150,7 @@ assert_contains natter/Makefile 'DEPENDS:=.*\+firewall4'
 assert_contains natter/Makefile 'DEPENDS:=.*\+kmod-nft-nat'
 assert_contains natter/Makefile 'go build .* -o \$\(PKG_BUILD_DIR\)/natter-go ./cmd/natter'
 assert_contains natter/Makefile '\$\(INSTALL_BIN\) \$\(PKG_BUILD_DIR\)/natter-go \$\(1\)/usr/bin/natter-go'
+assert_contains natter/Makefile '\$\(LN\) natter-go \$\(1\)/usr/bin/Natter'
 assert_not_contains natter/Makefile '\+iptables-nft'
 assert_not_contains natter/Makefile '\+socat'
 assert_not_contains natter/Makefile '\+gost'
@@ -255,11 +256,10 @@ printf '#!/bin/sh\n' > "$dummy_natter_go"
 chmod 0755 "$dummy_natter_go"
 if tar -tzf "$archive" | grep -qx 'usr/bin/natter.py'; then
 fi
-if tar -tzf "$archive" | grep -qx 'usr/bin/Natter'; then
-fi
 if tar -tzf "$archive" | grep -qx 'usr/share/natter/natter-python-wrapper.py'; then
 fi
 tar -tvzf "$archive" | awk '$6 == "usr/bin/natter-go" { print $1 }' | grep -q '^-rwxr-xr-x$' || \
+tar -tvzf "$archive" | awk '$6 == "usr/bin/Natter" { print $1 }' | grep -q '^lrwxrwxrwx$' || \
 tar -tvzf "$archive" | awk '$6 == "etc/uci-defaults/99-natter" { print $1 }' | grep -q '^-rwxr-xr-x$' || \
 if tar -tzf "$archive" | grep -Eq '^\./?$'; then
 fi

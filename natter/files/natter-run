@@ -4,4 +4,4 @@ log_file="$1"
 shift
 
 mkdir -p "$(dirname "$log_file")"
-exec "${NATTER_GO_BIN:-/usr/bin/natter-go}" "$@" >> "$log_file" 2>&1
+exec "${NATTER_GO_BIN:-/usr/bin/Natter}" "$@" >> "$log_file" 2>&1

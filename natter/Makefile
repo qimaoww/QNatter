@@ -44,6 +44,7 @@ endef
 define Package/natter/install
 	$(INSTALL_DIR) $(1)/usr/bin
 	$(INSTALL_BIN) $(PKG_BUILD_DIR)/natter-go $(1)/usr/bin/natter-go
+	$(LN) natter-go $(1)/usr/bin/Natter
 
 	$(INSTALL_DIR) $(1)/usr/share/natter
 	$(INSTALL_BIN) ./files/natter-common.sh $(1)/usr/share/natter/natter-common.sh
