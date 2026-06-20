@@ -23,6 +23,7 @@ config_foreach() {
 	[ "$type" = "instance" ] || return 0
 	"$callback" wan_ct
 	"$callback" wan_cm
+	"$callback" wan_auto
 	"$callback" disabled_lan
 }
 
@@ -44,6 +45,9 @@ config_get() {
 		wan_cm:enabled) value="1" ;;
 		wan_cm:network) value="wan2" ;;
 		wan_cm:bind_value) value="eth1.2" ;;
+		wan_auto:enabled) value="1" ;;
+		wan_auto:network) value="wan3" ;;
+		wan_auto:bind_value) value="" ;;
 		disabled_lan:enabled) value="0" ;;
 		disabled_lan:network) value="lan" ;;
 		disabled_lan:bind_value) value="br-lan" ;;
@@ -80,8 +84,16 @@ run_hotplug ifup wan pppoe-wan
 grep -Fqx enabled "$init_log" || fail "ifup wan should check service enabled"
 grep -Fqx reload "$init_log" || fail "ifup wan should reload Natter"
 
+run_hotplug ifup wan eth0
+if [ -s "$init_log" ]; then
+	fail "ifup wan with non-matching device must not reload bound Natter instance"
+fi
+
 run_hotplug ifupdate other eth1.2
 grep -Fqx reload "$init_log" || fail "ifupdate matching bind_value should reload Natter"
+
+run_hotplug ifup wan3 eth9
+grep -Fqx reload "$init_log" || fail "instance without bind_value should reload by network"
 
 run_hotplug ifup lan br-lan
 if [ -s "$init_log" ]; then

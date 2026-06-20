@@ -18,8 +18,11 @@ natter_match_interface() {
 
 	config_get network "$section" network "wan"
 	config_get bind_value "$section" bind_value ""
-	[ "$network" = "$INTERFACE" ] && MATCHED=1
-	[ -n "$bind_value" ] && [ "$bind_value" = "$DEVICE" ] && MATCHED=1
+	if [ -n "$bind_value" ]; then
+		[ "$bind_value" = "$DEVICE" ] && MATCHED=1
+	else
+		[ "$network" = "$INTERFACE" ] && MATCHED=1
+	fi
 }
 
 config_load natter
