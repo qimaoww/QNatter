@@ -2,8 +2,11 @@
 
 set -u
 
-. /usr/share/natter/natter-qbittorrent.sh
-. /usr/share/natter/natter-common.sh
+: "${NATTER_QBITTORRENT_SH:=/usr/share/natter/natter-qbittorrent.sh}"
+: "${NATTER_COMMON_SH:=/usr/share/natter/natter-common.sh}"
+
+. "$NATTER_QBITTORRENT_SH"
+. "$NATTER_COMMON_SH"
 
 protocol="${1:-}"
 inner_ip="${2:-}"
