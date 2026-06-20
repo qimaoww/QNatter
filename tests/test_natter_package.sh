@@ -205,6 +205,14 @@ cp "$ROOT/natter/files/natter-qbittorrent.sh" "$tmp/"
 	[ "$QBITTORRENT_URL" = "http://127.0.0.1:8080/path with spaces" ] || exit 14
 	[ "$QBITTORRENT_USERNAME" = "admin user" ] || exit 15
 	[ "$QBITTORRENT_PASSWORD" = "pa'ss word" ] || exit 16
+
+	chmod 0644 "$env_file"
+	natter_qb_write_notify_env "$env_file" QBITTORRENT_PASSWORD "secret"
+	mode="$(ls -l "$env_file" | awk '{ print $1 }')"
+	case "$mode" in
+		-rw-------) : ;;
+		*) exit 17 ;;
+	esac
 )
 
 (

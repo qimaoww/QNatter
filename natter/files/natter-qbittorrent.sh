@@ -41,6 +41,7 @@ natter_qb_normalize_url() {
 
 natter_qb_write_notify_env() {
 	local path="$1"
+	local tmp="${path}.$$"
 	shift
 	umask 077
 	{
@@ -48,5 +49,13 @@ natter_qb_write_notify_env() {
 			printf '%s=%s\n' "$1" "$(printf '%s' "$2" | sed "s/'/'\\\\''/g; s/^/'/; s/$/'/")"
 			shift 2
 		done
-	} > "$path"
+	} > "$tmp" || {
+		rm -f "$tmp"
+		return 1
+	}
+	chmod 0600 "$tmp" || {
+		rm -f "$tmp"
+		return 1
+	}
+	mv "$tmp" "$path"
 }
