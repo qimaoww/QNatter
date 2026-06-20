@@ -7,13 +7,18 @@ STOP=10
 NAME="natter"
 RUNNER="/usr/share/natter/natter-run"
 CONF="natter"
-RUN_DIR="/var/run/natter"
-LOG_DIR="/var/log/natter"
+RUN_DIR="${NATTER_RUN_DIR:-/var/run/natter}"
+LOG_DIR="${NATTER_LOG_DIR:-/var/log/natter}"
 
-. /lib/functions.sh
-. /lib/functions/network.sh
-. /usr/share/natter/natter-common.sh
-. /usr/share/natter/natter-qbittorrent.sh
+: "${NATTER_FUNCTIONS_SH:=/lib/functions.sh}"
+: "${NATTER_NETWORK_SH:=/lib/functions/network.sh}"
+: "${NATTER_COMMON_SH:=/usr/share/natter/natter-common.sh}"
+: "${NATTER_QBITTORRENT_SH:=/usr/share/natter/natter-qbittorrent.sh}"
+
+. "$NATTER_FUNCTIONS_SH"
+. "$NATTER_NETWORK_SH"
+. "$NATTER_COMMON_SH"
+. "$NATTER_QBITTORRENT_SH"
 
 service_triggers() {
 	procd_add_reload_trigger "$CONF"

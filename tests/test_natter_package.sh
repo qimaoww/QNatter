@@ -234,6 +234,7 @@ sh -n "$ROOT/natter/files/natter.init"
 sh -n "$ROOT/luci-app-natter/root/usr/libexec/natter-status"
 sh -n "$ROOT/luci-app-natter/root/usr/libexec/natter-log"
 sh -n "$ROOT/luci-app-natter/root/usr/libexec/rpcd/luci.natter"
+sh -n "$ROOT/tests/test_natter_init.sh"
 sh -n "$ROOT/tests/test_natter_status.sh"
 
 (
@@ -250,6 +251,7 @@ sh -n "$ROOT/tests/test_natter_status.sh"
 )
 
 (cd "$ROOT/go-natter" && go test ./...)
+"$ROOT/tests/test_natter_init.sh"
 "$ROOT/tests/test_natter_status.sh"
 
 dummy_natter_go="$tmp/natter-go"
