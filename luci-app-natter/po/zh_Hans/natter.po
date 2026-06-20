@@ -130,6 +130,9 @@ msgstr "Cloudflare SRV 记录"
 msgid "Select SRV record"
 msgstr "选择 SRV 记录"
 
+msgid "Cloudflare request failed"
+msgstr "Cloudflare 请求失败"
+
 msgid "Retry until target opens"
 msgstr "重试直到目标打开"
 

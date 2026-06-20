@@ -101,9 +101,9 @@ chmod 0755 "$jsonfilter_bin"
 rpcd="$ROOT/luci-app-natter/root/usr/libexec/rpcd/luci.natter"
 
 list_output="$("$rpcd" list)"
-printf '%s' "$list_output" | grep -Fq '"cloudflare_zones":{"section":"String"}' || \
+printf '%s' "$list_output" | grep -Fq '"cloudflare_zones":{"section":"String","token":"String"}' || \
 	fail "rpc list is missing cloudflare_zones signature: $list_output"
-printf '%s' "$list_output" | grep -Fq '"cloudflare_srv_records":{"section":"String","zone_id":"String"}' || \
+printf '%s' "$list_output" | grep -Fq '"cloudflare_srv_records":{"section":"String","zone_id":"String","token":"String"}' || \
 	fail "rpc list is missing cloudflare_srv_records signature: $list_output"
 
 status_output="$(
@@ -137,5 +137,12 @@ records_output="$(
 	fail "Cloudflare SRV records output = $records_output"
 grep -Fq 'Authorization: Bearer cf-token' "$curl_calls" || fail "Cloudflare RPC did not send bearer token"
 grep -Fq 'zones/zone1/dns_records?type=SRV&per_page=100' "$curl_calls" || fail "Cloudflare RPC did not request SRV records"
+
+unsaved_zones_output="$(
+	printf '{"section":"unsaved","token":"input-token"}\n' | NATTER_UCI_BIN="$uci_bin" NATTER_CURL_BIN="$curl_bin" NATTER_JSONFILTER_BIN="$jsonfilter_bin" "$rpcd" call cloudflare_zones
+)"
+[ "$unsaved_zones_output" = '{"zones":[{"id":"zone1","name":"example.com"},{"id":"zone2","name":"example.net"}]}' ] || \
+	fail "Cloudflare zones output must use unsaved input token: $unsaved_zones_output"
+grep -Fq 'Authorization: Bearer input-token' "$curl_calls" || fail "Cloudflare RPC did not send unsaved input token"
 
 printf 'natter rpcd checks passed\n'

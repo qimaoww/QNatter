@@ -9,15 +9,15 @@
 var callCloudflareZones = rpc.declare({
 	object: 'luci.natter',
 	method: 'cloudflare_zones',
-	params: [ 'section' ],
-	expect: { zones: [] }
+	params: [ 'section', 'token' ],
+	expect: { '': { zones: [] } }
 });
 
 var callCloudflareSrvRecords = rpc.declare({
 	object: 'luci.natter',
 	method: 'cloudflare_srv_records',
-	params: [ 'section', 'zone_id' ],
-	expect: { records: [] }
+	params: [ 'section', 'zone_id', 'token' ],
+	expect: { '': { records: [] } }
 });
 
 function detectThemeClass() {
@@ -73,10 +73,97 @@ return view.extend({
 
 	render: function(data) {
 		var m, s, o;
+		var tokenOption, zoneOption, recordOption;
 		var tools = {
 			socat: data[1],
 			gost: data[2]
 		};
+
+		function getOptionValue(option, section_id) {
+			var elem = option ? option.getUIElement(section_id) : null;
+
+			if (elem)
+				return elem.getValue() || '';
+
+			return uci.get('natter', section_id, option.option) || '';
+		}
+
+		function getCloudflareToken(section_id) {
+			return getOptionValue(tokenOption, section_id);
+		}
+
+		function setSelectChoices(option, section_id, placeholder, items, current, labelFn) {
+			var elem = option ? option.getUIElement(section_id) : null;
+			var select = elem && elem.node ? elem.node.querySelector('select') : null;
+			var seen = {};
+
+			if (!select)
+				return;
+
+			while (select.options.length)
+				select.remove(0);
+
+			select.add(new Option(placeholder, ''));
+			(items || []).forEach(function(item) {
+				if (!item.id)
+					return;
+
+				seen[item.id] = true;
+				select.add(new Option(labelFn ? labelFn(item) : (item.name || item.id), item.id));
+			});
+
+			if (current && !seen[current])
+				select.add(new Option(current, current));
+
+			elem.setValue(current || '');
+		}
+
+		function refreshCloudflareSrvRecords(section_id) {
+			var token = getCloudflareToken(section_id);
+			var zone = getOptionValue(zoneOption, section_id);
+			var current = getOptionValue(recordOption, section_id);
+
+			if (!token || !zone) {
+				setSelectChoices(recordOption, section_id, _('Select SRV record'), [], current);
+				return Promise.resolve();
+			}
+
+			setSelectChoices(recordOption, section_id, _('Loading...'), [], current);
+			return callCloudflareSrvRecords(section_id, zone, token).then(function(data) {
+				if (data && data.error) {
+					setSelectChoices(recordOption, section_id, _('Cloudflare request failed'), [], current);
+					return;
+				}
+
+				setSelectChoices(recordOption, section_id, _('Select SRV record'), data ? data.records : [], current, cloudflareRecordLabel);
+			}).catch(function() {
+				setSelectChoices(recordOption, section_id, _('Cloudflare request failed'), [], current);
+			});
+		}
+
+		function refreshCloudflareZones(section_id) {
+			var token = getCloudflareToken(section_id);
+			var current = getOptionValue(zoneOption, section_id);
+
+			if (!token) {
+				setSelectChoices(zoneOption, section_id, _('Select zone'), [], current);
+				setSelectChoices(recordOption, section_id, _('Select SRV record'), [], getOptionValue(recordOption, section_id));
+				return Promise.resolve();
+			}
+
+			setSelectChoices(zoneOption, section_id, _('Loading...'), [], current);
+			return callCloudflareZones(section_id, token).then(function(data) {
+				if (data && data.error) {
+					setSelectChoices(zoneOption, section_id, _('Cloudflare request failed'), [], current);
+					return;
+				}
+
+				setSelectChoices(zoneOption, section_id, _('Select zone'), data ? data.zones : [], current);
+				return refreshCloudflareSrvRecords(section_id);
+			}).catch(function() {
+				setSelectChoices(zoneOption, section_id, _('Cloudflare request failed'), [], current);
+			});
+		}
 
 		m = new form.Map('natter', _('Natter'),
 			_('Expose ports behind full-cone NAT with optional forwarding and qBittorrent port updates.'));
@@ -183,19 +270,23 @@ return view.extend({
 		o.default = '0';
 		o.description = _('Automatically patches the configured Cloudflare SRV record port to the current mapped public port.');
 
-		o = hideInGrid(s.option(form.Value, 'cloudflare_api_token', _('Cloudflare API token/key')));
+		o = tokenOption = hideInGrid(s.option(form.Value, 'cloudflare_api_token', _('Cloudflare API token/key')));
 		o.password = true;
 		o.depends('cloudflare_enabled', '1');
+		tokenOption.onchange = function(ev, section_id) {
+			return refreshCloudflareZones(section_id);
+		};
 
-		o = hideInGrid(s.option(form.ListValue, 'cloudflare_zone_id', _('Cloudflare zone')));
+		o = zoneOption = hideInGrid(s.option(form.ListValue, 'cloudflare_zone_id', _('Cloudflare zone')));
 		o.value('', _('Select zone'));
 		o.depends('cloudflare_enabled', '1');
 		o.load = function(section_id) {
 			var current = uci.get('natter', section_id, 'cloudflare_zone_id') || '';
+			var token = uci.get('natter', section_id, 'cloudflare_api_token') || '';
 
 			addMissingValue(this, current, current);
-			return callCloudflareZones(section_id).then(L.bind(function(zones) {
-				(zones || []).forEach(L.bind(function(zone) {
+			return callCloudflareZones(section_id, token).then(L.bind(function(data) {
+				((data && data.zones) || []).forEach(L.bind(function(zone) {
 					this.value(zone.id, zone.name || zone.id);
 				}, this));
 
@@ -204,20 +295,24 @@ return view.extend({
 				return current;
 			});
 		};
+		zoneOption.onchange = function(ev, section_id) {
+			return refreshCloudflareSrvRecords(section_id);
+		};
 
-		o = hideInGrid(s.option(form.ListValue, 'cloudflare_record_id', _('Cloudflare SRV record')));
+		o = recordOption = hideInGrid(s.option(form.ListValue, 'cloudflare_record_id', _('Cloudflare SRV record')));
 		o.value('', _('Select SRV record'));
 		o.depends('cloudflare_enabled', '1');
 		o.load = function(section_id) {
 			var current = uci.get('natter', section_id, 'cloudflare_record_id') || '';
 			var zone = uci.get('natter', section_id, 'cloudflare_zone_id') || '';
+			var token = uci.get('natter', section_id, 'cloudflare_api_token') || '';
 
 			addMissingValue(this, current, current);
 			if (!zone)
 				return current;
 
-			return callCloudflareSrvRecords(section_id, zone).then(L.bind(function(records) {
-				(records || []).forEach(L.bind(function(record) {
+			return callCloudflareSrvRecords(section_id, zone, token).then(L.bind(function(data) {
+				((data && data.records) || []).forEach(L.bind(function(record) {
 					this.value(record.id, cloudflareRecordLabel(record));
 				}, this));
 

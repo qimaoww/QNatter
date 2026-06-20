@@ -51,9 +51,10 @@ cloudflare_uci_get() {
 cloudflare_api_get() {
 	local section="$1"
 	local path="$2"
-	local token base
+	local token="${3:-}"
+	local base
 
-	token="$(cloudflare_uci_get "$section" cloudflare_api_token)"
+	[ -n "$token" ] || token="$(cloudflare_uci_get "$section" cloudflare_api_token)"
 	[ -n "$token" ] || return 1
 
 	base="${CLOUDFLARE_API_BASE%/}"
@@ -148,10 +149,11 @@ cloudflare_emit_srv_records() {
 
 cloudflare_zones() {
 	local section="$1"
+	local token="$2"
 	local response
 
-	response="$(cloudflare_api_get "$section" '/zones?per_page=100')" || {
-		printf '{"zones":[]}\n'
+	response="$(cloudflare_api_get "$section" '/zones?per_page=100' "$token")" || {
+		printf '{"zones":[],"error":"Cloudflare request failed"}\n'
 		return 0
 	}
 	cloudflare_emit_zones "$response"
@@ -160,6 +162,7 @@ cloudflare_zones() {
 cloudflare_srv_records() {
 	local section="$1"
 	local zone_id="$2"
+	local token="$3"
 	local response
 
 	[ -n "$zone_id" ] || zone_id="$(cloudflare_uci_get "$section" cloudflare_zone_id)"
@@ -168,8 +171,8 @@ cloudflare_srv_records() {
 		return 0
 	}
 
-	response="$(cloudflare_api_get "$section" "/zones/${zone_id}/dns_records?type=SRV&per_page=100")" || {
-		printf '{"records":[]}\n'
+	response="$(cloudflare_api_get "$section" "/zones/${zone_id}/dns_records?type=SRV&per_page=100" "$token")" || {
+		printf '{"records":[],"error":"Cloudflare request failed"}\n'
 		return 0
 	}
 	cloudflare_emit_srv_records "$response"
@@ -177,7 +180,7 @@ cloudflare_srv_records() {
 
 case "$1" in
 	list)
-		printf '{"status":{},"log":{"instance":"String","lines":"Integer"},"clear_log":{"instance":"String"},"cloudflare_zones":{"section":"String"},"cloudflare_srv_records":{"section":"String","zone_id":"String"}}\n'
+		printf '{"status":{},"log":{"instance":"String","lines":"Integer"},"clear_log":{"instance":"String"},"cloudflare_zones":{"section":"String","token":"String"},"cloudflare_srv_records":{"section":"String","zone_id":"String","token":"String"}}\n'
 		;;
 	call)
 		read -r input
@@ -198,12 +201,14 @@ case "$1" in
 				;;
 			cloudflare_zones)
 				section="$(json_arg_string section "$input")"
-				cloudflare_zones "${section:-default}"
+				token="$(json_arg_string token "$input")"
+				cloudflare_zones "${section:-default}" "$token"
 				;;
 			cloudflare_srv_records)
 				section="$(json_arg_string section "$input")"
 				zone_id="$(json_arg_string zone_id "$input")"
-				cloudflare_srv_records "${section:-default}" "$zone_id"
+				token="$(json_arg_string token "$input")"
+				cloudflare_srv_records "${section:-default}" "$zone_id" "$token"
 				;;
 		esac
 		;;
