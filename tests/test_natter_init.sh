@@ -91,6 +91,8 @@ config_get() {
 		wan_ct:cloudflare_enabled) value="1" ;;
 		wan_ct:cloudflare_api_url) value="https://api.cloudflare.com/client/v4/zones/zone/dns_records/record" ;;
 		wan_ct:cloudflare_api_token) value="cf-secret" ;;
+		wan_ct:cloudflare_zone_id) value="zone-selected" ;;
+		wan_ct:cloudflare_record_id) value="record-selected" ;;
 		wan_cm:enabled) value="1" ;;
 		wan_cm:label) value="Mobile" ;;
 		wan_cm:protocol) value="udp" ;;
@@ -182,6 +184,8 @@ grep -Fq "NATTER_FIREWALL_SRC='wan'" "$tmp/run/wan_ct.env" || fail "Telecom noti
 grep -Fq "CLOUDFLARE_SRV_ENABLED='1'" "$tmp/run/wan_ct.env" || fail "Telecom notify env missing Cloudflare SRV flag"
 grep -Fq "CLOUDFLARE_API_URL='https://api.cloudflare.com/client/v4/zones/zone/dns_records/record'" "$tmp/run/wan_ct.env" || fail "Telecom notify env missing Cloudflare API URL"
 grep -Fq "CLOUDFLARE_API_TOKEN='cf-secret'" "$tmp/run/wan_ct.env" || fail "Telecom notify env missing Cloudflare API token"
+grep -Fq "CLOUDFLARE_ZONE_ID='zone-selected'" "$tmp/run/wan_ct.env" || fail "Telecom notify env missing Cloudflare zone ID"
+grep -Fq "CLOUDFLARE_RECORD_ID='record-selected'" "$tmp/run/wan_ct.env" || fail "Telecom notify env missing Cloudflare record ID"
 grep -Fq "NATTER_AUTO_FIREWALL='0'" "$tmp/run/wan_cm.env" || fail "Mobile notify env should disable auto firewall by default"
 grep -Fq "CLOUDFLARE_SRV_ENABLED='0'" "$tmp/run/wan_cm.env" || fail "Mobile notify env should disable Cloudflare SRV by default"
 

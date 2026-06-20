@@ -134,6 +134,51 @@ done
 grep -Fqx '{"type":"SRV","data":{"port":62000}}' "$cf_curl_body" || \
 	fail "Cloudflare SRV request body must use mapped outer port"
 
+cf_selected_status_file="$tmp/wan_cf_selected.json"
+cf_selected_env_file="$tmp/cf-selected-notify.env"
+cf_selected_curl_bin="$tmp/curl-cloudflare-selected"
+cf_selected_args="$tmp/curl-cloudflare-selected-args.txt"
+cf_selected_body="$tmp/curl-cloudflare-selected-body.json"
+
+cat > "$cf_selected_curl_bin" <<EOF
+#!/bin/sh
+printf '%s\n' "\$@" > "$cf_selected_args"
+while [ "\$#" -gt 0 ]; do
+	case "\$1" in
+		--data|-d|--data-raw)
+			shift
+			printf '%s\n' "\$1" > "$cf_selected_body"
+			;;
+	esac
+	shift
+done
+exit 0
+EOF
+chmod 0755 "$cf_selected_curl_bin"
+
+cat > "$cf_selected_env_file" <<EOF
+NATTER_INSTANCE='wan_cf_selected'
+NATTER_STATUS_FILE='$cf_selected_status_file'
+CLOUDFLARE_SRV_ENABLED='1'
+CLOUDFLARE_API_TOKEN='selected-token'
+CLOUDFLARE_ZONE_ID='zone-selected'
+CLOUDFLARE_RECORD_ID='record-selected'
+QBITTORRENT_ENABLED='0'
+EOF
+
+NATTER_COMMON_SH="$ROOT/natter/files/natter-common.sh" \
+NATTER_QBITTORRENT_SH="$ROOT/natter/files/natter-qbittorrent.sh" \
+NATTER_CURL_BIN="$cf_selected_curl_bin" \
+NATTER_NOTIFY_ENV="$cf_selected_env_file" \
+	"$ROOT/natter/files/natter-notify" tcp 10.10.10.12 51415 203.0.113.12 62006
+
+grep -Fqx 'https://api.cloudflare.com/client/v4/zones/zone-selected/dns_records/record-selected' "$cf_selected_args" || \
+	fail "Cloudflare selected SRV update did not build endpoint from zone and record IDs"
+grep -Fqx 'Authorization: Bearer selected-token' "$cf_selected_args" || \
+	fail "Cloudflare selected SRV update did not send bearer token"
+grep -Fqx '{"type":"SRV","data":{"port":62006}}' "$cf_selected_body" || \
+	fail "Cloudflare selected SRV request body must use mapped outer port"
+
 cf_fail_status_file="$tmp/wan_cf_fail.json"
 cf_fail_args_file="$tmp/cf-fail-user-args.txt"
 cf_fail_user_script="$tmp/cf-fail-user-notify.sh"

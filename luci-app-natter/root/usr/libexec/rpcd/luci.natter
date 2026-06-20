@@ -2,6 +2,10 @@
 
 : "${NATTER_STATUS_BIN:=/usr/libexec/natter-status}"
 : "${NATTER_LOG_BIN:=/usr/libexec/natter-log}"
+: "${NATTER_UCI_BIN:=uci}"
+: "${NATTER_CURL_BIN:=curl}"
+: "${NATTER_JSONFILTER_BIN:=jsonfilter}"
+: "${CLOUDFLARE_API_BASE:=https://api.cloudflare.com/client/v4}"
 
 json_arg_string() {
 	local key="$1"
@@ -27,9 +31,153 @@ json_escape_stream() {
 	}'
 }
 
+json_escape_value() {
+	printf '%s' "$1" | json_escape_stream
+}
+
+json_string() {
+	printf '"'
+	json_escape_value "$1"
+	printf '"'
+}
+
+cloudflare_uci_get() {
+	local section="$1"
+	local option="$2"
+
+	"$NATTER_UCI_BIN" -q get "natter.${section}.${option}" 2>/dev/null || true
+}
+
+cloudflare_api_get() {
+	local section="$1"
+	local path="$2"
+	local token base
+
+	token="$(cloudflare_uci_get "$section" cloudflare_api_token)"
+	[ -n "$token" ] || return 1
+
+	base="${CLOUDFLARE_API_BASE%/}"
+	"$NATTER_CURL_BIN" -fsS -m "${CLOUDFLARE_TIMEOUT:-10}" \
+		-H "Authorization: Bearer $token" \
+		-H "Accept: application/json" \
+		"${base}${path}"
+}
+
+cloudflare_jsonfilter_file() {
+	local input="$1"
+	local expr="$2"
+	local output="$3"
+
+	"$NATTER_JSONFILTER_BIN" -e "$expr" < "$input" > "$output" 2>/dev/null || true
+}
+
+cloudflare_emit_zones() {
+	local response="$1"
+	local tmp ids names first id name
+
+	tmp="$(mktemp -d)"
+	trap 'rm -rf "$tmp"' EXIT HUP INT TERM
+	printf '%s' "$response" > "$tmp/response.json"
+	cloudflare_jsonfilter_file "$tmp/response.json" '@.result[*].id' "$tmp/ids"
+	cloudflare_jsonfilter_file "$tmp/response.json" '@.result[*].name' "$tmp/names"
+
+	printf '{"zones":['
+	first=1
+	exec 3< "$tmp/ids"
+	exec 4< "$tmp/names"
+	while IFS= read -r id <&3 && IFS= read -r name <&4; do
+		[ -n "$id" ] || continue
+		[ "$first" = "1" ] || printf ','
+		first=0
+		printf '{"id":'
+		json_string "$id"
+		printf ',"name":'
+		json_string "$name"
+		printf '}'
+	done
+	exec 3<&-
+	exec 4<&-
+	printf ']}\n'
+	rm -rf "$tmp"
+	trap - EXIT HUP INT TERM
+}
+
+cloudflare_emit_srv_records() {
+	local response="$1"
+	local tmp ids names targets ports first id name target port
+
+	tmp="$(mktemp -d)"
+	trap 'rm -rf "$tmp"' EXIT HUP INT TERM
+	printf '%s' "$response" > "$tmp/response.json"
+	cloudflare_jsonfilter_file "$tmp/response.json" '@.result[*].id' "$tmp/ids"
+	cloudflare_jsonfilter_file "$tmp/response.json" '@.result[*].name' "$tmp/names"
+	cloudflare_jsonfilter_file "$tmp/response.json" '@.result[*].data.target' "$tmp/targets"
+	cloudflare_jsonfilter_file "$tmp/response.json" '@.result[*].data.port' "$tmp/ports"
+
+	printf '{"records":['
+	first=1
+	exec 3< "$tmp/ids"
+	exec 4< "$tmp/names"
+	exec 5< "$tmp/targets"
+	exec 6< "$tmp/ports"
+	while IFS= read -r id <&3 && IFS= read -r name <&4; do
+		IFS= read -r target <&5 || target=""
+		IFS= read -r port <&6 || port="0"
+		[ -n "$id" ] || continue
+		case "$port" in
+			''|*[!0-9]*) port=0 ;;
+		esac
+		[ "$first" = "1" ] || printf ','
+		first=0
+		printf '{"id":'
+		json_string "$id"
+		printf ',"name":'
+		json_string "$name"
+		printf ',"target":'
+		json_string "$target"
+		printf ',"port":%s}' "$port"
+	done
+	exec 3<&-
+	exec 4<&-
+	exec 5<&-
+	exec 6<&-
+	printf ']}\n'
+	rm -rf "$tmp"
+	trap - EXIT HUP INT TERM
+}
+
+cloudflare_zones() {
+	local section="$1"
+	local response
+
+	response="$(cloudflare_api_get "$section" '/zones?per_page=100')" || {
+		printf '{"zones":[]}\n'
+		return 0
+	}
+	cloudflare_emit_zones "$response"
+}
+
+cloudflare_srv_records() {
+	local section="$1"
+	local zone_id="$2"
+	local response
+
+	[ -n "$zone_id" ] || zone_id="$(cloudflare_uci_get "$section" cloudflare_zone_id)"
+	[ -n "$zone_id" ] || {
+		printf '{"records":[]}\n'
+		return 0
+	}
+
+	response="$(cloudflare_api_get "$section" "/zones/${zone_id}/dns_records?type=SRV&per_page=100")" || {
+		printf '{"records":[]}\n'
+		return 0
+	}
+	cloudflare_emit_srv_records "$response"
+}
+
 case "$1" in
 	list)
-		printf '{"status":{},"log":{"instance":"String","lines":"Integer"},"clear_log":{"instance":"String"}}\n'
+		printf '{"status":{},"log":{"instance":"String","lines":"Integer"},"clear_log":{"instance":"String"},"cloudflare_zones":{"section":"String"},"cloudflare_srv_records":{"section":"String","zone_id":"String"}}\n'
 		;;
 	call)
 		read -r input
@@ -47,6 +195,15 @@ case "$1" in
 			clear_log)
 				instance="$(json_arg_string instance "$input")"
 				exec "$NATTER_LOG_BIN" clear "${instance:-default}" 200
+				;;
+			cloudflare_zones)
+				section="$(json_arg_string section "$input")"
+				cloudflare_zones "${section:-default}"
+				;;
+			cloudflare_srv_records)
+				section="$(json_arg_string section "$input")"
+				zone_id="$(json_arg_string zone_id "$input")"
+				cloudflare_srv_records "${section:-default}" "$zone_id"
 				;;
 		esac
 		;;

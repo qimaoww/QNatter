@@ -115,6 +115,21 @@ msgstr "Cloudflare API 地址"
 msgid "Cloudflare API token"
 msgstr "Cloudflare API Token"
 
+msgid "Cloudflare API token/key"
+msgstr "Cloudflare API Token/Key"
+
+msgid "Cloudflare zone"
+msgstr "Cloudflare 区域"
+
+msgid "Select zone"
+msgstr "选择区域"
+
+msgid "Cloudflare SRV record"
+msgstr "Cloudflare SRV 记录"
+
+msgid "Select SRV record"
+msgstr "选择 SRV 记录"
+
 msgid "Retry until target opens"
 msgstr "重试直到目标打开"
 

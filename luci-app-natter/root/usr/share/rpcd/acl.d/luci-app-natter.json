@@ -4,7 +4,7 @@
 		"read": {
 			"uci": [ "natter", "network" ],
 			"ubus": {
-				"luci.natter": [ "status", "log" ],
+				"luci.natter": [ "status", "log", "cloudflare_zones", "cloudflare_srv_records" ],
 				"service": [ "list" ]
 			}
 		},

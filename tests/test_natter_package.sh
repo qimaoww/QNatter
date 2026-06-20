@@ -100,6 +100,7 @@ assert_not_contains luci-app-natter/Makefile 'luci-compat'
 assert_not_contains luci-app-natter/Makefile 'LUCI_DEPENDS:=.*\+luci-compat'
 assert_contains luci-app-natter/htdocs/luci-static/resources/view/natter/instances.js "^'require form';"
 assert_contains luci-app-natter/htdocs/luci-static/resources/view/natter/instances.js "^'require fs';"
+assert_contains luci-app-natter/htdocs/luci-static/resources/view/natter/instances.js "^'require rpc';"
 assert_contains luci-app-natter/htdocs/luci-static/resources/view/natter/instances.js "^'require tools\\.widgets as widgets';"
 assert_not_contains luci-app-natter/htdocs/luci-static/resources/view/natter/instances.js 'cbi\('
 assert_contains luci-app-natter/htdocs/luci-static/resources/view/natter/instances.js 'natter-theme-aurora'
@@ -132,8 +133,11 @@ assert_not_contains luci-app-natter/htdocs/luci-static/resources/view/natter/ins
 assert_contains luci-app-natter/htdocs/luci-static/resources/view/natter/instances.js "hideInGrid\\(s\\.option\\(form\\.DynamicList, 'stun_server'"
 assert_contains luci-app-natter/htdocs/luci-static/resources/view/natter/instances.js "hideInGrid\\(s\\.option\\(form\\.Value, 'notify_script'"
 assert_contains luci-app-natter/htdocs/luci-static/resources/view/natter/instances.js "hideInGrid\\(s\\.option\\(form\\.Flag, 'cloudflare_enabled'"
-assert_contains luci-app-natter/htdocs/luci-static/resources/view/natter/instances.js "hideInGrid\\(s\\.option\\(form\\.Value, 'cloudflare_api_url'"
 assert_contains luci-app-natter/htdocs/luci-static/resources/view/natter/instances.js "hideInGrid\\(s\\.option\\(form\\.Value, 'cloudflare_api_token'"
+assert_contains luci-app-natter/htdocs/luci-static/resources/view/natter/instances.js "hideInGrid\\(s\\.option\\(form\\.ListValue, 'cloudflare_zone_id'"
+assert_contains luci-app-natter/htdocs/luci-static/resources/view/natter/instances.js "hideInGrid\\(s\\.option\\(form\\.ListValue, 'cloudflare_record_id'"
+assert_contains luci-app-natter/htdocs/luci-static/resources/view/natter/instances.js 'callCloudflareZones'
+assert_contains luci-app-natter/htdocs/luci-static/resources/view/natter/instances.js 'callCloudflareSrvRecords'
 assert_contains luci-app-natter/htdocs/luci-static/resources/view/natter/instances.js "hideInGrid\\(s\\.option\\(form\\.Flag, 'qbittorrent_enabled'"
 assert_contains luci-app-natter/htdocs/luci-static/resources/view/natter/status.js 'natter-theme-aurora'
 assert_contains luci-app-natter/htdocs/luci-static/resources/view/natter/status.js "expect: \\{ '': \\{ instances: \\[\\] \\} \\}"
@@ -145,6 +149,12 @@ assert_contains luci-app-natter/htdocs/luci-static/resources/view/natter/log.js 
 assert_contains luci-app-natter/root/usr/share/luci/menu.d/luci-app-natter.json '"type"[[:space:]]*:[[:space:]]*"view"'
 assert_contains luci-app-natter/root/usr/libexec/rpcd/luci.natter '"instance":"String"'
 assert_contains luci-app-natter/root/usr/libexec/rpcd/luci.natter '"lines":"Integer"'
+assert_contains luci-app-natter/root/usr/libexec/rpcd/luci.natter '"cloudflare_zones":\{"section":"String"\}'
+assert_contains luci-app-natter/root/usr/libexec/rpcd/luci.natter '"cloudflare_srv_records":\{"section":"String","zone_id":"String"\}'
+assert_contains luci-app-natter/root/usr/libexec/rpcd/luci.natter 'cloudflare_api_get'
+assert_contains luci-app-natter/root/usr/libexec/rpcd/luci.natter 'dns_records\?type=SRV'
+assert_contains luci-app-natter/root/usr/share/rpcd/acl.d/luci-app-natter.json '"cloudflare_zones"'
+assert_contains luci-app-natter/root/usr/share/rpcd/acl.d/luci-app-natter.json '"cloudflare_srv_records"'
 assert_contains luci-app-natter/root/usr/libexec/natter-status 'grep -Fx'
 assert_contains luci-app-natter/htdocs/luci-static/resources/natter/natter.css 'theme-argon'
 assert_contains luci-app-natter/htdocs/luci-static/resources/natter/natter.css 'natter-theme-aurora'
@@ -170,6 +180,8 @@ assert_contains natter/files/natter.config "option auto_firewall '0'"
 assert_contains natter/files/natter.config "option cloudflare_enabled '0'"
 assert_contains natter/files/natter.config "option cloudflare_api_url ''"
 assert_contains natter/files/natter.config "option cloudflare_api_token ''"
+assert_contains natter/files/natter.config "option cloudflare_zone_id ''"
+assert_contains natter/files/natter.config "option cloudflare_record_id ''"
 assert_not_contains natter/files/natter.config "^[[:space:]]*list[[:space:]]+stun_server"
 assert_contains natter/files/natter-common.sh 'natter_forward_method_or_auto'
 assert_contains natter/files/natter-common.sh '\[ "\$forward_method" != "auto" \]'
@@ -179,11 +191,15 @@ assert_contains natter/files/natter.init 'NATTER_FIREWALL_SECTION'
 assert_contains natter/files/natter.init 'CLOUDFLARE_SRV_ENABLED'
 assert_contains natter/files/natter.init 'CLOUDFLARE_API_URL'
 assert_contains natter/files/natter.init 'CLOUDFLARE_API_TOKEN'
+assert_contains natter/files/natter.init 'CLOUDFLARE_ZONE_ID'
+assert_contains natter/files/natter.init 'CLOUDFLARE_RECORD_ID'
 assert_contains natter/files/natter-notify 'NATTER_AUTO_FIREWALL'
 assert_contains natter/files/natter-notify 'NATTER_UCI_BIN'
 assert_contains natter/files/natter-notify 'firewall\.\$\{section\}\.dest_port=\$\{port\}'
 assert_contains natter/files/natter-notify 'update_cloudflare_srv'
 assert_contains natter/files/natter-notify 'Authorization: Bearer'
+assert_contains natter/files/natter-notify 'CLOUDFLARE_ZONE_ID'
+assert_contains natter/files/natter-notify 'CLOUDFLARE_RECORD_ID'
 assert_contains natter/files/natter-notify '\{"type":"SRV","data":\{"port":'
 assert_not_contains natter/files/natter.config 'option runtime'
 assert_not_contains natter/files/natter.init 'config_get runtime'
@@ -236,6 +252,7 @@ assert_contains luci-app-natter/Makefile 'LUCI_DEPENDS:=.*\+rpcd'
 assert_contains luci-app-natter/Makefile 'LUCI_DEPENDS:=.*\+uhttpd'
 assert_contains luci-app-natter/Makefile 'LUCI_DEPENDS:=.*\+uhttpd-mod-ubus'
 assert_contains luci-app-natter/Makefile 'LUCI_DEPENDS:=.*\+uci'
+assert_contains luci-app-natter/Makefile 'LUCI_DEPENDS:=.*\+jsonfilter'
 assert_contains natter/files/natter.uci-default 'NATTER_UCI_CONFIG:=/etc/config/natter'
 assert_contains natter/files/natter.uci-default 'NATTER_UCI_DEFAULT:=/etc/config/natter.default'
 assert_contains natter/files/natter.uci-default '\[ -e "\$NATTER_UCI_CONFIG" \] && exit 0'
@@ -251,8 +268,9 @@ assert_po_translation 'Auto firewall' '自动防火墙'
 assert_po_translation 'Automatically opens this instance current Natter port on the WAN firewall.' '自动在 WAN 防火墙上放行此实例当前的 Natter 端口。'
 assert_po_translation 'Forward target port' '转发目标端口'
 assert_po_translation 'Cloudflare SRV' 'Cloudflare SRV'
-assert_po_translation 'Cloudflare API URL' 'Cloudflare API 地址'
-assert_po_translation 'Cloudflare API token' 'Cloudflare API Token'
+assert_po_translation 'Cloudflare API token/key' 'Cloudflare API Token/Key'
+assert_po_translation 'Cloudflare zone' 'Cloudflare 区域'
+assert_po_translation 'Cloudflare SRV record' 'Cloudflare SRV 记录'
 assert_not_contains luci-app-natter/po/zh_Hans/natter.po 'Port 0 forwards to the Natter mapped internal port\.'
 assert_po_translation 'Port 0 forwards to the port Natter reports after punching.' '端口 0 会转发到 Natter 打洞后报告的端口。'
 assert_po_translation 'Natter Status' 'Natter 状态'

@@ -15,6 +15,10 @@ trap 'rm -rf "$tmp"' EXIT
 status_bin="$tmp/natter-status"
 log_bin="$tmp/natter-log"
 log_calls="$tmp/log-calls.txt"
+uci_bin="$tmp/uci"
+curl_bin="$tmp/curl-cloudflare"
+jsonfilter_bin="$tmp/jsonfilter"
+curl_calls="$tmp/curl-calls.txt"
 
 cat > "$status_bin" <<'EOF'
 #!/bin/sh
@@ -38,7 +42,69 @@ esac
 EOF
 chmod 0755 "$log_bin"
 
+cat > "$uci_bin" <<'EOF'
+#!/bin/sh
+[ "$1" = "-q" ] && shift
+[ "$1" = "get" ] || exit 1
+case "$2" in
+	natter.wan_ct.cloudflare_api_token) printf 'cf-token\n' ;;
+	natter.wan_ct.cloudflare_zone_id) printf 'zone1\n' ;;
+	*) exit 1 ;;
+esac
+EOF
+chmod 0755 "$uci_bin"
+
+cat > "$curl_bin" <<EOF
+#!/bin/sh
+printf '%s\n' "\$*" >> "$curl_calls"
+case "\$*" in
+	*'/zones/zone1/dns_records?type=SRV&per_page=100'*)
+		cat <<'JSON'
+{"result":[{"id":"record1","name":"_qb._tcp.example.com","data":{"target":"qb.example.com","port":51413}},{"id":"record2","name":"_mc._tcp.example.com","data":{"target":"mc.example.com","port":25565}}]}
+JSON
+		;;
+	*'/zones?per_page=100'*)
+		cat <<'JSON'
+{"result":[{"id":"zone1","name":"example.com"},{"id":"zone2","name":"example.net"}]}
+JSON
+		;;
+	*) exit 22 ;;
+esac
+EOF
+chmod 0755 "$curl_bin"
+
+cat > "$jsonfilter_bin" <<'EOF'
+#!/bin/sh
+expr=""
+while [ "$#" -gt 0 ]; do
+	case "$1" in
+		-e)
+			shift
+			expr="$1"
+			;;
+	esac
+	shift
+done
+input="$(cat)"
+case "$input:$expr" in
+	*'example.net'*':@.result[*].id') printf 'zone1\nzone2\n' ;;
+	*'example.net'*':@.result[*].name') printf 'example.com\nexample.net\n' ;;
+	*'record2'*':@.result[*].id') printf 'record1\nrecord2\n' ;;
+	*'record2'*':@.result[*].name') printf '_qb._tcp.example.com\n_mc._tcp.example.com\n' ;;
+	*'record2'*':@.result[*].data.target') printf 'qb.example.com\nmc.example.com\n' ;;
+	*'record2'*':@.result[*].data.port') printf '51413\n25565\n' ;;
+	*) exit 1 ;;
+esac
+EOF
+chmod 0755 "$jsonfilter_bin"
+
 rpcd="$ROOT/luci-app-natter/root/usr/libexec/rpcd/luci.natter"
+
+list_output="$("$rpcd" list)"
+printf '%s' "$list_output" | grep -Fq '"cloudflare_zones":{"section":"String"}' || \
+	fail "rpc list is missing cloudflare_zones signature: $list_output"
+printf '%s' "$list_output" | grep -Fq '"cloudflare_srv_records":{"section":"String","zone_id":"String"}' || \
+	fail "rpc list is missing cloudflare_srv_records signature: $list_output"
 
 status_output="$(
 	printf '{}\n' | NATTER_STATUS_BIN="$status_bin" NATTER_LOG_BIN="$log_bin" "$rpcd" call status
@@ -57,5 +123,19 @@ clear_output="$(
 )"
 [ "$clear_output" = '{"ok":true}' ] || fail "clear output = $clear_output"
 grep -Fqx 'clear wan_ct 200' "$log_calls" || fail "clear helper was not called with requested instance"
+
+zones_output="$(
+	printf '{"section":"wan_ct"}\n' | NATTER_UCI_BIN="$uci_bin" NATTER_CURL_BIN="$curl_bin" NATTER_JSONFILTER_BIN="$jsonfilter_bin" "$rpcd" call cloudflare_zones
+)"
+[ "$zones_output" = '{"zones":[{"id":"zone1","name":"example.com"},{"id":"zone2","name":"example.net"}]}' ] || \
+	fail "Cloudflare zones output = $zones_output"
+
+records_output="$(
+	printf '{"section":"wan_ct","zone_id":"zone1"}\n' | NATTER_UCI_BIN="$uci_bin" NATTER_CURL_BIN="$curl_bin" NATTER_JSONFILTER_BIN="$jsonfilter_bin" "$rpcd" call cloudflare_srv_records
+)"
+[ "$records_output" = '{"records":[{"id":"record1","name":"_qb._tcp.example.com","target":"qb.example.com","port":51413},{"id":"record2","name":"_mc._tcp.example.com","target":"mc.example.com","port":25565}]}' ] || \
+	fail "Cloudflare SRV records output = $records_output"
+grep -Fq 'Authorization: Bearer cf-token' "$curl_calls" || fail "Cloudflare RPC did not send bearer token"
+grep -Fq 'zones/zone1/dns_records?type=SRV&per_page=100' "$curl_calls" || fail "Cloudflare RPC did not request SRV records"
 
 printf 'natter rpcd checks passed\n'

@@ -3,7 +3,22 @@
 'require form';
 'require uci';
 'require fs';
+'require rpc';
 'require tools.widgets as widgets';
+
+var callCloudflareZones = rpc.declare({
+	object: 'luci.natter',
+	method: 'cloudflare_zones',
+	params: [ 'section' ],
+	expect: { zones: [] }
+});
+
+var callCloudflareSrvRecords = rpc.declare({
+	object: 'luci.natter',
+	method: 'cloudflare_srv_records',
+	params: [ 'section', 'zone_id' ],
+	expect: { records: [] }
+});
 
 function detectThemeClass() {
 	var text = [
@@ -26,6 +41,25 @@ function detectThemeClass() {
 function hideInGrid(option) {
 	option.modalonly = true;
 	return option;
+}
+
+function addMissingValue(option, value, label) {
+	if (!value)
+		return;
+
+	option.value(value, label || value);
+}
+
+function cloudflareRecordLabel(record) {
+	var label = record.name || record.id || '';
+
+	if (record.target)
+		label += ' -> ' + record.target;
+
+	if (record.port)
+		label += ':' + record.port;
+
+	return label || record.id;
 }
 
 return view.extend({
@@ -149,13 +183,49 @@ return view.extend({
 		o.default = '0';
 		o.description = _('Automatically patches the configured Cloudflare SRV record port to the current mapped public port.');
 
-		o = hideInGrid(s.option(form.Value, 'cloudflare_api_url', _('Cloudflare API URL')));
-		o.placeholder = 'https://api.cloudflare.com/client/v4/zones/.../dns_records/...';
-		o.depends('cloudflare_enabled', '1');
-
-		o = hideInGrid(s.option(form.Value, 'cloudflare_api_token', _('Cloudflare API token')));
+		o = hideInGrid(s.option(form.Value, 'cloudflare_api_token', _('Cloudflare API token/key')));
 		o.password = true;
 		o.depends('cloudflare_enabled', '1');
+
+		o = hideInGrid(s.option(form.ListValue, 'cloudflare_zone_id', _('Cloudflare zone')));
+		o.value('', _('Select zone'));
+		o.depends('cloudflare_enabled', '1');
+		o.load = function(section_id) {
+			var current = uci.get('natter', section_id, 'cloudflare_zone_id') || '';
+
+			addMissingValue(this, current, current);
+			return callCloudflareZones(section_id).then(L.bind(function(zones) {
+				(zones || []).forEach(L.bind(function(zone) {
+					this.value(zone.id, zone.name || zone.id);
+				}, this));
+
+				return current;
+			}, this)).catch(function() {
+				return current;
+			});
+		};
+
+		o = hideInGrid(s.option(form.ListValue, 'cloudflare_record_id', _('Cloudflare SRV record')));
+		o.value('', _('Select SRV record'));
+		o.depends('cloudflare_enabled', '1');
+		o.load = function(section_id) {
+			var current = uci.get('natter', section_id, 'cloudflare_record_id') || '';
+			var zone = uci.get('natter', section_id, 'cloudflare_zone_id') || '';
+
+			addMissingValue(this, current, current);
+			if (!zone)
+				return current;
+
+			return callCloudflareSrvRecords(section_id, zone).then(L.bind(function(records) {
+				(records || []).forEach(L.bind(function(record) {
+					this.value(record.id, cloudflareRecordLabel(record));
+				}, this));
+
+				return current;
+			}, this)).catch(function() {
+				return current;
+			});
+		};
 
 		o = hideInGrid(s.option(form.Flag, 'retry_target', _('Retry until target opens')));
 		o.default = '0';
