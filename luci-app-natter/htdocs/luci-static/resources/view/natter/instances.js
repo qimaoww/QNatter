@@ -4,6 +4,7 @@
 'require uci';
 'require fs';
 'require rpc';
+'require ui';
 'require tools.widgets as widgets';
 
 var callCloudflareZones = rpc.declare({
@@ -18,6 +19,13 @@ var callCloudflareSrvRecords = rpc.declare({
 	method: 'cloudflare_srv_records',
 	params: [ 'section', 'zone_id', 'token' ],
 	expect: { '': { records: [] } }
+});
+
+var callRenameInstance = rpc.declare({
+	object: 'luci.natter',
+	method: 'rename_instance',
+	params: [ 'old', 'new' ],
+	expect: { '': { ok: false } }
 });
 
 function detectThemeClass() {
@@ -151,6 +159,35 @@ return view.extend({
 			};
 		}
 
+		function renameInstanceButtonRenderer() {
+			return function(section_id) {
+				return E('button', {
+					'type': 'button',
+					'class': 'cbi-button cbi-button-apply',
+					'click': L.bind(function(ev) {
+						var renameOption = findCloudflareOption(this, '_rename_to');
+						var elem = renameOption ? renameOption.getUIElement(section_id) : null;
+						var newName = elem ? (elem.getValue() || '').trim() : '';
+
+						ev.preventDefault();
+						if (!newName || newName === section_id)
+							return Promise.resolve();
+
+						return callRenameInstance(section_id, newName).then(function(result) {
+							if (!result || !result.ok) {
+								ui.addNotification(null, E('p', {}, [ result && result.error ? result.error : _('Rename failed') ]), 'danger');
+								return;
+							}
+
+							window.location.reload();
+						}).catch(function() {
+							ui.addNotification(null, E('p', {}, [ _('Rename failed') ]), 'danger');
+						});
+					}, this)
+				}, [ _('Rename') ]);
+			};
+		}
+
 		function refreshCloudflareSrvRecords(contextOption, section_id) {
 			var token = getCloudflareToken(contextOption, section_id);
 			var zone = getOptionValue(contextOption, 'cloudflare_zone_id', section_id);
@@ -227,6 +264,21 @@ return view.extend({
 
 		o = s.option(form.Value, 'label', _('Label'));
 		o.placeholder = 'Default';
+
+		o = hideInGrid(s.option(form.Value, '_rename_to', _('Instance ID')));
+		o.rmempty = true;
+		o.datatype = 'uciname';
+		o.placeholder = _('letters, numbers, and underscore');
+		o.load = function() { return ''; };
+		o.write = function() {};
+
+		o = hideInGrid(s.option(form.DummyValue, '_rename_instance', _('Rename instance')));
+		o.title = '&#160;';
+		o.inputtitle = _('Rename');
+		o.inputstyle = 'apply';
+		o.default = '1';
+		o.rmempty = true;
+		o.renderWidget = renameInstanceButtonRenderer();
 
 		o = s.option(form.ListValue, 'protocol', _('Protocol'));
 		o.value('tcp', 'TCP');

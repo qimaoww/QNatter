@@ -164,6 +164,10 @@ assert_contains luci-app-natter/htdocs/luci-static/resources/view/natter/instanc
 assert_contains luci-app-natter/htdocs/luci-static/resources/view/natter/instances.js "hideInGrid\\(s\\.option\\(form\\.ListValue, 'cloudflare_record_id'"
 assert_contains luci-app-natter/htdocs/luci-static/resources/view/natter/instances.js 'callCloudflareZones'
 assert_contains luci-app-natter/htdocs/luci-static/resources/view/natter/instances.js 'callCloudflareSrvRecords'
+assert_contains luci-app-natter/htdocs/luci-static/resources/view/natter/instances.js 'callRenameInstance'
+assert_contains luci-app-natter/htdocs/luci-static/resources/view/natter/instances.js "rename_instance"
+assert_contains luci-app-natter/htdocs/luci-static/resources/view/natter/instances.js "form\\.Value, '_rename_to'"
+assert_contains luci-app-natter/htdocs/luci-static/resources/view/natter/instances.js "form\\.DummyValue, '_rename_instance'"
 assert_contains luci-app-natter/htdocs/luci-static/resources/view/natter/instances.js "hideInGrid\\(s\\.option\\(form\\.Flag, 'qbittorrent_enabled'"
 assert_contains luci-app-natter/htdocs/luci-static/resources/view/natter/status.js 'natter-theme-aurora'
 assert_contains luci-app-natter/htdocs/luci-static/resources/view/natter/status.js "expect: \\{ '': \\{ instances: \\[\\] \\} \\}"
@@ -178,10 +182,12 @@ assert_contains luci-app-natter/root/usr/libexec/rpcd/luci.natter '"instance":"S
 assert_contains luci-app-natter/root/usr/libexec/rpcd/luci.natter '"lines":"Integer"'
 assert_contains luci-app-natter/root/usr/libexec/rpcd/luci.natter '"cloudflare_zones":\{"section":"String","token":"String"\}'
 assert_contains luci-app-natter/root/usr/libexec/rpcd/luci.natter '"cloudflare_srv_records":\{"section":"String","zone_id":"String","token":"String"\}'
+assert_contains luci-app-natter/root/usr/libexec/rpcd/luci.natter '"rename_instance":\{"old":"String","new":"String"\}'
 assert_contains luci-app-natter/root/usr/libexec/rpcd/luci.natter 'cloudflare_api_get'
 assert_contains luci-app-natter/root/usr/libexec/rpcd/luci.natter 'dns_records\?type=SRV'
 assert_contains luci-app-natter/root/usr/share/rpcd/acl.d/luci-app-natter.json '"cloudflare_zones"'
 assert_contains luci-app-natter/root/usr/share/rpcd/acl.d/luci-app-natter.json '"cloudflare_srv_records"'
+assert_contains luci-app-natter/root/usr/share/rpcd/acl.d/luci-app-natter.json '"rename_instance"'
 assert_contains luci-app-natter/root/usr/libexec/natter-status 'grep -Fx'
 assert_contains luci-app-natter/htdocs/luci-static/resources/natter/natter.css 'theme-argon'
 assert_contains luci-app-natter/htdocs/luci-static/resources/natter/natter.css 'natter-theme-aurora'

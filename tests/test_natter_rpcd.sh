@@ -16,9 +16,17 @@ status_bin="$tmp/natter-status"
 log_bin="$tmp/natter-log"
 log_calls="$tmp/log-calls.txt"
 uci_bin="$tmp/uci"
+mv_bin="$tmp/mv"
+init_bin="$tmp/natter-init"
 curl_bin="$tmp/curl-cloudflare"
 jsonfilter_bin="$tmp/jsonfilter"
 curl_calls="$tmp/curl-calls.txt"
+uci_calls="$tmp/uci-calls.txt"
+mv_calls="$tmp/mv-calls.txt"
+init_calls="$tmp/init-calls.txt"
+run_dir="$tmp/run"
+log_dir="$tmp/logs"
+mkdir -p "$run_dir" "$log_dir"
 
 cat > "$status_bin" <<'EOF'
 #!/bin/sh
@@ -42,17 +50,45 @@ esac
 EOF
 chmod 0755 "$log_bin"
 
-cat > "$uci_bin" <<'EOF'
+cat > "$uci_bin" <<EOF
 #!/bin/sh
-[ "$1" = "-q" ] && shift
-[ "$1" = "get" ] || exit 1
-case "$2" in
-	natter.wan_ct.cloudflare_api_token) printf 'cf-token\n' ;;
-	natter.wan_ct.cloudflare_zone_id) printf 'zone1\n' ;;
-	*) exit 1 ;;
+printf '%s\n' "\$*" >> "$uci_calls"
+quiet=0
+[ "\$1" = "-q" ] && quiet=1 && shift
+case "\$1" in
+	get)
+		case "\$2" in
+			natter.wan_ct) printf 'instance\n' ;;
+			natter.wan_new) exit 1 ;;
+			natter.bad-name) exit 1 ;;
+			natter.wan_ct.cloudflare_api_token) printf 'cf-token\n' ;;
+			natter.wan_ct.cloudflare_zone_id) printf 'zone1\n' ;;
+			*) exit 1 ;;
+		esac
+		;;
+	rename|delete|commit)
+		exit 0
+		;;
+	*)
+		exit 1
+		;;
 esac
 EOF
 chmod 0755 "$uci_bin"
+
+cat > "$mv_bin" <<EOF
+#!/bin/sh
+printf '%s\n' "\$*" >> "$mv_calls"
+exit 0
+EOF
+chmod 0755 "$mv_bin"
+
+cat > "$init_bin" <<EOF
+#!/bin/sh
+printf '%s\n' "\$*" >> "$init_calls"
+exit 0
+EOF
+chmod 0755 "$init_bin"
 
 cat > "$curl_bin" <<EOF
 #!/bin/sh
@@ -105,6 +141,8 @@ printf '%s' "$list_output" | grep -Fq '"cloudflare_zones":{"section":"String","t
 	fail "rpc list is missing cloudflare_zones signature: $list_output"
 printf '%s' "$list_output" | grep -Fq '"cloudflare_srv_records":{"section":"String","zone_id":"String","token":"String"}' || \
 	fail "rpc list is missing cloudflare_srv_records signature: $list_output"
+printf '%s' "$list_output" | grep -Fq '"rename_instance":{"old":"String","new":"String"}' || \
+	fail "rpc list is missing rename_instance signature: $list_output"
 
 status_output="$(
 	printf '{}\n' | NATTER_STATUS_BIN="$status_bin" NATTER_LOG_BIN="$log_bin" "$rpcd" call status
@@ -144,5 +182,35 @@ unsaved_zones_output="$(
 [ "$unsaved_zones_output" = '{"zones":[{"id":"zone1","name":"example.com"},{"id":"zone2","name":"example.net"}]}' ] || \
 	fail "Cloudflare zones output must use unsaved input token: $unsaved_zones_output"
 grep -Fq 'Authorization: Bearer input-token' "$curl_calls" || fail "Cloudflare RPC did not send unsaved input token"
+
+: > "$run_dir/wan_ct.json"
+: > "$run_dir/wan_ct.env"
+: > "$run_dir/wan_ct.notify"
+: > "$log_dir/wan_ct.log"
+
+rename_output="$(
+	printf '{"old":"wan_ct","new":"wan_new"}\n' | \
+		NATTER_UCI_BIN="$uci_bin" \
+		NATTER_MV_BIN="$mv_bin" \
+		NATTER_INIT_BIN="$init_bin" \
+		NATTER_RUN_DIR="$run_dir" \
+		NATTER_LOG_DIR="$log_dir" \
+		"$rpcd" call rename_instance
+)"
+[ "$rename_output" = '{"ok":true,"name":"wan_new"}' ] || fail "rename output = $rename_output"
+grep -Fqx 'rename natter.wan_ct=wan_new' "$uci_calls" || fail "rename did not rename natter UCI section"
+grep -Fqx 'delete firewall.natter_wan_ct' "$uci_calls" || fail "rename did not delete old auto firewall section"
+grep -Fqx 'commit natter' "$uci_calls" || fail "rename did not commit natter config"
+grep -Fqx 'commit firewall' "$uci_calls" || fail "rename did not commit firewall config"
+grep -Fqx "$run_dir/wan_ct.json $run_dir/wan_new.json" "$mv_calls" || fail "rename did not move status file"
+grep -Fqx "$run_dir/wan_ct.env $run_dir/wan_new.env" "$mv_calls" || fail "rename did not move env file"
+grep -Fqx "$run_dir/wan_ct.notify $run_dir/wan_new.notify" "$mv_calls" || fail "rename did not move notify wrapper"
+grep -Fqx "$log_dir/wan_ct.log $log_dir/wan_new.log" "$mv_calls" || fail "rename did not move log file"
+grep -Fqx 'reload' "$init_calls" || fail "rename did not reload Natter"
+
+invalid_rename_output="$(
+	printf '{"old":"wan_ct","new":"bad-name"}\n' | NATTER_UCI_BIN="$uci_bin" "$rpcd" call rename_instance
+)"
+printf '%s' "$invalid_rename_output" | grep -Fq '"ok":false' || fail "invalid rename did not fail"
 
 printf 'natter rpcd checks passed\n'

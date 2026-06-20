@@ -3,6 +3,10 @@
 : "${NATTER_STATUS_BIN:=/usr/libexec/natter-status}"
 : "${NATTER_LOG_BIN:=/usr/libexec/natter-log}"
 : "${NATTER_UCI_BIN:=uci}"
+: "${NATTER_MV_BIN:=mv}"
+: "${NATTER_INIT_BIN:=/etc/init.d/natter}"
+: "${NATTER_RUN_DIR:=/var/run/natter}"
+: "${NATTER_LOG_DIR:=/var/log/natter}"
 : "${NATTER_CURL_BIN:=curl}"
 : "${NATTER_JSONFILTER_BIN:=jsonfilter}"
 : "${CLOUDFLARE_API_BASE:=https://api.cloudflare.com/client/v4}"
@@ -39,6 +43,112 @@ json_string() {
 	printf '"'
 	json_escape_value "$1"
 	printf '"'
+}
+
+runtime_slug() {
+	printf '%s' "${1:-default}" | awk '
+		BEGIN {
+			for (i = 1; i < 128; i++)
+				ord[sprintf("%c", i)] = i
+		}
+		{
+			for (i = 1; i <= length($0); i++) {
+				char = substr($0, i, 1)
+				next_three = substr($0, i + 1, 3)
+				if (char == "_" && next_three ~ /^x[0-9A-Fa-f][0-9A-Fa-f]$/)
+					out = out "_x5f"
+				else if (char ~ /^[A-Za-z0-9_]$/)
+					out = out char
+				else if (char in ord)
+					out = out sprintf("_x%02x", ord[char])
+				else
+					out = out "_"
+			}
+		}
+		END {
+			if (out == "")
+				out = "default"
+			print out
+		}
+	'
+}
+
+emit_error() {
+	local message="$1"
+
+	printf '{"ok":false,"error":'
+	json_string "$message"
+	printf '}\n'
+}
+
+valid_section_name() {
+	case "$1" in
+		''|*[!A-Za-z0-9_]*)
+			return 1
+			;;
+	esac
+	return 0
+}
+
+move_if_exists() {
+	local src="$1"
+	local dest="$2"
+
+	[ -e "$src" ] || return 0
+	"$NATTER_MV_BIN" "$src" "$dest" >/dev/null 2>&1 || true
+}
+
+rename_instance() {
+	local old="$1"
+	local new="$2"
+	local old_slug new_slug
+
+	valid_section_name "$old" || {
+		emit_error "Invalid old instance name"
+		return 0
+	}
+	valid_section_name "$new" || {
+		emit_error "Invalid new instance name"
+		return 0
+	}
+	[ "$old" != "$new" ] || {
+		printf '{"ok":true,"name":'
+		json_string "$new"
+		printf '}\n'
+		return 0
+	}
+
+	if ! "$NATTER_UCI_BIN" -q get "natter.${old}" >/dev/null 2>&1; then
+		emit_error "Instance not found"
+		return 0
+	fi
+	if "$NATTER_UCI_BIN" -q get "natter.${new}" >/dev/null 2>&1; then
+		emit_error "Instance name already exists"
+		return 0
+	fi
+
+	if ! "$NATTER_UCI_BIN" rename "natter.${old}=${new}" ||
+		! "$NATTER_UCI_BIN" commit natter; then
+		emit_error "Failed to rename instance"
+		return 0
+	fi
+
+	old_slug="$(runtime_slug "$old")"
+	new_slug="$(runtime_slug "$new")"
+	"$NATTER_UCI_BIN" delete "firewall.natter_${old_slug}" >/dev/null 2>&1 || true
+	"$NATTER_UCI_BIN" commit firewall >/dev/null 2>&1 || true
+	move_if_exists "${NATTER_RUN_DIR}/${old_slug}.json" "${NATTER_RUN_DIR}/${new_slug}.json"
+	move_if_exists "${NATTER_RUN_DIR}/${old_slug}.env" "${NATTER_RUN_DIR}/${new_slug}.env"
+	move_if_exists "${NATTER_RUN_DIR}/${old_slug}.notify" "${NATTER_RUN_DIR}/${new_slug}.notify"
+	move_if_exists "${NATTER_LOG_DIR}/${old_slug}.log" "${NATTER_LOG_DIR}/${new_slug}.log"
+
+	if [ -x "$NATTER_INIT_BIN" ]; then
+		"$NATTER_INIT_BIN" reload >/dev/null 2>&1 || true
+	fi
+
+	printf '{"ok":true,"name":'
+	json_string "$new"
+	printf '}\n'
 }
 
 cloudflare_uci_get() {
@@ -180,7 +290,7 @@ cloudflare_srv_records() {
 
 case "$1" in
 	list)
-		printf '{"status":{},"log":{"instance":"String","lines":"Integer"},"clear_log":{"instance":"String"},"cloudflare_zones":{"section":"String","token":"String"},"cloudflare_srv_records":{"section":"String","zone_id":"String","token":"String"}}\n'
+		printf '{"status":{},"log":{"instance":"String","lines":"Integer"},"clear_log":{"instance":"String"},"cloudflare_zones":{"section":"String","token":"String"},"cloudflare_srv_records":{"section":"String","zone_id":"String","token":"String"},"rename_instance":{"old":"String","new":"String"}}\n'
 		;;
 	call)
 		read -r input
@@ -209,6 +319,11 @@ case "$1" in
 				zone_id="$(json_arg_string zone_id "$input")"
 				token="$(json_arg_string token "$input")"
 				cloudflare_srv_records "${section:-default}" "$zone_id" "$token"
+				;;
+			rename_instance)
+				old="$(json_arg_string old "$input")"
+				new="$(json_arg_string new "$input")"
+				rename_instance "$old" "$new"
 				;;
 		esac
 		;;

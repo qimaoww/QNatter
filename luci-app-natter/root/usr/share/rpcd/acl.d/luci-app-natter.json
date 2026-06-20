@@ -11,7 +11,7 @@
 		"write": {
 			"uci": [ "natter" ],
 			"ubus": {
-				"luci.natter": [ "clear_log" ]
+				"luci.natter": [ "clear_log", "rename_instance" ]
 			}
 		}
 	}
