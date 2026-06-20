@@ -122,7 +122,7 @@ natter_start_instance() {
 	stun_servers=""
 	config_list_foreach "$section" stun_server natter_add_stun_server
 
-	slug="$(natter_slug "$section")"
+	slug="$(natter_runtime_slug "$section")"
 	mkdir -p "$RUN_DIR" "$LOG_DIR"
 	log_file="${LOG_DIR}/${slug}.log"
 	notify_env="${RUN_DIR}/${slug}.env"

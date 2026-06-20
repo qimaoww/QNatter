@@ -249,6 +249,9 @@ cp "$ROOT/natter/files/natter-qbittorrent.sh" "$tmp/"
 
 	[ "$(natter_slug wan_ct)" = "wan_ct" ] || exit 26
 	[ "$(natter_slug 'wan-ct')" = "wan_ct" ] || exit 27
+	[ "$(natter_runtime_slug wan_ct)" = "wan_ct" ] || exit 29
+	[ "$(natter_runtime_slug 'wan-ct')" != "$(natter_runtime_slug wan_ct)" ] || exit 30
+	[ "$(natter_runtime_slug 'wan.ct')" != "$(natter_runtime_slug wan_ct)" ] || exit 31
 	json_input="$(printf 'line "one"\\\nline\rtwo\tend')"
 	[ "$(natter_json_escape "$json_input")" = 'line \"one\"\\\nline\rtwo\tend' ] || exit 28
 

@@ -81,6 +81,31 @@ natter_slug() {
 	printf '%s' "${1:-default}" | tr -c 'A-Za-z0-9_' '_'
 }
 
+natter_runtime_slug() {
+	printf '%s' "${1:-default}" | awk '
+		BEGIN {
+			for (i = 1; i < 128; i++)
+				ord[sprintf("%c", i)] = i
+		}
+		{
+			for (i = 1; i <= length($0); i++) {
+				char = substr($0, i, 1)
+				if (char ~ /^[A-Za-z0-9_]$/)
+					out = out char
+				else if (char in ord)
+					out = out sprintf("_x%02x", ord[char])
+				else
+					out = out "_"
+			}
+		}
+		END {
+			if (out == "")
+				out = "default"
+			print out
+		}
+	'
+}
+
 natter_json_escape() {
 	printf '%s' "$1" | awk 'BEGIN { ORS = ""; tab = sprintf("%c", 9); cr = sprintf("%c", 13) } { if (NR > 1) printf "\\n"; gsub(/\\/, "\\\\"); gsub(/"/, "\\\""); gsub(cr, "\\r"); gsub(tab, "\\t"); printf "%s", $0 }'
 }

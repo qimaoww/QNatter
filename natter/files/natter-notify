@@ -26,7 +26,8 @@ log() {
 	"$NATTER_LOGGER_BIN" -t natter-notify "$*"
 }
 
-status_file="${NATTER_STATUS_FILE:-/var/run/natter/${NATTER_INSTANCE:-default}.json}"
+runtime_slug="$(natter_runtime_slug "${NATTER_INSTANCE:-default}")"
+status_file="${NATTER_STATUS_FILE:-/var/run/natter/${runtime_slug}.json}"
 natter_write_status_json "$status_file" "${NATTER_INSTANCE:-default}" "$protocol" "$inner_ip" "$inner_port" "$outer_ip" "$outer_port" "mapped"
 
 run_user_notify() {
@@ -57,7 +58,7 @@ username="${QBITTORRENT_USERNAME:-}"
 password="${QBITTORRENT_PASSWORD:-}"
 configured_port="${QBITTORRENT_TARGET_PORT:-0}"
 listen_port="$(natter_qb_select_listen_port "$inner_port" "$outer_port" "$configured_port")"
-cookie="/tmp/natter-qbittorrent-$(natter_slug "${NATTER_INSTANCE:-default}").cookie"
+cookie="/tmp/natter-qbittorrent-${runtime_slug}.cookie"
 json="$(natter_qb_preferences_json "$listen_port")"
 
 if [ -z "$url" ] || [ -z "$username" ]; then

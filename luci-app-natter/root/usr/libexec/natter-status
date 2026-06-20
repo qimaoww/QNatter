@@ -114,7 +114,7 @@ emit_instance() {
 	config_get qb_enabled "$section" qbittorrent_enabled "0"
 	config_get qb_forward "$section" qbittorrent_forward "0"
 
-	slug="$(natter_slug "$section")"
+	slug="$(natter_runtime_slug "$section")"
 	file="${NATTER_RUN_DIR}/${slug}.json"
 	inner_ip="$(status_field "$file" inner_ip)"
 	inner_port="$(status_number_field "$file" inner_port)"
