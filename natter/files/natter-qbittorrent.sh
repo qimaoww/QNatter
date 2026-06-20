@@ -45,7 +45,9 @@ natter_qb_normalize_url() {
 natter_qb_write_notify_env() {
 	local path="$1"
 	local tmp="${path}.$$"
+	local old_umask
 	shift
+	old_umask="$(umask)"
 	umask 077
 	{
 		while [ "$#" -gt 0 ]; do
@@ -53,12 +55,15 @@ natter_qb_write_notify_env() {
 			shift 2
 		done
 	} > "$tmp" || {
+		umask "$old_umask"
 		rm -f "$tmp"
 		return 1
 	}
 	chmod 0600 "$tmp" || {
+		umask "$old_umask"
 		rm -f "$tmp"
 		return 1
 	}
+	umask "$old_umask"
 	mv "$tmp" "$path"
 }
