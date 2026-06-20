@@ -74,6 +74,7 @@ natter_write_notify_env() {
 	local section="$1"
 	local env_file="$2"
 	local status_file="$3"
+	local log_file="${4:-}"
 	local notify_script qb_enabled qb_url qb_user qb_pass qb_forward qb_target_ip qb_target_port qb_forward_method
 	local label auto_firewall firewall_section firewall_name firewall_src firewall_dest
 	local cf_enabled cf_api_url cf_api_token cf_zone_id cf_record_id
@@ -105,6 +106,7 @@ natter_write_notify_env() {
 	natter_qb_write_notify_env "$env_file" \
 		NATTER_INSTANCE "$section" \
 		NATTER_STATUS_FILE "$status_file" \
+		NATTER_LOG_FILE "$log_file" \
 		NATTER_USER_NOTIFY "$notify_script" \
 		NATTER_AUTO_FIREWALL "$auto_firewall" \
 		NATTER_FIREWALL_SECTION "$firewall_section" \
@@ -191,7 +193,7 @@ natter_start_instance() {
 	NATTER_TARGET_IP="$target_ip"
 	NATTER_TARGET_PORT="$target_port"
 	NATTER_RETRY_TARGET="$retry_target"
-	natter_write_notify_env "$section" "$notify_env" "$status_file"
+	natter_write_notify_env "$section" "$notify_env" "$status_file" "$log_file"
 	cat > "$notify_wrapper" <<-EOF
 		#!/bin/sh
 		export NATTER_NOTIFY_ENV='$notify_env'

@@ -177,6 +177,7 @@ grep -Fqx 'wan_cm set env NATTER_INSTANCE=wan_cm' "$procd_log" || fail "Mobile i
 grep -Fqx "wan_ct set env NATTER_STATUS_FILE=$tmp/run/wan_ct.json" "$procd_log" || fail "Telecom status file env missing"
 grep -Fqx "wan_cm set env NATTER_STATUS_FILE=$tmp/run/wan_cm.json" "$procd_log" || fail "Mobile status file env missing"
 
+grep -Fq "NATTER_LOG_FILE='$tmp/log/wan_ct.log'" "$tmp/run/wan_ct.env" || fail "Telecom notify env missing instance log file"
 grep -Fq "NATTER_AUTO_FIREWALL='1'" "$tmp/run/wan_ct.env" || fail "Telecom notify env missing auto firewall flag"
 grep -Fq "NATTER_FIREWALL_SECTION='natter_wan_ct'" "$tmp/run/wan_ct.env" || fail "Telecom notify env missing firewall section"
 grep -Fq "NATTER_FIREWALL_NAME='Natter Telecom'" "$tmp/run/wan_ct.env" || fail "Telecom notify env missing firewall name"

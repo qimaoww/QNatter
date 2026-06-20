@@ -13,6 +13,7 @@ tmp="$(mktemp -d)"
 trap 'rm -rf "$tmp"' EXIT
 
 status_file="$tmp/wan_ct.json"
+notify_log_file="$tmp/notify.log"
 args_file="$tmp/user-args.txt"
 user_script="$tmp/user-notify.sh"
 env_file="$tmp/notify.env"
@@ -63,6 +64,7 @@ chmod 0755 "$cf_curl_bin"
 cat > "$env_file" <<EOF
 NATTER_INSTANCE='wan_ct'
 NATTER_STATUS_FILE='$status_file'
+NATTER_LOG_FILE='$notify_log_file'
 NATTER_USER_NOTIFY='$user_script'
 NATTER_AUTO_FIREWALL='1'
 NATTER_FIREWALL_SECTION='natter_wan_ct'
@@ -136,6 +138,10 @@ do
 done
 grep -Fqx '{"type":"SRV","data":{"port":62000}}' "$cf_curl_body" || \
 	fail "Cloudflare SRV request body must use mapped outer port"
+grep -Fq 'Cloudflare SRV update started for wan_ct: port=62000' "$notify_log_file" || \
+	fail "Cloudflare SRV update start was not written to instance log"
+grep -Fq 'Cloudflare SRV updated for wan_ct: port=62000' "$notify_log_file" || \
+	fail "Cloudflare SRV update result was not written to instance log"
 
 cf_selected_status_file="$tmp/wan_cf_selected.json"
 cf_selected_env_file="$tmp/cf-selected-notify.env"
@@ -198,6 +204,7 @@ chmod 0755 "$cf_fail_user_script"
 
 cat > "$cf_fail_curl_bin" <<'EOF'
 #!/bin/sh
+printf 'cloudflare rejected request\n' >&2
 exit 22
 EOF
 chmod 0755 "$cf_fail_curl_bin"
@@ -225,7 +232,7 @@ NATTER_CURL_BIN="$cf_fail_curl_bin" \
 NATTER_NOTIFY_ENV="$cf_fail_env_file" \
 	"$ROOT/natter/files/natter-notify" tcp 10.10.10.11 51414 203.0.113.11 62005
 
-grep -Fq 'Cloudflare SRV update failed for wan_cf_fail: 62005' "$logger_file" || \
+grep -Fq 'Cloudflare SRV update failed for wan_cf_fail: port=62005 response=cloudflare rejected request' "$logger_file" || \
 	fail "Cloudflare SRV update failure was not logged"
 cat > "$expected_args" <<'EOF'
 tcp
@@ -331,11 +338,14 @@ NATTER_NOTIFY_ENV="$qb_login_fail_env_file" \
 
 grep -Fq '"message":"qBittorrent login failed"' "$qb_login_fail_status_file" || \
 	fail "qBittorrent login failure response was not written to status"
+grep -Fq 'qBittorrent login failed for wan_login_fail at http://127.0.0.1:9: response=Fails.' "$logger_file" || \
+	fail "qBittorrent login failure response was not logged"
 if grep -Fq '/api/v2/app/setPreferences' "$curl_login_fail_calls"; then
 	fail "qBittorrent preferences API must not be called after login response Fails."
 fi
 
 qb_ok_status_file="$tmp/wan_ok.json"
+qb_ok_log_file="$tmp/qb-ok.log"
 qb_ok_args_file="$tmp/qb-ok-user-args.txt"
 qb_ok_user_script="$tmp/qb-ok-user-notify.sh"
 qb_ok_env_file="$tmp/qb-ok-notify.env"
@@ -353,6 +363,7 @@ cat > "$curl_bin" <<EOF
 printf '%s\n' "\$*" >> "$curl_calls"
 case "\$*" in
 	*/api/v2/auth/login*) printf 'Ok.' ;;
+	*/api/v2/app/preferences*) printf '{"listen_port":51413}' ;;
 esac
 exit 0
 EOF
@@ -361,6 +372,7 @@ chmod 0755 "$curl_bin"
 cat > "$qb_ok_env_file" <<EOF
 NATTER_INSTANCE='wan_ok'
 NATTER_STATUS_FILE='$qb_ok_status_file'
+NATTER_LOG_FILE='$qb_ok_log_file'
 NATTER_USER_NOTIFY='$qb_ok_user_script'
 QBITTORRENT_ENABLED='1'
 QBITTORRENT_URL='http://127.0.0.1:9/'
@@ -384,6 +396,12 @@ grep -Fq '/api/v2/app/setPreferences' "$curl_calls" || fail "qBittorrent prefere
 grep -Fq 'json={"listen_port":62002}' "$curl_calls" || fail "qBittorrent listen_port should use outer port"
 grep -Fq '"message":"qBittorrent listen_port set to 62002"' "$qb_ok_status_file" || \
 	fail "qBittorrent success message was not written to status"
+grep -Fq 'qBittorrent update started for wan_ok: url=http://127.0.0.1:9 listen_port=62002 source=outer' "$qb_ok_log_file" || \
+	fail "qBittorrent update start was not written to instance log"
+grep -Fq 'qBittorrent current listen_port for wan_ok: 51413' "$qb_ok_log_file" || \
+	fail "qBittorrent current listen_port was not written to instance log"
+grep -Fq 'qBittorrent listen_port changed for wan_ok: 51413 -> 62002' "$qb_ok_log_file" || \
+	fail "qBittorrent listen_port change was not written to instance log"
 
 cat > "$expected_args" <<'EOF'
 tcp
