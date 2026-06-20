@@ -164,6 +164,7 @@ func parseSTUNServer(value string) (STUNServer, error) {
 	if value == "" {
 		return STUNServer{}, fmt.Errorf("empty STUN server")
 	}
+	value = trimSTUNScheme(value)
 
 	host := value
 	port := 3478
@@ -180,6 +181,15 @@ func parseSTUNServer(value string) (STUNServer, error) {
 	}
 
 	return STUNServer{Host: host, Port: port}, nil
+}
+
+func trimSTUNScheme(value string) string {
+	for _, scheme := range []string{"tcp://", "udp://"} {
+		if strings.HasPrefix(value, scheme) {
+			return strings.TrimPrefix(value, scheme)
+		}
+	}
+	return value
 }
 
 func parseHostPortDefault(value string, defaultPort int) (string, int, error) {

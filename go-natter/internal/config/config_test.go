@@ -92,6 +92,22 @@ func TestParseArgsNormalizesIPv4LikePython(t *testing.T) {
 	}
 }
 
+func TestParseArgsAcceptsSTUNServerSchemePrefixes(t *testing.T) {
+	cfg, err := ParseArgs([]string{
+		"-s", "tcp://turn.cloud-rtc.com:80",
+		"-s", "udp://stun.example.com",
+	})
+	if err != nil {
+		t.Fatalf("ParseArgs returned error: %v", err)
+	}
+	if cfg.STUNServers[0].Host != "turn.cloud-rtc.com" || cfg.STUNServers[0].Port != 80 {
+		t.Fatalf("first STUN = %+v, want turn.cloud-rtc.com:80", cfg.STUNServers[0])
+	}
+	if cfg.STUNServers[1].Host != "stun.example.com" || cfg.STUNServers[1].Port != 3478 {
+		t.Fatalf("second STUN = %+v, want stun.example.com:3478", cfg.STUNServers[1])
+	}
+}
+
 func TestParseArgsRejectsInvalidValues(t *testing.T) {
 	tests := []struct {
 		name string
