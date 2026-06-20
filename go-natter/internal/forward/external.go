@@ -94,8 +94,12 @@ func (f *SocatForwarder) Start(options StartOptions) error {
 		proto = "UDP"
 		args = append(args, fmt.Sprintf("-T%d", timeout))
 	}
+	listen := fmt.Sprintf("%s4-LISTEN:%d", proto, options.Port)
+	if options.IP != "" {
+		listen += fmt.Sprintf(",bind=%s", options.IP)
+	}
 	args = append(args,
-		fmt.Sprintf("%s4-LISTEN:%d,reuseaddr,fork,max-children=%d", proto, options.Port, maxChildren),
+		fmt.Sprintf("%s,reuseaddr,fork,max-children=%d", listen, maxChildren),
 		fmt.Sprintf("%s4:%s:%d", proto, options.TargetIP, options.TargetPort),
 	)
 	return f.start("socat", args...)
@@ -126,7 +130,11 @@ func (f *GostForwarder) Start(options StartOptions) error {
 	if options.UDP {
 		proto = "udp"
 	}
-	arg := fmt.Sprintf("-L=%s://:%d/%s:%d", proto, options.Port, options.TargetIP, options.TargetPort)
+	listenHost := ""
+	if options.IP != "" {
+		listenHost = options.IP
+	}
+	arg := fmt.Sprintf("-L=%s://%s:%d/%s:%d", proto, listenHost, options.Port, options.TargetIP, options.TargetPort)
 	if options.UDP {
 		arg += fmt.Sprintf("?ttl=%ds", timeout)
 	}

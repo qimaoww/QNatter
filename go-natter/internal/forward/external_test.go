@@ -20,7 +20,7 @@ func TestSocatForwarderBuildsTCPAndUDPCommands(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("Start TCP returned error: %v", err)
 	}
-	wantTCP := []string{"socat", "TCP4-LISTEN:41000,reuseaddr,fork,max-children=128", "TCP4:10.10.10.10:62000"}
+	wantTCP := []string{"socat", "TCP4-LISTEN:41000,bind=10.10.10.3,reuseaddr,fork,max-children=128", "TCP4:10.10.10.10:62000"}
 	if !reflect.DeepEqual(starter.commands[0], wantTCP) {
 		t.Fatalf("TCP command = %#v, want %#v", starter.commands[0], wantTCP)
 	}
@@ -30,6 +30,7 @@ func TestSocatForwarderBuildsTCPAndUDPCommands(t *testing.T) {
 	}
 
 	if err := f.Start(StartOptions{
+		IP:         "10.10.10.3",
 		Port:       41001,
 		TargetIP:   "10.10.10.10",
 		TargetPort: 62001,
@@ -37,7 +38,7 @@ func TestSocatForwarderBuildsTCPAndUDPCommands(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("Start UDP returned error: %v", err)
 	}
-	wantUDP := []string{"socat", "-T60", "UDP4-LISTEN:41001,reuseaddr,fork,max-children=128", "UDP4:10.10.10.10:62001"}
+	wantUDP := []string{"socat", "-T60", "UDP4-LISTEN:41001,bind=10.10.10.3,reuseaddr,fork,max-children=128", "UDP4:10.10.10.10:62001"}
 	if !reflect.DeepEqual(starter.commands[1], wantUDP) {
 		t.Fatalf("UDP command = %#v, want %#v", starter.commands[1], wantUDP)
 	}
@@ -48,13 +49,14 @@ func TestGostForwarderBuildsTCPAndUDPCommands(t *testing.T) {
 	f := &GostForwarder{Starter: starter, Checker: &fakeVersionChecker{}, Sleep: noStartupSleep}
 
 	if err := f.Start(StartOptions{
+		IP:         "10.10.10.3",
 		Port:       41000,
 		TargetIP:   "10.10.10.10",
 		TargetPort: 62000,
 	}); err != nil {
 		t.Fatalf("Start TCP returned error: %v", err)
 	}
-	wantTCP := []string{"gost", "-L=tcp://:41000/10.10.10.10:62000"}
+	wantTCP := []string{"gost", "-L=tcp://10.10.10.3:41000/10.10.10.10:62000"}
 	if !reflect.DeepEqual(starter.commands[0], wantTCP) {
 		t.Fatalf("TCP command = %#v, want %#v", starter.commands[0], wantTCP)
 	}
@@ -64,6 +66,7 @@ func TestGostForwarderBuildsTCPAndUDPCommands(t *testing.T) {
 	}
 
 	if err := f.Start(StartOptions{
+		IP:         "10.10.10.3",
 		Port:       41001,
 		TargetIP:   "10.10.10.10",
 		TargetPort: 62001,
@@ -71,9 +74,30 @@ func TestGostForwarderBuildsTCPAndUDPCommands(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("Start UDP returned error: %v", err)
 	}
-	wantUDP := []string{"gost", "-L=udp://:41001/10.10.10.10:62001?ttl=60s"}
+	wantUDP := []string{"gost", "-L=udp://10.10.10.3:41001/10.10.10.10:62001?ttl=60s"}
 	if !reflect.DeepEqual(starter.commands[1], wantUDP) {
 		t.Fatalf("UDP command = %#v, want %#v", starter.commands[1], wantUDP)
+	}
+}
+
+func TestExternalForwardersUseWildcardListenWhenIPIsEmpty(t *testing.T) {
+	starter := &fakeProcessStarter{}
+	socat := &SocatForwarder{Starter: starter, Checker: &fakeVersionChecker{}, Sleep: noStartupSleep}
+	if err := socat.Start(StartOptions{Port: 41000, TargetIP: "10.10.10.10", TargetPort: 62000}); err != nil {
+		t.Fatalf("socat Start returned error: %v", err)
+	}
+	wantSocat := []string{"socat", "TCP4-LISTEN:41000,reuseaddr,fork,max-children=128", "TCP4:10.10.10.10:62000"}
+	if !reflect.DeepEqual(starter.commands[0], wantSocat) {
+		t.Fatalf("socat command = %#v, want %#v", starter.commands[0], wantSocat)
+	}
+
+	gost := &GostForwarder{Starter: starter, Checker: &fakeVersionChecker{}, Sleep: noStartupSleep}
+	if err := gost.Start(StartOptions{Port: 41001, TargetIP: "10.10.10.10", TargetPort: 62001}); err != nil {
+		t.Fatalf("gost Start returned error: %v", err)
+	}
+	wantGost := []string{"gost", "-L=tcp://:41001/10.10.10.10:62001"}
+	if !reflect.DeepEqual(starter.commands[1], wantGost) {
+		t.Fatalf("gost command = %#v, want %#v", starter.commands[1], wantGost)
 	}
 }
 
