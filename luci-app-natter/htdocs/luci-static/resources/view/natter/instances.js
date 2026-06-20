@@ -105,6 +105,10 @@ return view.extend({
 		if (tools.gost)
 			o.value('gost', 'gost');
 		o.default = 'auto';
+		o.depends('qbittorrent_enabled', '');
+		o.depends('qbittorrent_enabled', '0');
+		o.depends('qbittorrent_forward', '');
+		o.depends('qbittorrent_forward', '0');
 
 		o = hideInGrid(s.option(form.Flag, 'auto_firewall', _('Auto firewall')));
 		o.default = '0';
