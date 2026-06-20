@@ -1,12 +1,15 @@
 #!/bin/sh
 
-. /usr/share/natter/natter-common.sh
+: "${NATTER_COMMON_SH:=/usr/share/natter/natter-common.sh}"
+: "${NATTER_LOG_DIR:=/var/log/natter}"
+
+. "$NATTER_COMMON_SH"
 
 action="${1:-read}"
 instance="${2:-default}"
 lines="${3:-200}"
 slug="$(natter_slug "$instance")"
-log_file="/var/log/natter/${slug}.log"
+log_file="${NATTER_LOG_DIR}/${slug}.log"
 
 case "$lines" in
 	''|*[!0-9]*) lines=200 ;;
@@ -18,7 +21,7 @@ elif [ "$lines" -gt 1000 ]; then
 	lines=1000
 fi
 
-mkdir -p /var/log/natter
+mkdir -p "$NATTER_LOG_DIR"
 
 case "$action" in
 	clear)
