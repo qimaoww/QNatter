@@ -47,6 +47,7 @@ natter_qb_write_notify_env() {
 	local tmp="${path}.$$"
 	local old_umask
 	shift
+	[ $(( $# % 2 )) -eq 0 ] || return 1
 	old_umask="$(umask)"
 	umask 077
 	{
