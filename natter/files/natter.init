@@ -153,7 +153,7 @@ natter_start_instance() {
 	NATTER_NOTIFY_PATH="$notify_wrapper"
 
 	# Optional qBittorrent forwarding reuses Natter's native forwarding: target
-	# port 0 means Natter forwards to the mapped internal port after punching.
+	# port 0 means Natter forwards to the port reported after punching.
 	if [ "$qb_forward" = "1" ] && [ -n "$qb_target_ip" ]; then
 		NATTER_FORWARD_METHOD="$qb_forward_method"
 		NATTER_TARGET_IP="$qb_target_ip"
