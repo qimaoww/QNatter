@@ -169,7 +169,7 @@ assert_contains natter/Makefile 'go build .* -o \$\(PKG_BUILD_DIR\)/natter-go ./
 assert_contains natter/Makefile '\$\(INSTALL_BIN\) \$\(PKG_BUILD_DIR\)/natter-go \$\(1\)/usr/bin/natter-go'
 assert_contains natter/Makefile '\$\(LN\) natter-go \$\(1\)/usr/bin/Natter'
 natter_release="$(sed -n 's/^PKG_RELEASE:=//p' "$ROOT/natter/Makefile")"
-[ "$natter_release" -gt 8 ] || fail "natter package release must increase when package files change"
+[ "$natter_release" -gt 9 ] || fail "natter package release must increase when package files change"
 assert_contains natter/Makefile '\$\(INSTALL_CONF\) ./files/natter.config \$\(1\)/etc/config/natter.default'
 assert_contains natter/Makefile '\$\(INSTALL_DIR\) \$\(1\)/etc/uci-defaults'
 assert_contains natter/Makefile '\$\(INSTALL_BIN\) ./files/natter.uci-default \$\(1\)/etc/uci-defaults/99-natter'
@@ -249,6 +249,15 @@ cp "$ROOT/natter/files/natter-qbittorrent.sh" "$tmp/"
 	natter_qb_write_notify_env "$env_file" QBITTORRENT_PASSWORD "secret"
 	[ "$(umask)" = "0022" ] || exit 19
 	umask "$previous_umask"
+
+	failing_env="$tmp/qb-env-failing"
+	failing_tmp="${failing_env}.$$"
+	mv() { return 1; }
+	if natter_qb_write_notify_env "$failing_env" QBITTORRENT_PASSWORD "secret"; then
+		exit 33
+	fi
+	unset -f mv
+	[ ! -e "$failing_tmp" ] || exit 34
 )
 
 (

@@ -65,5 +65,8 @@ natter_qb_write_notify_env() {
 		return 1
 	}
 	umask "$old_umask"
-	mv "$tmp" "$path"
+	mv "$tmp" "$path" || {
+		rm -f "$tmp"
+		return 1
+	}
 }
