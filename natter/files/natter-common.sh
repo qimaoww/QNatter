@@ -113,6 +113,19 @@ natter_json_escape() {
 	printf '%s' "$1" | awk 'BEGIN { ORS = ""; tab = sprintf("%c", 9); cr = sprintf("%c", 13) } { if (NR > 1) printf "\\n"; gsub(/\\/, "\\\\"); gsub(/"/, "\\\""); gsub(cr, "\\r"); gsub(tab, "\\t"); printf "%s", $0 }'
 }
 
+natter_status_port() {
+	local port="${1:-}"
+
+	case "$port" in
+		''|*[!0-9]*) printf '%s\n' "0"; return 0 ;;
+	esac
+	[ "${#port}" -le 5 ] || {
+		printf '%s\n' "0"
+		return 0
+	}
+	awk -v port="$port" 'BEGIN { port += 0; if (port >= 0 && port <= 65535) printf "%d\n", port; else printf "0\n" }'
+}
+
 natter_write_status_json() {
 	local file="$1"
 	local instance="$2"
@@ -130,9 +143,9 @@ natter_write_status_json() {
 		"$(natter_json_escape "$instance")" \
 		"$(natter_json_escape "$protocol")" \
 		"$(natter_json_escape "$inner_ip")" \
-		"${inner_port:-0}" \
+		"$(natter_status_port "$inner_port")" \
 		"$(natter_json_escape "$outer_ip")" \
-		"${outer_port:-0}" \
+		"$(natter_status_port "$outer_port")" \
 		"$(natter_json_escape "$now")" \
 		"$(natter_json_escape "$message")" > "$file"
 }
