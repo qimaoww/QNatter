@@ -13,6 +13,7 @@ tmp="$(mktemp -d)"
 trap 'rm -rf "$tmp"' EXIT
 
 procd_log="$tmp/procd.log"
+trigger_log="$tmp/triggers.log"
 current_instance=""
 
 procd_open_instance() {
@@ -37,6 +38,18 @@ procd_close_instance() {
 	current_instance=""
 }
 
+procd_add_reload_trigger() {
+	printf 'reload' >> "$trigger_log"
+	printf ' %s' "$@" >> "$trigger_log"
+	printf '\n' >> "$trigger_log"
+}
+
+procd_add_interface_trigger() {
+	printf 'interface' >> "$trigger_log"
+	printf ' %s' "$@" >> "$trigger_log"
+	printf '\n' >> "$trigger_log"
+}
+
 cat > "$tmp/functions.sh" <<'EOF'
 config_load() {
 	[ "$1" = "natter" ] || return 1
@@ -49,6 +62,7 @@ config_foreach() {
 	"$callback" wan_ct
 	"$callback" wan_cm
 	"$callback" wan_qb
+	"$callback" disabled_lan
 }
 
 config_get_bool() {
@@ -92,6 +106,10 @@ config_get() {
 		wan_qb:qbittorrent_target_ip) value="10.10.10.30" ;;
 		wan_qb:qbittorrent_target_port) value="51415" ;;
 		wan_qb:qbittorrent_forward_method) value="nftables" ;;
+		disabled_lan:enabled) value="0" ;;
+		disabled_lan:label) value="Disabled LAN" ;;
+		disabled_lan:network) value="lan" ;;
+		disabled_lan:bind_value) value="br-lan" ;;
 	esac
 
 	eval "$__var=\$value"
@@ -116,6 +134,7 @@ export NATTER_FUNCTIONS_SH NATTER_NETWORK_SH NATTER_COMMON_SH NATTER_QBITTORRENT
 
 . "$ROOT/natter/files/natter.init"
 start_service
+service_triggers
 
 grep -Fqx 'wan_ct append command -i' "$procd_log" || fail "Telecom instance did not pass -i"
 grep -Fqx 'wan_ct append command pppoe-wan' "$procd_log" || fail "Telecom instance did not bind pppoe-wan"
@@ -142,5 +161,12 @@ grep -Fqx 'wan_ct set env NATTER_INSTANCE=wan_ct' "$procd_log" || fail "Telecom 
 grep -Fqx 'wan_cm set env NATTER_INSTANCE=wan_cm' "$procd_log" || fail "Mobile instance env missing"
 grep -Fqx "wan_ct set env NATTER_STATUS_FILE=$tmp/run/wan_ct.json" "$procd_log" || fail "Telecom status file env missing"
 grep -Fqx "wan_cm set env NATTER_STATUS_FILE=$tmp/run/wan_cm.json" "$procd_log" || fail "Mobile status file env missing"
+
+grep -Fqx 'reload natter' "$trigger_log" || fail "config reload trigger missing"
+grep -Fqx 'interface interface.* wan /etc/init.d/natter reload' "$trigger_log" || fail "wan interface trigger missing"
+grep -Fqx 'interface interface.* wan2 /etc/init.d/natter reload' "$trigger_log" || fail "wan2 interface trigger missing"
+if grep -Fq ' lan ' "$trigger_log"; then
+	fail "disabled instance must not register interface trigger"
+fi
 
 printf 'natter init checks passed\n'
