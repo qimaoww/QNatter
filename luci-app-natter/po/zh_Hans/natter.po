@@ -82,9 +82,6 @@ msgstr "转发目标 IP"
 msgid "Forward target port"
 msgstr "转发目标端口"
 
-msgid "Port 0 forwards to the Natter mapped internal port."
-msgstr "端口 0 会转发到 Natter 映射出的内部端口。"
-
 msgid "STUN server"
 msgstr "STUN 服务器"
 

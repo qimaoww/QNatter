@@ -113,7 +113,7 @@ return view.extend({
 		o = hideInGrid(s.option(form.Value, 'target_port', _('Forward target port')));
 		o.datatype = 'port';
 		o.placeholder = '0';
-		o.description = _('Port 0 forwards to the Natter mapped internal port.');
+		o.description = _('Port 0 forwards to the port Natter reports after punching.');
 
 		o = hideInGrid(s.option(form.DynamicList, 'stun_server', _('STUN server')));
 		o.placeholder = 'stun.example.com:3478';

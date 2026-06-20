@@ -99,6 +99,7 @@ assert_contains luci-app-natter/htdocs/luci-static/resources/view/natter/instanc
 assert_not_contains luci-app-natter/htdocs/luci-static/resources/view/natter/instances.js "o\\.value\\('iptables'"
 assert_not_contains luci-app-natter/htdocs/luci-static/resources/view/natter/instances.js "o\\.value\\('iptables-snat'"
 assert_contains luci-app-natter/htdocs/luci-static/resources/view/natter/instances.js "hideInGrid\\(s\\.option\\(form\\.Value, 'target_ip'"
+assert_not_contains luci-app-natter/htdocs/luci-static/resources/view/natter/instances.js 'Port 0 forwards to the Natter mapped internal port\.'
 assert_contains luci-app-natter/htdocs/luci-static/resources/view/natter/instances.js "hideInGrid\\(s\\.option\\(form\\.DynamicList, 'stun_server'"
 assert_contains luci-app-natter/htdocs/luci-static/resources/view/natter/instances.js "hideInGrid\\(s\\.option\\(form\\.Value, 'notify_script'"
 assert_contains luci-app-natter/htdocs/luci-static/resources/view/natter/instances.js "hideInGrid\\(s\\.option\\(form\\.Flag, 'qbittorrent_enabled'"
@@ -189,7 +190,8 @@ assert_po_translation 'WAN interface' 'WAN 接口'
 assert_po_translation 'Leave empty to bind to the default WAN device.' '留空则自动绑定默认 WAN 设备。'
 assert_po_translation 'Forward method' '转发方式'
 assert_po_translation 'Forward target port' '转发目标端口'
-assert_po_translation 'Port 0 forwards to the Natter mapped internal port.' '端口 0 会转发到 Natter 映射出的内部端口。'
+assert_not_contains luci-app-natter/po/zh_Hans/natter.po 'Port 0 forwards to the Natter mapped internal port\.'
+assert_po_translation 'Port 0 forwards to the port Natter reports after punching.' '端口 0 会转发到 Natter 打洞后报告的端口。'
 assert_po_translation 'Natter Status' 'Natter 状态'
 assert_po_translation 'Public address' '公网地址'
 assert_po_translation 'Internal address' '内部地址'
