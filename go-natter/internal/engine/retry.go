@@ -3,6 +3,7 @@ package engine
 import (
 	"context"
 	"errors"
+	"syscall"
 	"time"
 
 	"natter-openwrt/go-natter/internal/config"
@@ -46,7 +47,7 @@ func retryable(err error, fn func(error) bool) bool {
 	}
 	return errors.Is(err, ErrMappingChanged) || errors.Is(err, ErrKeepAliveFailed) ||
 		errors.Is(err, ErrTargetClosed) || errors.Is(err, ErrLocalAddressChanged) ||
-		errors.Is(err, stun.ErrNoServerAvailable)
+		errors.Is(err, stun.ErrNoServerAvailable) || errors.Is(err, syscall.EADDRNOTAVAIL)
 }
 
 func retryDelay(cfg config.Config) time.Duration {
