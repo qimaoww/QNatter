@@ -213,4 +213,55 @@ tcp
 EOF
 cmp -s "$expected_args" "$qb_ok_args_file" || fail "qBittorrent success path did not call user notify"
 
+qb_trap_status_file="$tmp/wan_trap.json"
+qb_trap_env_file="$tmp/qb-trap-notify.env"
+curl_trap_bin="$tmp/curl-trap"
+trap_cookie="/tmp/natter-qbittorrent-wan_trap.cookie"
+rm -f "$trap_cookie"
+
+cat > "$curl_trap_bin" <<EOF
+#!/bin/sh
+case "\$*" in
+	*/api/v2/auth/login*)
+		while [ "\$#" -gt 0 ]; do
+			if [ "\$1" = "-c" ]; then
+				shift
+				printf 'cookie\n' > "\$1"
+				break
+			fi
+			shift
+		done
+		printf 'Ok.'
+		exit 0
+		;;
+	*/api/v2/app/setPreferences*)
+		kill -TERM "\$PPID"
+		sleep 1
+		exit 1
+		;;
+esac
+exit 1
+EOF
+chmod 0755 "$curl_trap_bin"
+
+cat > "$qb_trap_env_file" <<EOF
+NATTER_INSTANCE='wan_trap'
+NATTER_STATUS_FILE='$qb_trap_status_file'
+QBITTORRENT_ENABLED='1'
+QBITTORRENT_URL='http://127.0.0.1:9/'
+QBITTORRENT_USERNAME='admin'
+QBITTORRENT_PASSWORD='secret'
+QBITTORRENT_TARGET_PORT='0'
+QBITTORRENT_TIMEOUT='1'
+EOF
+
+NATTER_COMMON_SH="$ROOT/natter/files/natter-common.sh" \
+NATTER_QBITTORRENT_SH="$ROOT/natter/files/natter-qbittorrent.sh" \
+NATTER_LOGGER_BIN="$logger_bin" \
+NATTER_CURL_BIN="$curl_trap_bin" \
+NATTER_NOTIFY_ENV="$qb_trap_env_file" \
+	"$ROOT/natter/files/natter-notify" tcp 10.10.10.31 51415 203.0.113.31 62004 || true
+
+[ ! -e "$trap_cookie" ] || fail "qBittorrent cookie must be removed when notify is interrupted"
+
 printf 'natter notify checks passed\n'

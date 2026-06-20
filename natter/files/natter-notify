@@ -61,6 +61,11 @@ listen_port="$(natter_qb_select_listen_port "$inner_port" "$outer_port" "$config
 cookie="/tmp/natter-qbittorrent-${runtime_slug}.cookie"
 json="$(natter_qb_preferences_json "$listen_port")"
 
+cleanup_cookie() {
+	rm -f "$cookie"
+}
+trap cleanup_cookie EXIT HUP INT TERM
+
 if [ -z "$url" ] || [ -z "$username" ]; then
 	log "qBittorrent is enabled but URL or username is empty for ${NATTER_INSTANCE:-default}"
 	natter_write_status_json "$status_file" "${NATTER_INSTANCE:-default}" "$protocol" "$inner_ip" "$inner_port" "$outer_ip" "$outer_port" "qBittorrent URL or username is empty"
