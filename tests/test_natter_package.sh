@@ -204,14 +204,25 @@ cp "$ROOT/natter/files/natter-qbittorrent.sh" "$tmp/"
 	PATH=/nonexistent NATTER_FORWARD_METHOD=socat
 	natter_build_args
 	case "$NATTER_ARGS" in *socat*|*'-m'*) exit 22 ;; esac
+
+	PATH=/nonexistent NATTER_FORWARD_METHOD=gost
+	natter_build_args
+	case "$NATTER_ARGS" in *gost*|*'-m'*) exit 24 ;; esac
 	PATH="$old_path"
 
 	mkdir -p "$tmp/bin"
 	printf '#!/bin/sh\n' > "$tmp/bin/socat"
 	chmod 0755 "$tmp/bin/socat"
+	printf '#!/bin/sh\n' > "$tmp/bin/gost"
+	chmod 0755 "$tmp/bin/gost"
+
 	PATH="$tmp/bin" NATTER_FORWARD_METHOD=socat
 	natter_build_args
 	case "$NATTER_ARGS" in *socat*) ;; *) exit 23 ;; esac
+
+	PATH="$tmp/bin" NATTER_FORWARD_METHOD=gost
+	natter_build_args
+	case "$NATTER_ARGS" in *gost*) ;; *) exit 25 ;; esac
 )
 
 sh -n "$ROOT/natter/files/natter-common.sh"
