@@ -9,6 +9,8 @@ import (
 	"os"
 	"strconv"
 	"strings"
+
+	"natter-openwrt/go-natter/internal/endpoint"
 )
 
 type STUNServer struct {
@@ -166,35 +168,9 @@ func parseSTUNServer(value string) (STUNServer, error) {
 	}
 	value = trimSTUNScheme(value)
 
-	host := value
-	port := 3478
-	if strings.HasPrefix(value, "[") {
-		end := strings.LastIndex(value, "]")
-		if end < 0 {
-			return STUNServer{}, fmt.Errorf("invalid STUN server host %q", value)
-		}
-		host = value[1:end]
-		if rest := value[end+1:]; rest != "" {
-			if !strings.HasPrefix(rest, ":") {
-				return STUNServer{}, fmt.Errorf("invalid STUN server host %q", value)
-			}
-			parsed, err := parsePort(rest[1:])
-			if err != nil {
-				return STUNServer{}, fmt.Errorf("invalid STUN server port %q", value)
-			}
-			port = parsed
-		}
-	} else if strings.Count(value, ":") == 1 {
-		idx := strings.LastIndex(value, ":")
-		host = value[:idx]
-		parsed, err := parsePort(value[idx+1:])
-		if err != nil {
-			return STUNServer{}, fmt.Errorf("invalid STUN server port %q", value)
-		}
-		port = parsed
-	}
-	if host == "" {
-		return STUNServer{}, fmt.Errorf("invalid STUN server host %q", value)
+	host, port, err := endpoint.SplitHostPortDefault(value, 3478)
+	if err != nil {
+		return STUNServer{}, fmt.Errorf("invalid STUN server %q", value)
 	}
 
 	return STUNServer{Host: host, Port: port}, nil
@@ -209,46 +185,8 @@ func trimSTUNScheme(value string) string {
 	return value
 }
 
-func parsePort(value string) (int, error) {
-	parsed, err := strconv.Atoi(value)
-	if err != nil || parsed < 1 || parsed > 65535 {
-		return 0, fmt.Errorf("invalid port")
-	}
-	return parsed, nil
-}
-
 func parseHostPortDefault(value string, defaultPort int) (string, int, error) {
-	host := value
-	port := defaultPort
-	if strings.HasPrefix(value, "[") {
-		end := strings.LastIndex(value, "]")
-		if end < 0 {
-			return "", 0, fmt.Errorf("empty host")
-		}
-		host = value[1:end]
-		if rest := value[end+1:]; rest != "" {
-			if !strings.HasPrefix(rest, ":") {
-				return "", 0, fmt.Errorf("invalid port in %q", value)
-			}
-			parsed, err := parsePort(rest[1:])
-			if err != nil {
-				return "", 0, fmt.Errorf("invalid port in %q", value)
-			}
-			port = parsed
-		}
-	} else if strings.Count(value, ":") == 1 {
-		idx := strings.LastIndex(value, ":")
-		host = value[:idx]
-		parsed, err := parsePort(value[idx+1:])
-		if err != nil {
-			return "", 0, fmt.Errorf("invalid port in %q", value)
-		}
-		port = parsed
-	}
-	if host == "" {
-		return "", 0, fmt.Errorf("empty host")
-	}
-	return host, port, nil
+	return endpoint.SplitHostPortDefault(value, defaultPort)
 }
 
 func normalizeIPv4(value string) (string, bool) {

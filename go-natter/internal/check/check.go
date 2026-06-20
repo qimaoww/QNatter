@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"natter-openwrt/go-natter/internal/config"
+	"natter-openwrt/go-natter/internal/endpoint"
 	"natter-openwrt/go-natter/internal/portcheck"
 	"natter-openwrt/go-natter/internal/socketopts"
 )
@@ -710,7 +711,7 @@ func resolveSTUNServers(ctx context.Context, resolve Resolver, servers []config.
 }
 
 func resolveHostPort(ctx context.Context, resolve Resolver, value string, defaultPort int) (netip.AddrPort, error) {
-	host, port, err := splitHostPortDefault(value, defaultPort)
+	host, port, err := endpoint.SplitHostPortDefault(value, defaultPort)
 	if err != nil {
 		return netip.AddrPort{}, err
 	}
@@ -730,51 +731,6 @@ func resolveHostPort(ctx context.Context, resolve Resolver, value string, defaul
 		}
 	}
 	return netip.AddrPort{}, fmt.Errorf("no IPv4 address for %s", host)
-}
-
-func splitHostPortDefault(value string, defaultPort int) (string, int, error) {
-	if value == "" {
-		return "", 0, errors.New("empty host")
-	}
-	host := value
-	port := defaultPort
-	if strings.HasPrefix(value, "[") {
-		end := strings.LastIndex(value, "]")
-		if end < 0 {
-			return "", 0, errors.New("empty host")
-		}
-		host = value[1:end]
-		if rest := value[end+1:]; rest != "" {
-			if !strings.HasPrefix(rest, ":") {
-				return "", 0, fmt.Errorf("invalid port in %q", value)
-			}
-			parsed, err := parsePort(rest[1:])
-			if err != nil {
-				return "", 0, fmt.Errorf("invalid port in %q", value)
-			}
-			port = parsed
-		}
-	} else if strings.Count(value, ":") == 1 {
-		idx := strings.LastIndex(value, ":")
-		host = value[:idx]
-		parsed, err := parsePort(value[idx+1:])
-		if err != nil {
-			return "", 0, fmt.Errorf("invalid port in %q", value)
-		}
-		port = parsed
-	}
-	if host == "" {
-		return "", 0, errors.New("empty host")
-	}
-	return host, port, nil
-}
-
-func parsePort(value string) (int, error) {
-	parsed, err := strconv.Atoi(value)
-	if err != nil || parsed < 1 || parsed > 65535 {
-		return 0, fmt.Errorf("invalid port")
-	}
-	return parsed, nil
 }
 
 func bindFromConfig(cfg config.Config) (netip.Addr, string) {

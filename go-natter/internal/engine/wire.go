@@ -1,12 +1,10 @@
 package engine
 
 import (
-	"fmt"
 	"net/netip"
-	"strconv"
-	"strings"
 
 	"natter-openwrt/go-natter/internal/config"
+	"natter-openwrt/go-natter/internal/endpoint"
 	"natter-openwrt/go-natter/internal/keepalive"
 	"natter-openwrt/go-natter/internal/stun"
 )
@@ -61,7 +59,7 @@ func NewKeepAliveFromConfig(cfg config.Config, mapping stun.Mapping) (KeepAlive,
 	if cfg.UDP {
 		defaultPort = 53
 	}
-	host, port, err := splitHostPortDefault(cfg.KeepAliveServer, defaultPort)
+	host, port, err := endpoint.SplitHostPortDefault(cfg.KeepAliveServer, defaultPort)
 	if err != nil {
 		return nil, err
 	}
@@ -79,49 +77,4 @@ func NewKeepAliveFromConfig(cfg config.Config, mapping stun.Mapping) (KeepAlive,
 		Source:    mapping.Inner,
 		Interface: bind.Interface,
 	}, nil
-}
-
-func splitHostPortDefault(value string, defaultPort int) (string, int, error) {
-	host := value
-	port := defaultPort
-	if host == "" {
-		return "", 0, fmt.Errorf("empty host")
-	}
-	if strings.HasPrefix(value, "[") {
-		end := strings.LastIndex(value, "]")
-		if end < 0 {
-			return "", 0, fmt.Errorf("empty host")
-		}
-		host = value[1:end]
-		if rest := value[end+1:]; rest != "" {
-			if !strings.HasPrefix(rest, ":") {
-				return "", 0, fmt.Errorf("invalid port in %q", value)
-			}
-			parsed, err := parsePort(rest[1:])
-			if err != nil {
-				return "", 0, fmt.Errorf("invalid port in %q", value)
-			}
-			port = parsed
-		}
-	} else if strings.Count(value, ":") == 1 {
-		idx := strings.LastIndex(value, ":")
-		host = value[:idx]
-		parsed, err := parsePort(value[idx+1:])
-		if err != nil {
-			return "", 0, fmt.Errorf("invalid port in %q", value)
-		}
-		port = parsed
-	}
-	if host == "" {
-		return "", 0, fmt.Errorf("empty host")
-	}
-	return host, port, nil
-}
-
-func parsePort(value string) (int, error) {
-	parsed, err := strconv.Atoi(value)
-	if err != nil || parsed < 1 || parsed > 65535 {
-		return 0, fmt.Errorf("invalid port")
-	}
-	return parsed, nil
 }
