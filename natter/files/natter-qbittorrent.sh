@@ -7,6 +7,7 @@ natter_qb_valid_port() {
 		''|*[!0-9]*) return 1 ;;
 	esac
 
+	[ "${#port}" -le 5 ] || return 1
 	[ "$port" -ge 1 ] && [ "$port" -le 65535 ]
 }
 

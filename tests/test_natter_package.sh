@@ -202,6 +202,9 @@ cp "$ROOT/natter/files/natter-qbittorrent.sh" "$tmp/"
 	. "$tmp/natter-qbittorrent.sh"
 	[ "$(natter_qb_select_listen_port 5000 62000 0)" = "62000" ] || exit 11
 	[ "$(natter_qb_select_listen_port 5000 62000 51413)" = "51413" ] || exit 12
+	qb_port_err="$tmp/qb-port.err"
+	[ "$(natter_qb_select_listen_port 5000 62000 999999999999999999999999 2>"$qb_port_err")" = "62000" ] || exit 19
+	[ ! -s "$qb_port_err" ] || exit 20
 	[ "$(natter_qb_preferences_json 62000)" = '{"listen_port":62000}' ] || exit 13
 	[ "$(natter_qb_normalize_url 'http://127.0.0.1:8080///')" = "http://127.0.0.1:8080" ] || exit 18
 
