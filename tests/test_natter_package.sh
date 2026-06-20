@@ -325,4 +325,3 @@ if tar -tzf "$archive" | grep -Eq '^\./?$'; then
 fi
 tar -tvzf "$archive" | awk '$6 ~ /^(etc|usr|www)\/?$/ { print $1 }' | grep -q '^drwxr-xr-x' || \
 
-printf 'natter package static checks passed\n'
