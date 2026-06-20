@@ -14,6 +14,8 @@ trap 'rm -rf "$tmp"' EXIT
 
 config_file="$tmp/natter"
 default_file="$tmp/natter.default"
+uci_bin="$tmp/uci"
+uci_calls="$tmp/uci-calls.txt"
 
 printf 'default-config\n' > "$default_file"
 
@@ -30,6 +32,42 @@ NATTER_UCI_DEFAULT="$default_file" \
 	sh "$ROOT/natter/files/natter.uci-default"
 
 [ "$(cat "$config_file")" = "user-config" ] || fail "uci-defaults overwrote existing user config"
+
+cat > "$uci_bin" <<EOF
+#!/bin/sh
+printf '%s\n' "\$*" >> "$uci_calls"
+case "\$*" in
+	"-q get natter.global.hot_reload")
+		exit 1
+		;;
+	"-q show natter")
+		printf '%s\n' 'natter.global=global' 'natter.wan_ct=instance' 'natter.wan_cm=instance'
+		exit 0
+		;;
+	"set natter.global.hot_reload=1"|"-q delete natter.wan_ct.label"|"-q delete natter.wan_cm.label"|"commit natter")
+		exit 0
+		;;
+esac
+exit 1
+EOF
+chmod 0755 "$uci_bin"
+: > "$uci_calls"
+
+NATTER_UCI_CONFIG="$config_file" \
+NATTER_UCI_DEFAULT="$default_file" \
+NATTER_UCI_BIN="$uci_bin" \
+	sh "$ROOT/natter/files/natter.uci-default"
+
+for want in \
+	'-q get natter.global.hot_reload' \
+	'set natter.global.hot_reload=1' \
+	'-q show natter' \
+	'-q delete natter.wan_ct.label' \
+	'-q delete natter.wan_cm.label' \
+	'commit natter'
+do
+	grep -Fqx -- "$want" "$uci_calls" || fail "uci-defaults migration did not run: $want"
+done
 
 rm -f "$config_file" "$default_file"
 

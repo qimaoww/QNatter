@@ -92,14 +92,17 @@ if [ -s "$stderr" ]; then
 fi
 
 case "$output" in
-	*'"name":"wan_ct"'*'"label":"Telecom WAN"'*'"bind_value":"pppoe-wan"'*) : ;;
+	*'"name":"wan_ct"'*'"bind_value":"pppoe-wan"'*) : ;;
 	*) fail "status output is missing Telecom instance: $output" ;;
 esac
 
 case "$output" in
-	*'"name":"wan_cm"'*'"label":"Mobile WAN"'*'"bind_value":"eth1.2"'*) : ;;
+	*'"name":"wan_cm"'*'"bind_value":"eth1.2"'*) : ;;
 	*) fail "status output is missing Mobile instance: $output" ;;
 esac
+if printf '%s\n' "$output" | grep -Eq '"label":|"group":'; then
+	fail "status output should not expose label/group fields: $output"
+fi
 
 printf '%s\n' "$output" | grep -Fq '"name":"wan_cm"' || \
 	fail "status output is missing Mobile instance name: $output"

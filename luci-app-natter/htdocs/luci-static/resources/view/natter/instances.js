@@ -245,6 +245,10 @@ return view.extend({
 		o = s.option(form.Flag, 'enabled', _('Enable'));
 		o.default = '0';
 
+		o = s.option(form.Flag, 'hot_reload', _('Hot reload'));
+		o.default = '1';
+		o.description = _('Reload notify-only changes without restarting running Natter processes.');
+
 		o = s.option(form.ListValue, 'log_level', _('Log level'));
 		o.value('info', _('Info'));
 		o.value('debug', _('Debug'));
@@ -261,9 +265,6 @@ return view.extend({
 
 		o = s.option(form.Flag, 'enabled', _('Enable'));
 		o.default = '0';
-
-		o = s.option(form.Value, 'label', _('Label'));
-		o.placeholder = 'Default';
 
 		o = hideInGrid(s.option(form.Value, '_rename_to', _('Instance ID')));
 		o.rmempty = true;

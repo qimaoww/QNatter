@@ -37,7 +37,7 @@ function renderCard(item) {
 
 	return E('section', { 'class': 'natter-card' }, [
 		E('div', { 'class': 'natter-card-head' }, [
-			E('h3', {}, [ item.label || item.name ]),
+			E('h3', {}, [ item.name || '-' ]),
 			E('span', { 'class': 'natter-pill ' + (item.running ? 'is-running' : 'is-stopped') },
 				[ item.running ? _('RUNNING') : _('NOT RUNNING') ])
 		]),

@@ -107,10 +107,9 @@ instance_running() {
 
 emit_instance() {
 	local section="$1"
-	local label enabled network bind_value protocol qb_enabled qb_forward slug file running
+	local enabled network bind_value protocol qb_enabled qb_forward slug file running
 	local inner_ip inner_port outer_ip outer_port updated_at message
 
-	config_get label "$section" label "$section"
 	config_get enabled "$section" enabled "0"
 	config_get network "$section" network "wan"
 	config_get bind_value "$section" bind_value ""
@@ -134,7 +133,6 @@ emit_instance() {
 	first=0
 	printf '{'
 	json_pair name "$section"; printf ','
-	json_pair label "$label"; printf ','
 	json_bool_pair enabled "$enabled"; printf ','
 	json_bool_pair running "$running"; printf ','
 	json_pair network "$network"; printf ','

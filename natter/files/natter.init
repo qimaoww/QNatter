@@ -76,11 +76,10 @@ natter_write_notify_env() {
 	local status_file="$3"
 	local log_file="${4:-}"
 	local notify_script qb_enabled qb_url qb_user qb_pass qb_forward qb_target_ip qb_target_port qb_forward_method
-	local label auto_firewall firewall_section firewall_name firewall_src firewall_dest
+	local auto_firewall firewall_section firewall_name firewall_src firewall_dest
 	local cf_enabled cf_api_url cf_api_token cf_zone_id cf_record_id
 	local forward_method target_ip
 
-	config_get label "$section" label "$section"
 	config_get notify_script "$section" notify_script ""
 	config_get_bool auto_firewall "$section" auto_firewall 0
 	config_get forward_method "$section" forward_method "auto"
@@ -99,7 +98,7 @@ natter_write_notify_env() {
 	config_get qb_target_port "$section" qbittorrent_target_port "0"
 	config_get qb_forward_method "$section" qbittorrent_forward_method "nftables"
 	firewall_section="natter_$(natter_runtime_slug "$section")"
-	firewall_name="Natter ${label}"
+	firewall_name="Natter ${section}"
 	firewall_src="wan"
 	firewall_dest="$(natter_firewall_dest_zone "$forward_method" "$target_ip" "$qb_forward" "$qb_target_ip")"
 
@@ -138,17 +137,46 @@ natter_add_stun_server() {
 	fi
 }
 
+natter_write_runtime_fingerprint() {
+	local file="$1"
+	local section="$2"
+	local network="$3"
+	local log_file="$4"
+	local tmp="${file}.$$"
+	local arg
+
+	mkdir -p "$(dirname "$file")"
+	{
+		printf 'section=%s\n' "$section"
+		printf 'runner=%s\n' "$RUNNER"
+		printf 'network=%s\n' "$network"
+		printf 'log_file=%s\n' "$log_file"
+		while IFS= read -r arg; do
+			[ -n "$arg" ] || continue
+			printf 'arg=%s\n' "$arg"
+		done <<-EOF
+			$NATTER_ARGS
+		EOF
+	} > "$tmp" || {
+		rm -f "$tmp"
+		return 1
+	}
+	mv "$tmp" "$file" || {
+		rm -f "$tmp"
+		return 1
+	}
+}
+
 natter_start_instance() {
 	local section="$1"
-	local enabled label protocol network bind_value bind_port public_ip_mode forward_method
+	local enabled protocol network bind_value bind_port public_ip_mode forward_method
 	local target_ip target_port keepalive_interval keepalive_server notify_script retry_target exit_when_changed
 	local upnp verbose qb_enabled qb_forward qb_target_ip qb_target_port qb_forward_method
-	local stun_servers slug log_file notify_env notify_wrapper status_file resolved_bind
+	local stun_servers slug log_file notify_env notify_wrapper status_file runtime_file resolved_bind
 
 	config_get_bool enabled "$section" enabled 0
 	[ "$enabled" = "1" ] || return 0
 
-	config_get label "$section" label "$section"
 	config_get protocol "$section" protocol "tcp"
 	config_get network "$section" network "wan"
 	config_get bind_value "$section" bind_value ""
@@ -178,6 +206,7 @@ natter_start_instance() {
 	notify_env="${RUN_DIR}/${slug}.env"
 	notify_wrapper="${RUN_DIR}/${slug}.notify"
 	status_file="${RUN_DIR}/${slug}.json"
+	runtime_file="${NATTER_RUNTIME_DIR:-$RUN_DIR}/${slug}.runtime"
 	resolved_bind="$(natter_resolve_bind_value "$network" "$bind_value")"
 
 	NATTER_PROTOCOL="$protocol"
@@ -211,6 +240,9 @@ natter_start_instance() {
 	fi
 
 	natter_build_args
+	natter_write_runtime_fingerprint "$runtime_file" "$section" "$network" "$log_file" || return 1
+	[ -n "${NATTER_RUNTIME_LIST:-}" ] && printf '%s\n' "$slug" >> "$NATTER_RUNTIME_LIST"
+	[ "${NATTER_PREPARE_ONLY:-0}" = "1" ] && return 0
 
 	procd_open_instance "$section"
 	procd_set_param command "$RUNNER" "$log_file"
@@ -231,19 +263,76 @@ natter_start_instance() {
 	procd_set_param nice 0
 	procd_close_instance
 
-	echo "$(date '+%Y-%m-%d %H:%M:%S') starting ${label}: bind=${resolved_bind:-default route} public_ip=${public_ip_mode}" >> "$log_file"
+	echo "$(date '+%Y-%m-%d %H:%M:%S') starting ${section}: bind=${resolved_bind:-default route} public_ip=${public_ip_mode}" >> "$log_file"
 }
 
 start_service() {
-	local enabled
+	local enabled runtime_list_tmp
 
 	config_load "$CONF"
 	config_get_bool enabled global enabled 0
 	[ "$enabled" = "1" ] || return 0
+	mkdir -p "$RUN_DIR"
+	runtime_list_tmp="${RUN_DIR}/.runtime-instances.$$"
+	: > "$runtime_list_tmp"
+	NATTER_PREPARE_ONLY=0
+	NATTER_RUNTIME_DIR="$RUN_DIR"
+	NATTER_RUNTIME_LIST="$runtime_list_tmp"
 	config_foreach natter_start_instance instance
+	mv "$runtime_list_tmp" "${RUN_DIR}/.runtime-instances"
+	unset NATTER_PREPARE_ONLY NATTER_RUNTIME_DIR NATTER_RUNTIME_LIST
+}
+
+natter_hot_reload_service() {
+	local tmp runtime_list old_list slug
+
+	mkdir -p "$RUN_DIR"
+	tmp="$(mktemp -d "${RUN_DIR}/.reload.XXXXXX")" || return 1
+	runtime_list="${tmp}/.runtime-instances"
+	: > "$runtime_list"
+	NATTER_PREPARE_ONLY=1
+	NATTER_RUNTIME_DIR="$tmp"
+	NATTER_RUNTIME_LIST="$runtime_list"
+	config_foreach natter_start_instance instance || {
+		rm -rf "$tmp"
+		unset NATTER_PREPARE_ONLY NATTER_RUNTIME_DIR NATTER_RUNTIME_LIST
+		return 1
+	}
+	unset NATTER_PREPARE_ONLY NATTER_RUNTIME_DIR NATTER_RUNTIME_LIST
+
+	old_list="${RUN_DIR}/.runtime-instances"
+	if ! cmp -s "$old_list" "$runtime_list"; then
+		rm -rf "$tmp"
+		return 1
+	fi
+
+	while IFS= read -r slug; do
+		[ -n "$slug" ] || continue
+		if ! cmp -s "${RUN_DIR}/${slug}.runtime" "${tmp}/${slug}.runtime"; then
+			rm -rf "$tmp"
+			return 1
+		fi
+	done < "$runtime_list"
+
+	rm -rf "$tmp"
+	return 0
 }
 
 reload_service() {
+	local enabled hot_reload
+
+	config_load "$CONF"
+	config_get_bool enabled global enabled 0
+	if [ "$enabled" != "1" ]; then
+		stop
+		return 0
+	fi
+
+	config_get_bool hot_reload global hot_reload 1
+	if [ "$hot_reload" = "1" ] && natter_hot_reload_service; then
+		return 0
+	fi
+
 	stop
 	start
 }

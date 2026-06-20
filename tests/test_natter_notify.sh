@@ -48,8 +48,13 @@ chmod 0755 "$firewall_bin"
 cat > "$cf_curl_bin" <<EOF
 #!/bin/sh
 printf '%s\n' "\$@" > "$cf_curl_args"
+is_patch=0
 while [ "\$#" -gt 0 ]; do
 	case "\$1" in
+		-X)
+			shift
+			[ "\$1" = "PATCH" ] && is_patch=1
+			;;
 		--data|-d|--data-raw)
 			shift
 			printf '%s\n' "\$1" > "$cf_curl_body"
@@ -57,6 +62,11 @@ while [ "\$#" -gt 0 ]; do
 	esac
 	shift
 done
+if [ "\$is_patch" = "1" ]; then
+	printf '{"result":{"name":"_mc._tcp.example.com","data":{"target":"mc.example.com","port":62000}}}\n'
+else
+	printf '{"result":{"name":"_mc._tcp.example.com","data":{"target":"mc.example.com","port":25565}}}\n'
+fi
 exit 0
 EOF
 chmod 0755 "$cf_curl_bin"
@@ -140,6 +150,10 @@ grep -Fqx '{"type":"SRV","data":{"port":62000}}' "$cf_curl_body" || \
 	fail "Cloudflare SRV request body must use mapped outer port"
 grep -Fq 'Cloudflare SRV update started for wan_ct: port=62000' "$notify_log_file" || \
 	fail "Cloudflare SRV update start was not written to instance log"
+grep -Fq 'Cloudflare SRV current record for wan_ct: name=_mc._tcp.example.com target=mc.example.com port=25565' "$notify_log_file" || \
+	fail "Cloudflare SRV current record details were not written to instance log"
+grep -Fq 'Cloudflare SRV port changed for wan_ct: 25565 -> 62000 name=_mc._tcp.example.com target=mc.example.com' "$notify_log_file" || \
+	fail "Cloudflare SRV port change details were not written to instance log"
 grep -Fq 'Cloudflare SRV updated for wan_ct: port=62000' "$notify_log_file" || \
 	fail "Cloudflare SRV update result was not written to instance log"
 
@@ -402,6 +416,8 @@ grep -Fq 'qBittorrent current listen_port for wan_ok: 51413' "$qb_ok_log_file" |
 	fail "qBittorrent current listen_port was not written to instance log"
 grep -Fq 'qBittorrent listen_port changed for wan_ok: 51413 -> 62002' "$qb_ok_log_file" || \
 	fail "qBittorrent listen_port change was not written to instance log"
+grep -Fq 'qBittorrent listen_port changed for wan_ok: 51413 -> 62002 source=outer mapping=tcp 10.10.10.30:51415 -> 203.0.113.30:62002' "$qb_ok_log_file" || \
+	fail "qBittorrent listen_port change details were not written to instance log"
 
 cat > "$expected_args" <<'EOF'
 tcp

@@ -46,6 +46,27 @@ natter_json_listen_port() {
 	printf '%s\n' "${1:-}" | sed -n 's/.*"listen_port"[[:space:]]*:[[:space:]]*\([0-9][0-9]*\).*/\1/p' | head -n 1
 }
 
+natter_json_string() {
+	local key="$1"
+
+	printf '%s\n' "${2:-}" | tr '\r\n' '  ' | awk -v key="\"$key\"" '
+		{
+			pos = index($0, key)
+			if (pos == 0)
+				next
+			value = substr($0, pos + length(key))
+			if (value !~ /^[[:space:]]*:[[:space:]]*"/)
+				next
+			sub(/^[[:space:]]*:[[:space:]]*"/, "", value)
+			end = index(value, "\"")
+			if (end > 0) {
+				print substr(value, 1, end - 1)
+				exit
+			}
+		}
+	'
+}
+
 runtime_slug="$(natter_runtime_slug "${NATTER_INSTANCE:-default}")"
 status_file="${NATTER_STATUS_FILE:-/var/run/natter/${runtime_slug}.json}"
 natter_write_status_json "$status_file" "${NATTER_INSTANCE:-default}" "$protocol" "$inner_ip" "$inner_port" "$outer_ip" "$outer_port" "mapped"
@@ -113,7 +134,8 @@ update_cloudflare_srv() {
 	local zone_id="${CLOUDFLARE_ZONE_ID:-}"
 	local record_id="${CLOUDFLARE_RECORD_ID:-}"
 	local base="${CLOUDFLARE_API_BASE:-https://api.cloudflare.com/client/v4}"
-	local port timeout json response rc current_response current_port patched_port
+	local port timeout json response rc current_response current_port current_name current_target
+	local patched_port patched_name patched_target
 
 	natter_bool "$enabled" || return 0
 
@@ -148,7 +170,11 @@ update_cloudflare_srv() {
 	rc=$?
 	if [ "$rc" -eq 0 ]; then
 		current_port="$(natter_json_port "$current_response")"
-		[ -n "$current_port" ] && log "Cloudflare SRV current port for ${NATTER_INSTANCE:-default}: $current_port"
+		current_name="$(natter_json_string name "$current_response")"
+		current_target="$(natter_json_string target "$current_response")"
+		if [ -n "$current_port$current_name$current_target" ]; then
+			log "Cloudflare SRV current record for ${NATTER_INSTANCE:-default}: name=${current_name:-unknown} target=${current_target:-unknown} port=${current_port:-unknown}"
+		fi
 	else
 		log "Cloudflare SRV current record read failed for ${NATTER_INSTANCE:-default}: response=$(natter_one_line "$current_response")"
 	fi
@@ -167,15 +193,18 @@ update_cloudflare_srv() {
 
 	patched_port="$(natter_json_port "$response")"
 	[ -n "$patched_port" ] || patched_port="$port"
+	patched_name="$(natter_json_string name "$response")"
+	patched_target="$(natter_json_string target "$response")"
+	[ -n "$patched_name" ] || patched_name="${current_name:-}"
+	[ -n "$patched_target" ] || patched_target="${current_target:-}"
 	if [ -n "${current_port:-}" ]; then
 		if [ "$current_port" = "$patched_port" ]; then
-			log "Cloudflare SRV updated for ${NATTER_INSTANCE:-default}: port=$patched_port unchanged"
+			log "Cloudflare SRV port unchanged for ${NATTER_INSTANCE:-default}: $patched_port name=${patched_name:-unknown} target=${patched_target:-unknown}"
 		else
-			log "Cloudflare SRV updated for ${NATTER_INSTANCE:-default}: port=$patched_port ($current_port -> $patched_port)"
+			log "Cloudflare SRV port changed for ${NATTER_INSTANCE:-default}: $current_port -> $patched_port name=${patched_name:-unknown} target=${patched_target:-unknown}"
 		fi
-	else
-		log "Cloudflare SRV updated for ${NATTER_INSTANCE:-default}: port=$patched_port"
 	fi
+	log "Cloudflare SRV updated for ${NATTER_INSTANCE:-default}: port=$patched_port name=${patched_name:-unknown} target=${patched_target:-unknown}"
 }
 
 update_auto_firewall
@@ -282,12 +311,12 @@ fi
 rm -f "$cookie"
 if [ -n "${current_listen_port:-}" ]; then
 	if [ "$current_listen_port" = "$listen_port" ]; then
-		log "qBittorrent listen_port unchanged for ${NATTER_INSTANCE:-default}: $listen_port"
+		log "qBittorrent listen_port unchanged for ${NATTER_INSTANCE:-default}: $listen_port source=$listen_port_source mapping=${protocol} ${inner_ip}:${inner_port} -> ${outer_ip}:${outer_port}"
 	else
-		log "qBittorrent listen_port changed for ${NATTER_INSTANCE:-default}: $current_listen_port -> $listen_port"
+		log "qBittorrent listen_port changed for ${NATTER_INSTANCE:-default}: $current_listen_port -> $listen_port source=$listen_port_source mapping=${protocol} ${inner_ip}:${inner_port} -> ${outer_ip}:${outer_port}"
 	fi
 fi
-log "qBittorrent listen_port set to $listen_port for ${NATTER_INSTANCE:-default}; ${protocol} ${inner_ip}:${inner_port} -> ${outer_ip}:${outer_port}"
+log "qBittorrent listen_port set to $listen_port for ${NATTER_INSTANCE:-default}; previous=${current_listen_port:-unknown} source=$listen_port_source mapping=${protocol} ${inner_ip}:${inner_port} -> ${outer_ip}:${outer_port}"
 natter_write_status_json "$status_file" "${NATTER_INSTANCE:-default}" "$protocol" "$inner_ip" "$inner_port" "$outer_ip" "$outer_port" "qBittorrent listen_port set to $listen_port"
 run_user_notify
 exit 0

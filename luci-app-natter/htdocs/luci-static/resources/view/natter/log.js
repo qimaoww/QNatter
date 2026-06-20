@@ -63,22 +63,19 @@ return view.extend({
 			var options = [];
 
 			(instances || []).forEach(function(item) {
-				options.push({
-					name: item.name || 'default',
-					label: item.label || item.name || 'default'
-				});
+				options.push(item.name || 'default');
 			});
 
 			if (!options.length)
-				options.push({ name: 'default', label: 'default' });
+				options.push('default');
 
 			var found = options.some(function(item) {
-				return item.name === previous;
+				return item === previous;
 			});
 
-			currentInstance = found ? previous : options[0].name;
+			currentInstance = found ? previous : options[0];
 			instanceSelect.replaceChildren.apply(instanceSelect, options.map(function(item) {
-				return E('option', { 'value': item.name }, [ item.label ]);
+				return E('option', { 'value': item }, [ item ]);
 			}));
 			instanceSelect.value = currentInstance;
 		}

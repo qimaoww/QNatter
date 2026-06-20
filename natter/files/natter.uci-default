@@ -2,9 +2,21 @@
 
 : "${NATTER_UCI_CONFIG:=/etc/config/natter}"
 : "${NATTER_UCI_DEFAULT:=/etc/config/natter.default}"
+: "${NATTER_UCI_BIN:=uci}"
 
-[ -e "$NATTER_UCI_CONFIG" ] && exit 0
-[ -r "$NATTER_UCI_DEFAULT" ] || exit 0
+if [ ! -e "$NATTER_UCI_CONFIG" ]; then
+	[ -r "$NATTER_UCI_DEFAULT" ] || exit 0
+	cp "$NATTER_UCI_DEFAULT" "$NATTER_UCI_CONFIG"
+fi
 
-cp "$NATTER_UCI_DEFAULT" "$NATTER_UCI_CONFIG"
+if command -v "$NATTER_UCI_BIN" >/dev/null 2>&1; then
+	changed=0
+	if ! "$NATTER_UCI_BIN" -q get natter.global.hot_reload >/dev/null 2>&1; then
+		"$NATTER_UCI_BIN" set natter.global.hot_reload='1' >/dev/null 2>&1 && changed=1
+	fi
+	for section in $("$NATTER_UCI_BIN" -q show natter 2>/dev/null | sed -n 's/^natter\.\([A-Za-z0-9_][A-Za-z0-9_]*\)=instance$/\1/p'); do
+		"$NATTER_UCI_BIN" -q delete "natter.${section}.label" >/dev/null 2>&1 && changed=1
+	done
+	[ "$changed" = "1" ] && "$NATTER_UCI_BIN" commit natter >/dev/null 2>&1
+fi
 exit 0

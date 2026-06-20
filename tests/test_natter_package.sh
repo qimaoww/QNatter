@@ -134,6 +134,8 @@ assert_contains luci-app-natter/htdocs/luci-static/resources/view/natter/instanc
 assert_contains luci-app-natter/htdocs/luci-static/resources/view/natter/instances.js "return E\\('button'"
 assert_contains luci-app-natter/htdocs/luci-static/resources/view/natter/instances.js "hideInGrid\\(s\\.option\\(widgets\\.DeviceSelect, 'bind_value'"
 assert_contains luci-app-natter/htdocs/luci-static/resources/view/natter/instances.js "widgets\\.DeviceSelect, 'bind_value', _\\('WAN interface'\\)"
+assert_contains luci-app-natter/htdocs/luci-static/resources/view/natter/instances.js "form\\.Flag, 'hot_reload', _\\('Hot reload'\\)"
+assert_not_contains luci-app-natter/htdocs/luci-static/resources/view/natter/instances.js "form\\.Value, 'label'"
 assert_not_contains luci-app-natter/htdocs/luci-static/resources/view/natter/instances.js "form\\.ListValue, 'runtime'"
 assert_not_contains luci-app-natter/htdocs/luci-static/resources/view/natter/instances.js "/usr/bin/python3"
 assert_not_contains luci-app-natter/htdocs/luci-static/resources/view/natter/instances.js 'tools\.python'
@@ -173,12 +175,18 @@ assert_contains luci-app-natter/htdocs/luci-static/resources/view/natter/instanc
 assert_contains luci-app-natter/htdocs/luci-static/resources/view/natter/status.js 'natter-theme-aurora'
 assert_contains luci-app-natter/htdocs/luci-static/resources/view/natter/status.js "expect: \\{ '': \\{ instances: \\[\\] \\} \\}"
 assert_contains luci-app-natter/htdocs/luci-static/resources/view/natter/status.js 'data\.instances'
+assert_contains luci-app-natter/htdocs/luci-static/resources/view/natter/status.js "E\\('h3', \\{\\}, \\[ item\\.name \\|\\| '-' \\]\\)"
+assert_not_contains luci-app-natter/htdocs/luci-static/resources/view/natter/status.js "_\\('Group'\\)"
+assert_not_contains luci-app-natter/htdocs/luci-static/resources/view/natter/status.js 'item\\.label \\|\\| item\\.name'
 assert_contains luci-app-natter/htdocs/luci-static/resources/view/natter/log.js 'natter-theme-aurora'
 assert_contains luci-app-natter/htdocs/luci-static/resources/view/natter/log.js "expect: \\{ '': \\{ instances: \\[\\] \\} \\}"
 assert_contains luci-app-natter/htdocs/luci-static/resources/view/natter/log.js "expect: \\{ '': \\{ log: '' \\} \\}"
 assert_contains luci-app-natter/htdocs/luci-static/resources/view/natter/log.js 'data\.log'
+assert_not_contains luci-app-natter/htdocs/luci-static/resources/view/natter/log.js 'label'
 assert_contains luci-app-natter/root/usr/share/luci/menu.d/luci-app-natter.json '"type"[[:space:]]*:[[:space:]]*"view"'
 assert_contains luci-app-natter/root/usr/share/luci/menu.d/luci-app-natter.json '"path"[[:space:]]*:[[:space:]]*"natter/instances-v11"'
+assert_not_contains luci-app-natter/root/usr/libexec/natter-status 'json_pair label'
+assert_not_contains luci-app-natter/root/usr/libexec/natter-status 'config_get label'
 assert_contains luci-app-natter/root/usr/libexec/rpcd/luci.natter '"instance":"String"'
 assert_contains luci-app-natter/root/usr/libexec/rpcd/luci.natter '"lines":"Integer"'
 assert_contains luci-app-natter/root/usr/libexec/rpcd/luci.natter '"cloudflare_zones":\{"section":"String","token":"String"\}'
@@ -210,6 +218,8 @@ assert_contains natter/files/natter.hotplug 'config_get bind_value "\$section" b
 assert_contains natter/files/natter.hotplug 'if \[ -n "\$bind_value" \]; then'
 assert_contains natter/files/natter.hotplug '\[ "\$bind_value" = "\$DEVICE" \] && MATCHED=1'
 assert_contains natter/files/natter.config "option forward_method 'auto'"
+assert_contains natter/files/natter.config "option hot_reload '1'"
+assert_not_contains natter/files/natter.config "option label"
 assert_contains natter/files/natter.config "option auto_firewall '0'"
 assert_contains natter/files/natter.config "option cloudflare_enabled '0'"
 assert_contains natter/files/natter.config "option cloudflare_api_url ''"
@@ -221,6 +231,9 @@ assert_contains natter/files/natter-common.sh 'natter_forward_method_or_auto'
 assert_contains natter/files/natter-common.sh '\[ "\$forward_method" != "auto" \]'
 assert_contains natter/files/natter.init 'NATTER_STATUS_FILE'
 assert_contains natter/files/natter.init 'NATTER_LOG_FILE'
+assert_contains natter/files/natter.init 'hot_reload'
+assert_contains natter/files/natter.init 'runtime'
+assert_not_contains natter/files/natter.init 'config_get label'
 assert_contains natter/files/natter.init 'NATTER_AUTO_FIREWALL'
 assert_contains natter/files/natter.init 'NATTER_FIREWALL_SECTION'
 assert_contains natter/files/natter.init 'CLOUDFLARE_SRV_ENABLED'
@@ -237,11 +250,12 @@ assert_contains natter/files/natter-notify 'CLOUDFLARE_ZONE_ID'
 assert_contains natter/files/natter-notify 'CLOUDFLARE_RECORD_ID'
 assert_contains natter/files/natter-notify '\{"type":"SRV","data":\{"port":'
 assert_contains natter/files/natter-notify 'Cloudflare SRV update started'
+assert_contains natter/files/natter-notify 'Cloudflare SRV current record'
+assert_contains natter/files/natter-notify 'Cloudflare SRV port changed'
 assert_contains natter/files/natter-notify 'Cloudflare SRV updated'
 assert_contains natter/files/natter-notify 'NATTER_LOG_FILE'
 assert_not_contains natter/files/natter.config 'option runtime'
 assert_not_contains natter/files/natter.init 'config_get runtime'
-assert_not_contains natter/files/natter.init 'NATTER_RUNTIME'
 assert_not_contains natter/files/natter.init 'PROG="/usr/bin/natter.py"'
 assert_not_contains natter/files/natter.init 'mapped internal port'
 assert_contains natter/files/natter.init 'qbittorrent_target_ip'
@@ -256,6 +270,7 @@ assert_contains natter/files/natter-notify 'api/v2/app/preferences'
 assert_contains natter/files/natter-notify 'api/v2/app/setPreferences'
 assert_contains natter/files/natter-notify 'qBittorrent current listen_port'
 assert_contains natter/files/natter-notify 'qBittorrent listen_port changed'
+assert_contains natter/files/natter-notify 'source=\$listen_port_source mapping='
 assert_not_contains natter/Makefile 'DEPENDS:=.*\+python3'
 assert_contains natter/Makefile 'DEPENDS:=.*\+curl'
 assert_contains natter/Makefile 'DEPENDS:=.*\+nftables'
@@ -273,7 +288,7 @@ assert_contains natter/Makefile 'go build .* -o \$\(PKG_BUILD_DIR\)/natter-go ./
 assert_contains natter/Makefile '\$\(INSTALL_BIN\) \$\(PKG_BUILD_DIR\)/natter-go \$\(1\)/usr/bin/natter-go'
 assert_contains natter/Makefile '\$\(LN\) natter-go \$\(1\)/usr/bin/Natter'
 natter_release="$(sed -n 's/^PKG_RELEASE:=//p' "$ROOT/natter/Makefile")"
-[ "$natter_release" -gt 13 ] || fail "natter package release must increase when package files change"
+[ "$natter_release" -ge 22 ] || fail "natter package release must increase when package files change"
 assert_contains natter/Makefile '\$\(INSTALL_CONF\) ./files/natter.config \$\(1\)/etc/config/natter.default'
 assert_contains natter/Makefile '\$\(INSTALL_DIR\) \$\(1\)/etc/uci-defaults'
 assert_contains natter/Makefile '\$\(INSTALL_BIN\) ./files/natter.uci-default \$\(1\)/etc/uci-defaults/99-natter'
@@ -286,7 +301,7 @@ assert_not_contains natter/Makefile 'natter.py'
 assert_not_contains natter/Makefile './files/Natter'
 assert_not_contains natter/Makefile 'natter-python-wrapper.py'
 luci_release="$(sed -n 's/^PKG_RELEASE:=//p' "$ROOT/luci-app-natter/Makefile")"
-[ "$luci_release" -ge 12 ] || fail "luci-app-natter package release must increase when LuCI files change"
+[ "$luci_release" -ge 13 ] || fail "luci-app-natter package release must increase when LuCI files change"
 assert_contains luci-app-natter/Makefile 'LUCI_DEPENDS:=.*\+natter'
 assert_contains luci-app-natter/Makefile 'LUCI_DEPENDS:=.*\+luci-base'
 assert_contains luci-app-natter/Makefile 'LUCI_DEPENDS:=.*\+rpcd'
@@ -325,12 +340,17 @@ assert_option_block_contains luci-app-natter/htdocs/luci-static/resources/view/n
 assert_contains luci-app-natter/root/usr/libexec/rpcd/luci.natter 'CLOUDFLARE_TIMEOUT:-4'
 assert_contains natter/files/natter.uci-default 'NATTER_UCI_CONFIG:=/etc/config/natter'
 assert_contains natter/files/natter.uci-default 'NATTER_UCI_DEFAULT:=/etc/config/natter.default'
-assert_contains natter/files/natter.uci-default '\[ -e "\$NATTER_UCI_CONFIG" \] && exit 0'
+assert_contains natter/files/natter.uci-default 'NATTER_UCI_BIN:=uci'
+assert_contains natter/files/natter.uci-default 'natter.global.hot_reload'
+assert_contains natter/files/natter.uci-default 'delete "natter\.\$\{section\}\.label"'
 assert_contains natter/files/natter.uci-default 'cp "\$NATTER_UCI_DEFAULT" "\$NATTER_UCI_CONFIG"'
 
 assert_po_translation 'Global Settings' '全局设置'
+assert_po_translation 'Hot reload' '热加载'
+assert_po_translation 'Reload notify-only changes without restarting running Natter processes.' '仅重载通知类配置变更，不重启正在运行的 Natter 进程。'
 assert_po_translation 'Expose ports behind full-cone NAT with optional forwarding and qBittorrent port updates.' '通过全锥形 NAT 暴露端口，并可选转发和更新 qBittorrent 监听端口。'
 assert_po_translation 'Runtime' '运行时'
+assert_not_contains luci-app-natter/po/zh_Hans/natter.po 'msgid "Label"'
 assert_po_translation 'WAN interface' 'WAN 接口'
 assert_po_translation 'Leave empty to bind to the default WAN device.' '留空则自动绑定默认 WAN 设备。'
 assert_po_translation 'Forward method' '转发方式'

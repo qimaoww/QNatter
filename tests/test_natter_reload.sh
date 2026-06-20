@@ -1,0 +1,158 @@
+#!/bin/sh
+
+set -eu
+
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+
+fail() {
+	printf 'FAIL: %s\n' "$*" >&2
+	exit 1
+}
+
+tmp="$(mktemp -d)"
+trap 'rm -rf "$tmp"' EXIT
+
+procd_log="$tmp/procd.log"
+service_log="$tmp/service.log"
+trigger_log="$tmp/triggers.log"
+current_instance=""
+GLOBAL_ENABLED=1
+HOT_RELOAD=1
+BIND_VALUE="pppoe-wan"
+CF_TOKEN="token-one"
+
+procd_open_instance() {
+	current_instance="$1"
+	printf '%s open\n' "$current_instance" >> "$procd_log"
+}
+
+procd_set_param() {
+	printf '%s set' "$current_instance" >> "$procd_log"
+	printf ' %s' "$@" >> "$procd_log"
+	printf '\n' >> "$procd_log"
+}
+
+procd_append_param() {
+	printf '%s append' "$current_instance" >> "$procd_log"
+	printf ' %s' "$@" >> "$procd_log"
+	printf '\n' >> "$procd_log"
+}
+
+procd_close_instance() {
+	printf '%s close\n' "$current_instance" >> "$procd_log"
+	current_instance=""
+}
+
+procd_add_reload_trigger() {
+	printf 'reload %s\n' "$*" >> "$trigger_log"
+}
+
+procd_add_interface_trigger() {
+	printf 'interface %s\n' "$*" >> "$trigger_log"
+}
+
+stop() {
+	printf 'stop\n' >> "$service_log"
+}
+
+start() {
+	printf 'start\n' >> "$service_log"
+	start_service
+}
+
+cat > "$tmp/functions.sh" <<'EOF'
+config_load() {
+	[ "$1" = "natter" ] || return 1
+}
+
+config_foreach() {
+	local callback="$1"
+	local type="$2"
+	[ "$type" = "instance" ] || return 0
+	"$callback" wan_ct
+}
+
+config_get_bool() {
+	config_get "$@"
+}
+
+config_get() {
+	local __var="$1"
+	local section="$2"
+	local option="$3"
+	local default="${4:-}"
+	local value="$default"
+
+	case "$section:$option" in
+		global:enabled) value="$GLOBAL_ENABLED" ;;
+		global:hot_reload) value="$HOT_RELOAD" ;;
+		wan_ct:enabled) value="1" ;;
+		wan_ct:label) value="Telecom" ;;
+		wan_ct:protocol) value="tcp" ;;
+		wan_ct:network) value="wan" ;;
+		wan_ct:bind_value) value="$BIND_VALUE" ;;
+		wan_ct:forward_method) value="none" ;;
+		wan_ct:auto_firewall) value="1" ;;
+		wan_ct:cloudflare_enabled) value="1" ;;
+		wan_ct:cloudflare_api_token) value="$CF_TOKEN" ;;
+		wan_ct:cloudflare_zone_id) value="zone-selected" ;;
+		wan_ct:cloudflare_record_id) value="record-selected" ;;
+	esac
+
+	eval "$__var=\$value"
+}
+
+config_list_foreach() {
+	return 0
+}
+EOF
+
+cat > "$tmp/network.sh" <<'EOF'
+# Not needed by natter.init in tests.
+EOF
+
+NATTER_FUNCTIONS_SH="$tmp/functions.sh"
+NATTER_NETWORK_SH="$tmp/network.sh"
+NATTER_COMMON_SH="$ROOT/natter/files/natter-common.sh"
+NATTER_QBITTORRENT_SH="$ROOT/natter/files/natter-qbittorrent.sh"
+NATTER_RUN_DIR="$tmp/run"
+NATTER_LOG_DIR="$tmp/log"
+export NATTER_FUNCTIONS_SH NATTER_NETWORK_SH NATTER_COMMON_SH NATTER_QBITTORRENT_SH NATTER_RUN_DIR NATTER_LOG_DIR
+export GLOBAL_ENABLED HOT_RELOAD BIND_VALUE CF_TOKEN
+
+. "$ROOT/natter/files/natter.init"
+
+start_service
+[ -s "$tmp/run/wan_ct.runtime" ] || fail "start_service did not write runtime fingerprint"
+grep -Fq "CLOUDFLARE_API_TOKEN='token-one'" "$tmp/run/wan_ct.env" || fail "initial notify env missing token"
+
+: > "$service_log"
+: > "$procd_log"
+CF_TOKEN="token-two"
+reload_service
+
+[ ! -s "$service_log" ] || fail "notify-only reload should not restart backend"
+[ ! -s "$procd_log" ] || fail "notify-only reload should not reopen procd instance"
+grep -Fq "CLOUDFLARE_API_TOKEN='token-two'" "$tmp/run/wan_ct.env" || fail "hot reload did not rewrite notify env"
+
+: > "$service_log"
+BIND_VALUE="pppoe-wan-new"
+reload_service
+grep -Fqx 'stop' "$service_log" || fail "runtime reload must stop backend"
+grep -Fqx 'start' "$service_log" || fail "runtime reload must start backend"
+
+: > "$service_log"
+HOT_RELOAD=0
+reload_service
+grep -Fqx 'stop' "$service_log" || fail "disabled hot reload must stop backend"
+grep -Fqx 'start' "$service_log" || fail "disabled hot reload must start backend"
+
+: > "$service_log"
+GLOBAL_ENABLED=0
+reload_service
+grep -Fqx 'stop' "$service_log" || fail "disabled service reload must stop backend"
+if grep -Fqx 'start' "$service_log"; then
+	fail "disabled service reload must not start backend"
+fi
+
+printf 'natter reload checks passed\n'

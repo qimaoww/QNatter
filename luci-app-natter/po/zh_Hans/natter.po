@@ -28,11 +28,14 @@ msgstr "信息"
 msgid "Debug"
 msgstr "调试"
 
+msgid "Hot reload"
+msgstr "热加载"
+
+msgid "Reload notify-only changes without restarting running Natter processes."
+msgstr "仅重载通知类配置变更，不重启正在运行的 Natter 进程。"
+
 msgid "Log lines"
 msgstr "日志行数"
-
-msgid "Label"
-msgstr "标签"
 
 msgid "Instance ID"
 msgstr "实例 ID"
