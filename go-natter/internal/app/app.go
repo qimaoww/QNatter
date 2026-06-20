@@ -97,6 +97,9 @@ func runWithContext(ctx context.Context, args []string, stdout io.Writer, stderr
 	}
 
 	printStartup(stderr, len(args) == 0)
+	if cfg.Verbose {
+		logConfig(stderr, cfg)
+	}
 	if err := run(ctx, cfg); err != nil {
 		if cfg.ExitWhenChanged && (errors.Is(err, engine.ErrMappingChanged) || errors.Is(err, engine.ErrLocalAddressChanged)) {
 			return 0
@@ -116,6 +119,18 @@ func printStartup(stderr io.Writer, showTip bool) {
 
 func logLine(w io.Writer, level string, format string, args ...any) {
 	fmt.Fprintf(w, "%s [%s] %s\n", time.Now().Format("2006-01-02 15:04:05"), level, fmt.Sprintf(format, args...))
+}
+
+func logConfig(w io.Writer, cfg config.Config) {
+	protocol := "tcp"
+	if cfg.UDP {
+		protocol = "udp"
+	}
+	method := cfg.ForwardMethod
+	if method == "" {
+		method = "auto"
+	}
+	logLine(w, "D", "config: protocol=%s bind=%s:%d method=%s target=%s:%d", protocol, cfg.BindValue, cfg.BindPort, method, cfg.TargetIP, cfg.TargetPort)
 }
 
 func runEngine(ctx context.Context, cfg config.Config) error {

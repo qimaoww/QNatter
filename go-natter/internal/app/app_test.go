@@ -216,6 +216,26 @@ func TestRunLogsUseTimestampedLevels(t *testing.T) {
 	}
 }
 
+func TestRunVerboseLogsRuntimeConfig(t *testing.T) {
+	var stderr bytes.Buffer
+	code := RunWith([]string{"-v", "-u", "-i", "pppoe-wan_cmcc", "-b", "40000", "-m", "none"}, &bytes.Buffer{}, &stderr, func(config.Config) error {
+		return nil
+	})
+	if code != 0 {
+		t.Fatalf("RunWith returned code %d, want 0", code)
+	}
+	for _, want := range []string{
+		"[D] config:",
+		"protocol=udp",
+		"bind=pppoe-wan_cmcc:40000",
+		"method=none",
+	} {
+		if !strings.Contains(stderr.String(), want) {
+			t.Fatalf("stderr = %q, missing %q", stderr.String(), want)
+		}
+	}
+}
+
 func TestRunWithContextPassesContextToEngine(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
