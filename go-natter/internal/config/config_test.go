@@ -92,6 +92,16 @@ func TestParseArgsNormalizesIPv4LikePython(t *testing.T) {
 	}
 }
 
+func TestParseArgsAcceptsDottedInterfaceBindValues(t *testing.T) {
+	cfg, err := ParseArgs([]string{"-i", "eth1.2"})
+	if err != nil {
+		t.Fatalf("ParseArgs returned error: %v", err)
+	}
+	if cfg.BindValue != "eth1.2" {
+		t.Fatalf("bind value = %q, want eth1.2", cfg.BindValue)
+	}
+}
+
 func TestParseArgsAcceptsSTUNServerSchemePrefixes(t *testing.T) {
 	cfg, err := ParseArgs([]string{
 		"-s", "tcp://turn.cloud-rtc.com:80",
@@ -146,6 +156,7 @@ func TestParseArgsRejectsInvalidValues(t *testing.T) {
 		{name: "zero keepalive", args: []string{"-k", "0"}},
 		{name: "negative bind port", args: []string{"-b", "-1"}},
 		{name: "large target port", args: []string{"-p", "65536"}},
+		{name: "invalid bind IP", args: []string{"-i", "10.10.10.999"}},
 		{name: "invalid target IP", args: []string{"-t", "not-an-ip"}},
 		{name: "invalid keepalive server port", args: []string{"-h", "example.com:bad"}},
 		{name: "missing notify file", args: []string{"-e", filepath.Join(t.TempDir(), "missing")}},

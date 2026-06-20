@@ -124,6 +124,8 @@ func validateConfig(cfg *Config) error {
 	}
 	if normalized, ok := normalizeIPv4(cfg.BindValue); ok {
 		cfg.BindValue = normalized
+	} else if looksLikeIPv4Literal(cfg.BindValue) {
+		return fmt.Errorf("invalid IP address: %s", cfg.BindValue)
 	}
 	normalizedTarget, ok := normalizeIPv4(cfg.TargetIP)
 	if !ok {
@@ -135,6 +137,23 @@ func validateConfig(cfg *Config) error {
 
 func validPort(port int) bool {
 	return port >= 0 && port <= 65535
+}
+
+func looksLikeIPv4Literal(value string) bool {
+	if value == "" {
+		return false
+	}
+	hasDot := false
+	for _, char := range value {
+		if char == '.' {
+			hasDot = true
+			continue
+		}
+		if char < '0' || char > '9' {
+			return false
+		}
+	}
+	return hasDot
 }
 
 func defaultSTUNServers(udp bool) []string {
