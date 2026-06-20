@@ -184,6 +184,7 @@ func runEngineWithLog(ctx context.Context, cfg config.Config, log io.Writer) err
 		InitialCheck: portChecker,
 	}
 	if cfg.UPnP {
+		logUPnPScanning(log)
 		upnpMapper, err := engine.NewUPnPMapperFromConfig(cfg)
 		if err != nil {
 			return err
@@ -230,6 +231,10 @@ func logUPnPFoundRouter(w io.Writer, ip string) {
 		return
 	}
 	logLine(w, "I", "[UPnP] Found router %s", ip)
+}
+
+func logUPnPScanning(w io.Writer) {
+	logLine(w, "I", "Scanning UPnP Devices...")
 }
 
 func logMapping(w io.Writer, cfg config.Config, result engine.Result) {

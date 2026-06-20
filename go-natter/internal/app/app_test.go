@@ -311,6 +311,15 @@ func TestLogUPnPFoundRouterSkipsEmptyIP(t *testing.T) {
 	}
 }
 
+func TestLogUPnPScanningPrintsNotice(t *testing.T) {
+	var stderr bytes.Buffer
+	logUPnPScanning(&stderr)
+
+	if !strings.Contains(stderr.String(), "[I] Scanning UPnP Devices...") {
+		t.Fatalf("stderr = %q, missing UPnP scanning notice", stderr.String())
+	}
+}
+
 func TestLogMappingPrintsRouteInformation(t *testing.T) {
 	var stderr bytes.Buffer
 	logMapping(&stderr, config.Config{}, engine.Result{
