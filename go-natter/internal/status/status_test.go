@@ -98,6 +98,39 @@ func TestWriteMappingDoesNotHTMLEscapeStatusStrings(t *testing.T) {
 	}
 }
 
+func TestWriteMappingAtomicallyReplacesExistingFile(t *testing.T) {
+	dir := t.TempDir()
+	file := dir + "/status.json"
+	link := dir + "/old-status.json"
+
+	if err := os.WriteFile(file, []byte("old status\n"), 0o644); err != nil {
+		t.Fatalf("WriteFile returned error: %v", err)
+	}
+	if err := os.Link(file, link); err != nil {
+		t.Skipf("hard links are not available: %v", err)
+	}
+
+	mapping := Mapping{
+		Instance: "cmcc",
+		Protocol: "tcp",
+		Inner:    netip.MustParseAddrPort("192.0.2.10:40000"),
+		Outer:    netip.MustParseAddrPort("198.51.100.10:62000"),
+		Now:      func() string { return "2026-06-20 05:30:00" },
+	}
+
+	if err := WriteMapping(file, mapping); err != nil {
+		t.Fatalf("WriteMapping returned error: %v", err)
+	}
+
+	raw, err := os.ReadFile(link)
+	if err != nil {
+		t.Fatalf("ReadFile hard link returned error: %v", err)
+	}
+	if got := string(raw); got != "old status\n" {
+		t.Fatalf("WriteMapping updated the old inode in place: %q", got)
+	}
+}
+
 func assertString(t *testing.T, got map[string]any, key string, want string) {
 	t.Helper()
 	if got[key] != want {
