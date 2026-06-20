@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/netip"
 	"os"
+	"strings"
 	"testing"
 )
 
@@ -65,6 +66,36 @@ func TestWriteMappingDefaultsInstanceAndMessage(t *testing.T) {
 	}
 	assertString(t, got, "instance", "default")
 	assertString(t, got, "message", "mapped")
+}
+
+func TestWriteMappingDoesNotHTMLEscapeStatusStrings(t *testing.T) {
+	file := t.TempDir() + "/html.json"
+	mapping := Mapping{
+		Instance: "cmcc",
+		Protocol: "tcp",
+		Inner:    netip.MustParseAddrPort("192.0.2.10:40000"),
+		Outer:    netip.MustParseAddrPort("198.51.100.10:62000"),
+		Message:  "qBittorrent <tag>&value",
+		Now:      func() string { return "2026-06-20 05:00:00" },
+	}
+
+	if err := WriteMapping(file, mapping); err != nil {
+		t.Fatalf("WriteMapping returned error: %v", err)
+	}
+
+	raw, err := os.ReadFile(file)
+	if err != nil {
+		t.Fatalf("ReadFile returned error: %v", err)
+	}
+	if string(raw) == "" || raw[len(raw)-1] != '\n' {
+		t.Fatalf("status JSON must end with newline: %q", raw)
+	}
+	if got := string(raw); !strings.Contains(got, `"message":"qBittorrent <tag>&value"`) {
+		t.Fatalf("status JSON HTML-escaped message: %s", got)
+	}
+	if strings.Contains(string(raw), `\u003c`) || strings.Contains(string(raw), `\u003e`) || strings.Contains(string(raw), `\u0026`) {
+		t.Fatalf("status JSON contains HTML unicode escapes: %s", raw)
+	}
 }
 
 func assertString(t *testing.T, got map[string]any, key string, want string) {

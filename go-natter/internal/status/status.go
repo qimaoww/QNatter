@@ -1,6 +1,7 @@
 package status
 
 import (
+	"bytes"
 	"encoding/json"
 	"net/netip"
 	"os"
@@ -54,14 +55,15 @@ func WriteMapping(path string, mapping Mapping) error {
 		Message:   mapping.Message,
 	}
 
-	raw, err := json.Marshal(payload)
-	if err != nil {
+	var buf bytes.Buffer
+	encoder := json.NewEncoder(&buf)
+	encoder.SetEscapeHTML(false)
+	if err := encoder.Encode(payload); err != nil {
 		return err
 	}
-	raw = append(raw, '\n')
 
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return err
 	}
-	return os.WriteFile(path, raw, 0o644)
+	return os.WriteFile(path, buf.Bytes(), 0o644)
 }
