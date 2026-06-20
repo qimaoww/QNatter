@@ -68,7 +68,7 @@ EOF
 printf 'NATTER_INSTANCE=dotXname\0' > "$proc_dir/100/environ"
 
 cat > "$run_dir/wan_ct.json" <<'EOF'
-{"instance":"wan_ct","protocol":"tcp","inner_ip":"10.10.10.10","inner_port":51413,"outer_ip":"203.0.113.10","outer_port":62000,"updated_at":"2026-06-20 04:00:00","message":"mapped"}
+{"instance":"wan_ct","protocol":"tcp","inner_ip":"10.10.10.10","inner_port":51413,"outer_ip":"203.0.113.10","outer_port":62000,"updated_at":"2026-06-20 04:00:00","message":"mapped \"quote\" \\ path"}
 EOF
 
 stderr="$tmp/status.err"
@@ -98,10 +98,16 @@ case "$output" in
 	*) fail "status output is missing Mobile instance: $output" ;;
 esac
 
-case "$output" in
-	*'"inner_ip":"10.10.10.10"'*'"inner_port":51413'*'"outer_ip":"203.0.113.10"'*'"outer_port":62000'*'"message":"mapped"'*) : ;;
-	*) fail "status output is missing Telecom runtime mapping: $output" ;;
-esac
+printf '%s\n' "$output" | grep -Fq '"inner_ip":"10.10.10.10"' || \
+	fail "status output is missing Telecom inner IP: $output"
+printf '%s\n' "$output" | grep -Fq '"inner_port":51413' || \
+	fail "status output is missing Telecom inner port: $output"
+printf '%s\n' "$output" | grep -Fq '"outer_ip":"203.0.113.10"' || \
+	fail "status output is missing Telecom outer IP: $output"
+printf '%s\n' "$output" | grep -Fq '"outer_port":62000' || \
+	fail "status output is missing Telecom outer port: $output"
+printf '%s\n' "$output" | grep -Fq '"message":"mapped \"quote\" \\ path"' || \
+	fail "status output must preserve escaped runtime strings: $output"
 
 case "$output" in
 	*'"name":"wan_cm"'*'"inner_port":0'*'"outer_port":0'*) : ;;
