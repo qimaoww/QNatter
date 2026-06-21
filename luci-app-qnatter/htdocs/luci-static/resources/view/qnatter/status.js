@@ -1,6 +1,5 @@
 'use strict';
 'require view';
-'require poll';
 'require rpc';
 
 var callStatus = rpc.declare({
@@ -42,7 +41,7 @@ function reloadInstance(name, btn) {
 	return callReloadInstance(name).then(function() {
 		return new Promise(function(resolve) { setTimeout(resolve, 2000); });
 	}).then(function() {
-		return callStatus();
+		return true;
 	}).catch(function(err) {
 		alert(err.message || String(err));
 	}).finally(function() {
@@ -53,44 +52,96 @@ function reloadInstance(name, btn) {
 	});
 }
 
-function renderCard(item) {
-	var route = item.outer_ip
+function setText(node, text) {
+	text = text == null ? '' : String(text);
+	if (node.textContent !== text)
+		node.textContent = text;
+}
+
+function itemKey(item) {
+	return item.name || item.instance || 'default';
+}
+
+function itemRoute(item) {
+	return item.outer_ip
 		? '%s:%s'.format(item.outer_ip, item.outer_port || '')
 		: _('Waiting for mapping');
-	var inner = item.inner_ip
+}
+
+function itemInner(item) {
+	return item.inner_ip
 		? '%s:%s'.format(item.inner_ip, item.inner_port || '')
 		: (item.bind_value || item.network || '');
-	var protocol = (item.protocol || 'tcp').toString().toUpperCase();
+}
 
+function createCard(item, fieldByName) {
+	var name = itemKey(item);
+	var fields = {};
 	var reloadBtn = E('button', {
 		'class': 'btn cbi-button cbi-button-action',
 		'style': 'margin-left:6px;padding:2px 8px;font-size:11px',
-		'click': function(ev) { reloadInstance(item.instance || item.name, this); }
+		'click': function(ev) { reloadInstance(name, this); }
 	}, [ _('Reload') ]);
 
-	return E('section', { 'class': 'qnatter-card' }, [
+	fields.name = E('span', {}, [ name || '-' ]);
+	fields.running = E('span', { 'class': 'qnatter-pill' }, []);
+	fields.route = E('dd', {}, []);
+	fields.inner = E('dd', {}, []);
+	fields.protocol = E('dd', {}, []);
+	fields.network = E('dd', {}, []);
+	fields.qbittorrent = E('dd', {}, []);
+	fields.updated_at = E('dd', {}, []);
+	fields.message = E('dd', {}, []);
+	fieldByName[name] = fields;
+
+	return E('section', { 'class': 'qnatter-card', 'data-instance': name }, [
 		E('div', { 'class': 'qnatter-card-head' }, [
 			E('h3', { 'style': 'display:flex;align-items:center;gap:4px' }, [
-				item.name || '-',
+				fields.name,
 				reloadBtn
 			]),
-			E('span', { 'class': 'qnatter-pill ' + (item.running ? 'is-running' : 'is-stopped') },
-				[ item.running ? _('RUNNING') : _('NOT RUNNING') ])
+			fields.running
 		]),
 		E('dl', {}, [
-			E('dt', {}, [ _('Public address') ]), E('dd', {}, [ route ]),
-			E('dt', {}, [ _('Internal address') ]), E('dd', {}, [ inner ]),
-			E('dt', {}, [ _('Network protocol') ]), E('dd', {}, [ protocol ]),
-			E('dt', {}, [ _('WAN network') ]), E('dd', {}, [ item.network || 'wan' ]),
-			E('dt', {}, [ _('qBittorrent') ]), E('dd', {}, [ item.qbittorrent_enabled ? _('Enabled') : _('Disabled') ]),
-			E('dt', {}, [ _('Updated') ]), E('dd', {}, [ item.updated_at || '-' ]),
-			E('dt', {}, [ _('Message') ]), E('dd', {}, [ item.message || '-' ])
+			E('dt', {}, [ _('Public address') ]), fields.route,
+			E('dt', {}, [ _('Internal address') ]), fields.inner,
+			E('dt', {}, [ _('Network protocol') ]), fields.protocol,
+			E('dt', {}, [ _('WAN network') ]), fields.network,
+			E('dt', {}, [ _('qBittorrent') ]), fields.qbittorrent,
+			E('dt', {}, [ _('Updated') ]), fields.updated_at,
+			E('dt', {}, [ _('Message') ]), fields.message
 		])
 	]);
 }
 
+function updateCard(item, fieldByName) {
+	var name = itemKey(item);
+	var fields = fieldByName[name];
+	var route = itemRoute(item);
+	var inner = itemInner(item);
+	var protocol = (item.protocol || 'tcp').toString().toUpperCase();
+
+	if (!fields)
+		return;
+
+	setText(fields.name, name || '-');
+	fields.running.className = 'qnatter-pill ' + (item.running ? 'is-running' : 'is-stopped');
+	setText(fields.running, item.running ? _('RUNNING') : _('NOT RUNNING'));
+	setText(fields.route, route);
+	setText(fields.inner, inner);
+	setText(fields.protocol, protocol);
+	setText(fields.network, item.network || 'wan');
+	setText(fields.qbittorrent, item.qbittorrent_enabled ? _('Enabled') : _('Disabled'));
+	setText(fields.updated_at, item.updated_at || '-');
+	setText(fields.message, item.message || '-');
+}
+
 return view.extend({
 	render: function() {
+		var cardByName = {};
+		var fieldByName = {};
+		var refreshInFlight = false;
+		var refreshTimer = null;
 		var grid = E('div', { 'class': 'qnatter-grid' }, [
 			E('div', { 'class': 'qnatter-empty' }, [ _('Collecting data...') ])
 		]);
@@ -105,21 +156,75 @@ return view.extend({
 			grid
 		]);
 
-		function refresh() {
-			return callStatus().then(function(data) {
-				if (!data.instances || !data.instances.length) {
-					grid.replaceChildren(E('div', { 'class': 'qnatter-empty' }, [ _('No instances configured.') ]));
-					return;
+		function renderInstances(instances) {
+			var present = {};
+
+			if (!instances.length) {
+				cardByName = {};
+				fieldByName = {};
+				grid.replaceChildren(E('div', { 'class': 'qnatter-empty' }, [ _('No instances configured.') ]));
+				return;
+			}
+
+			if (grid.firstElementChild && grid.firstElementChild.className === 'qnatter-empty')
+				grid.replaceChildren();
+
+			for (var i = 0; i < instances.length; i++) {
+				var item = instances[i];
+				var name = itemKey(item);
+				present[name] = true;
+
+				if (!cardByName[name]) {
+					cardByName[name] = createCard(item, fieldByName);
 				}
 
-				grid.replaceChildren.apply(grid, data.instances.map(renderCard));
-			}).catch(function(err) {
-				grid.replaceChildren(E('div', { 'class': 'qnatter-empty' }, [ err.message || String(err) ]));
+				grid.appendChild(cardByName[name]);
+				updateCard(item, fieldByName);
+			}
+
+			Object.keys(cardByName).forEach(function(name) {
+				if (!present[name]) {
+					cardByName[name].remove();
+					delete cardByName[name];
+					delete fieldByName[name];
+				}
 			});
 		}
 
-		poll.add(refresh, 3);
+		function refresh() {
+			if (refreshInFlight)
+				return Promise.resolve();
+
+			refreshInFlight = true;
+			return callStatus().then(function(data) {
+				renderInstances(data.instances || []);
+			}).catch(function(err) {
+				cardByName = {};
+				fieldByName = {};
+				grid.replaceChildren(E('div', { 'class': 'qnatter-empty' }, [ err.message || String(err) ]));
+			}).finally(function() {
+				refreshInFlight = false;
+			});
+		}
+
+		function scheduleRefresh(delay) {
+			window.clearTimeout(refreshTimer);
+			refreshTimer = window.setTimeout(function() {
+				refresh().finally(function() {
+					scheduleRefresh(document.hidden ? 10000 : 1000);
+				});
+			}, delay);
+		}
+
+		document.addEventListener('visibilitychange', function() {
+			if (!document.hidden) {
+				window.clearTimeout(refreshTimer);
+				refresh().finally(function() { scheduleRefresh(1000); });
+			}
+		});
+
 		refresh();
+		scheduleRefresh(1000);
 
 		return root;
 	}

@@ -177,8 +177,15 @@ assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/statu
 assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/status.js 'data\.instances'
 assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/status.js "method: 'reload_instance'"
 assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/status.js "callReloadInstance\\(name\\)"
-assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/status.js "reloadInstance\\(item\\.instance \\|\\| item\\.name"
+assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/status.js "reloadInstance\\(name, this\\)"
 assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/status.js "_\\('Reload'\\)"
+assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/status.js 'cardByName'
+assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/status.js 'fieldByName'
+assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/status.js 'refreshInFlight'
+assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/status.js 'document\.hidden'
+assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/status.js 'setTimeout'
+assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/status.js 'updateCard'
+assert_not_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/status.js 'grid\.replaceChildren\.apply'
 assert_not_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/status.js "_\\('Group'\\)"
 assert_not_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/status.js 'item\\.label \\|\\| item\\.name'
 assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/log.js 'qnatter-theme-aurora'
