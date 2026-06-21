@@ -20,10 +20,12 @@ mv_bin="$tmp/mv"
 init_bin="$tmp/qnatter-init"
 curl_bin="$tmp/curl-cloudflare"
 jsonfilter_bin="$tmp/jsonfilter"
+ubus_bin="$tmp/ubus"
 curl_calls="$tmp/curl-calls.txt"
 uci_calls="$tmp/uci-calls.txt"
 mv_calls="$tmp/mv-calls.txt"
 init_calls="$tmp/init-calls.txt"
+ubus_calls="$tmp/ubus-calls.txt"
 run_dir="$tmp/run"
 log_dir="$tmp/logs"
 mkdir -p "$run_dir" "$log_dir"
@@ -134,6 +136,13 @@ esac
 EOF
 chmod 0755 "$jsonfilter_bin"
 
+cat > "$ubus_bin" <<EOF
+#!/bin/sh
+printf '%s\n' "\$*" >> "$ubus_calls"
+exit 0
+EOF
+chmod 0755 "$ubus_bin"
+
 rpcd="$ROOT/luci-app-qnatter/root/usr/libexec/rpcd/luci.qnatter"
 
 list_output="$("$rpcd" list)"
@@ -143,6 +152,8 @@ printf '%s' "$list_output" | grep -Fq '"cloudflare_srv_records":{"section":"Stri
 	fail "rpc list is missing cloudflare_srv_records signature: $list_output"
 printf '%s' "$list_output" | grep -Fq '"rename_instance":{"old":"String","new":"String"}' || \
 	fail "rpc list is missing rename_instance signature: $list_output"
+printf '%s' "$list_output" | grep -Fq '"reload_instance":{"instance":"String"}' || \
+	fail "rpc list is missing reload_instance signature: $list_output"
 
 status_output="$(
 	printf '{}\n' | QNATTER_STATUS_BIN="$status_bin" QNATTER_LOG_BIN="$log_bin" "$rpcd" call status
@@ -207,6 +218,17 @@ grep -Fqx "$run_dir/wan_ct.env $run_dir/wan_new.env" "$mv_calls" || fail "rename
 grep -Fqx "$run_dir/wan_ct.notify $run_dir/wan_new.notify" "$mv_calls" || fail "rename did not move notify wrapper"
 grep -Fqx "$log_dir/wan_ct.log $log_dir/wan_new.log" "$mv_calls" || fail "rename did not move log file"
 grep -Fqx 'reload' "$init_calls" || fail "rename did not reload QNatter"
+
+reload_output="$(
+	printf '{"instance":"wan_ct"}\n' | \
+		PATH="$tmp:$PATH" \
+		QNATTER_INIT_BIN="$init_bin" \
+		"$rpcd" call reload_instance
+)"
+[ "$reload_output" = '{"ok":true}' ] || fail "reload_instance output = $reload_output"
+grep -Fqx 'call service delete { "name": "qnatter", "instance": "wan_ct" }' "$ubus_calls" || \
+	fail "reload_instance did not delete only the requested procd instance"
+grep -Fqx 'reload' "$init_calls" || fail "reload_instance did not reload QNatter"
 
 invalid_rename_output="$(
 	printf '{"old":"wan_ct","new":"bad-name"}\n' | QNATTER_UCI_BIN="$uci_bin" "$rpcd" call rename_instance

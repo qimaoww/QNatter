@@ -11,7 +11,7 @@
 		"write": {
 			"uci": [ "qnatter" ],
 			"ubus": {
-				"luci.qnatter": [ "clear_log", "rename_instance" ]
+				"luci.qnatter": [ "clear_log", "rename_instance", "reload_instance" ]
 			}
 		}
 	}

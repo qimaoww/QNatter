@@ -27,6 +27,32 @@ function detectThemeClass() {
 	return '';
 }
 
+var callReloadInstance = rpc.declare({
+	object: 'luci.qnatter',
+	method: 'reload_instance',
+	params: [ 'instance' ],
+	expect: { '': { ok: true } }
+});
+
+function reloadInstance(name, btn) {
+	if (btn) {
+		btn.disabled = true;
+		btn.innerHTML = _('Reloading…');
+	}
+	return callReloadInstance(name).then(function() {
+		return new Promise(function(resolve) { setTimeout(resolve, 2000); });
+	}).then(function() {
+		return callStatus();
+	}).catch(function(err) {
+		alert(err.message || String(err));
+	}).finally(function() {
+		if (btn) {
+			btn.disabled = false;
+			btn.innerHTML = _('Reload');
+		}
+	});
+}
+
 function renderCard(item) {
 	var route = item.outer_ip
 		? '%s:%s'.format(item.outer_ip, item.outer_port || '')
@@ -36,9 +62,18 @@ function renderCard(item) {
 		: (item.bind_value || item.network || '');
 	var protocol = (item.protocol || 'tcp').toString().toUpperCase();
 
+	var reloadBtn = E('button', {
+		'class': 'btn cbi-button cbi-button-action',
+		'style': 'margin-left:6px;padding:2px 8px;font-size:11px',
+		'click': function(ev) { reloadInstance(item.instance || item.name, this); }
+	}, [ _('Reload') ]);
+
 	return E('section', { 'class': 'qnatter-card' }, [
 		E('div', { 'class': 'qnatter-card-head' }, [
-			E('h3', {}, [ item.name || '-' ]),
+			E('h3', { 'style': 'display:flex;align-items:center;gap:4px' }, [
+				item.name || '-',
+				reloadBtn
+			]),
 			E('span', { 'class': 'qnatter-pill ' + (item.running ? 'is-running' : 'is-stopped') },
 				[ item.running ? _('RUNNING') : _('NOT RUNNING') ])
 		]),

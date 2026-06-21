@@ -175,7 +175,10 @@ assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/insta
 assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/status.js 'qnatter-theme-aurora'
 assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/status.js "expect: \\{ '': \\{ instances: \\[\\] \\} \\}"
 assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/status.js 'data\.instances'
-assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/status.js "E\\('h3', \\{\\}, \\[ item\\.name \\|\\| '-' \\]\\)"
+assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/status.js "method: 'reload_instance'"
+assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/status.js "callReloadInstance\\(name\\)"
+assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/status.js "reloadInstance\\(item\\.instance \\|\\| item\\.name"
+assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/status.js "_\\('Reload'\\)"
 assert_not_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/status.js "_\\('Group'\\)"
 assert_not_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/status.js 'item\\.label \\|\\| item\\.name'
 assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/log.js 'qnatter-theme-aurora'
@@ -192,11 +195,16 @@ assert_contains luci-app-qnatter/root/usr/libexec/rpcd/luci.qnatter '"lines":"In
 assert_contains luci-app-qnatter/root/usr/libexec/rpcd/luci.qnatter '"cloudflare_zones":\{"section":"String","token":"String"\}'
 assert_contains luci-app-qnatter/root/usr/libexec/rpcd/luci.qnatter '"cloudflare_srv_records":\{"section":"String","zone_id":"String","token":"String"\}'
 assert_contains luci-app-qnatter/root/usr/libexec/rpcd/luci.qnatter '"rename_instance":\{"old":"String","new":"String"\}'
+assert_contains luci-app-qnatter/root/usr/libexec/rpcd/luci.qnatter '"reload_instance":\{"instance":"String"\}'
+assert_contains luci-app-qnatter/root/usr/libexec/rpcd/luci.qnatter 'valid_section_name "\$instance"'
+assert_contains luci-app-qnatter/root/usr/libexec/rpcd/luci.qnatter 'service delete'
+assert_contains luci-app-qnatter/root/usr/libexec/rpcd/luci.qnatter '\\"instance\\": \\"\${instance}\\"'
 assert_contains luci-app-qnatter/root/usr/libexec/rpcd/luci.qnatter 'cloudflare_api_get'
 assert_contains luci-app-qnatter/root/usr/libexec/rpcd/luci.qnatter 'dns_records\?type=SRV'
 assert_contains luci-app-qnatter/root/usr/share/rpcd/acl.d/luci-app-qnatter.json '"cloudflare_zones"'
 assert_contains luci-app-qnatter/root/usr/share/rpcd/acl.d/luci-app-qnatter.json '"cloudflare_srv_records"'
 assert_contains luci-app-qnatter/root/usr/share/rpcd/acl.d/luci-app-qnatter.json '"rename_instance"'
+assert_contains luci-app-qnatter/root/usr/share/rpcd/acl.d/luci-app-qnatter.json '"reload_instance"'
 assert_contains luci-app-qnatter/root/usr/libexec/qnatter-status 'grep -Fx'
 assert_contains luci-app-qnatter/htdocs/luci-static/resources/qnatter/qnatter.css 'theme-argon'
 assert_contains luci-app-qnatter/htdocs/luci-static/resources/qnatter/qnatter.css 'qnatter-theme-aurora'

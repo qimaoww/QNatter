@@ -290,7 +290,7 @@ cloudflare_srv_records() {
 
 case "$1" in
 	list)
-		printf '{"status":{},"log":{"instance":"String","lines":"Integer"},"clear_log":{"instance":"String"},"cloudflare_zones":{"section":"String","token":"String"},"cloudflare_srv_records":{"section":"String","zone_id":"String","token":"String"},"rename_instance":{"old":"String","new":"String"}}\n'
+		printf '{"status":{},"log":{"instance":"String","lines":"Integer"},"clear_log":{"instance":"String"},"cloudflare_zones":{"section":"String","token":"String"},"cloudflare_srv_records":{"section":"String","zone_id":"String","token":"String"},"rename_instance":{"old":"String","new":"String"},"reload_instance":{"instance":"String"}}\n'
 		;;
 	call)
 		read -r input
@@ -324,6 +324,15 @@ case "$1" in
 				old="$(json_arg_string old "$input")"
 				new="$(json_arg_string new "$input")"
 				rename_instance "$old" "$new"
+				;;
+			reload_instance)
+				instance="$(json_arg_string instance "$input")"
+				[ -n "$instance" ] || { emit_error "Missing instance"; exit 0; }
+				valid_section_name "$instance" || { emit_error "Invalid instance name"; exit 0; }
+				command -v ubus >/dev/null 2>&1 && \
+					ubus call service delete "{ \"name\": \"qnatter\", \"instance\": \"${instance}\" }" >/dev/null 2>&1 || true
+				"$QNATTER_INIT_BIN" reload >/dev/null 2>&1 || true
+				printf '{"ok":true}\n'
 				;;
 		esac
 		;;

@@ -229,6 +229,12 @@ msgstr "运行中"
 msgid "NOT RUNNING"
 msgstr "未运行"
 
+msgid "Reload"
+msgstr "重载"
+
+msgid "Reloading…"
+msgstr "正在重载…"
+
 msgid "Public address"
 msgstr "公网地址"
 
