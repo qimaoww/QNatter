@@ -420,8 +420,10 @@ start_service() {
 	[ "$enabled" = "1" ] || return 0
 	qnatter_prepare_route_slots || return 1
 	mkdir -p "$RUN_DIR"
-	qnatter_flush_runtime_rules
-	qnatter_flush_route_rules
+	if [ "${QNATTER_RELOADING:-0}" != "1" ]; then
+		qnatter_flush_runtime_rules
+		qnatter_flush_route_rules
+	fi
 	qnatter_start_instances
 }
 
@@ -483,7 +485,7 @@ qnatter_hot_reload_service() {
 }
 
 reload_service() {
-	local enabled
+	local enabled tmp old_list new_list slug section
 
 	config_load "$CONF"
 	config_get_bool enabled global enabled 0
@@ -491,8 +493,53 @@ reload_service() {
 		stop
 		return 0
 	fi
-
 	qnatter_prepare_route_slots || return 1
 	mkdir -p "$RUN_DIR"
-	qnatter_start_instances
+
+	tmp="$(mktemp -d "${RUN_DIR}/.reload.XXXXXX")" || return 1
+	old_list="${RUN_DIR}/.runtime-instances"
+	[ -f "$old_list" ] || : > "$old_list"
+
+	# Phase 1: prepare new fingerprints (PREPARE_ONLY)
+	QNATTER_PREPARE_ONLY=1
+	QNATTER_RUNTIME_DIR="$tmp"
+	QNATTER_RUNTIME_LIST="${tmp}/.runtime-instances"
+	QNATTER_ROUTE_SLOT=0
+	config_foreach qnatter_start_instance instance || {
+		rm -rf "$tmp"
+		unset QNATTER_PREPARE_ONLY QNATTER_RUNTIME_DIR QNATTER_RUNTIME_LIST QNATTER_ROUTE_SLOT QNATTER_ROUTE_MARK QNATTER_ROUTE_TABLE QNATTER_ROUTE_PRIORITY
+		return 1
+	}
+	unset QNATTER_PREPARE_ONLY QNATTER_RUNTIME_DIR QNATTER_RUNTIME_LIST QNATTER_ROUTE_SLOT QNATTER_ROUTE_MARK QNATTER_ROUTE_TABLE QNATTER_ROUTE_PRIORITY
+	new_list="${tmp}/.runtime-instances"
+
+	# Phase 2: stop removed instances (in old_list but not new_list)
+	while IFS= read -r slug; do
+		[ -n "$slug" ] || continue
+		grep -Fqx "$slug" "$new_list" 2>/dev/null && continue
+		section="$(grep '^section=' "${RUN_DIR}/${slug}.runtime" 2>/dev/null | cut -d= -f2)"
+		[ -n "$section" ] && command -v ubus >/dev/null 2>&1 && \
+			ubus call service delete "{ \"name\": \"qnatter\", \"instance\": \"${section}\" }" >/dev/null 2>&1 || true
+	done < "$old_list"
+
+	# Phase 3: stop changed instances (different fingerprint)
+	while IFS= read -r slug; do
+		[ -n "$slug" ] || continue
+		[ -f "${RUN_DIR}/${slug}.runtime" ] || continue
+		cmp -s "${RUN_DIR}/${slug}.runtime" "${tmp}/${slug}.runtime" 2>/dev/null && continue
+		section="$(grep '^section=' "${tmp}/${slug}.runtime" 2>/dev/null | cut -d= -f2)"
+		[ -n "$section" ] && command -v ubus >/dev/null 2>&1 && \
+			ubus call service delete "{ \"name\": \"qnatter\", \"instance\": \"${section}\" }" >/dev/null 2>&1 || true
+	done < "$new_list"
+
+	# Phase 4: redeclare all enabled instances through procd
+	# procd diffs the declarations: unchanged leave running, deleted get started
+	command -v procd_open_service >/dev/null 2>&1 && {
+		procd_open_service "qnatter" ""
+		QNATTER_RELOADING=1 qnatter_start_instances
+		procd_close_service "start"
+	}
+
+	cp "$new_list" "$old_list" 2>/dev/null || true
+	rm -rf "$tmp"
 }
