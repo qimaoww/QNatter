@@ -397,7 +397,6 @@ qnatter_start_instance() {
 		$QNATTER_ARGS
 	EOF
 	procd_set_param respawn 3600 5 5
-	procd_set_param file /etc/config/qnatter
 	procd_set_param env \
 		QNATTER_INSTANCE="$section" \
 		QNATTER_STATUS_FILE="$status_file" \
