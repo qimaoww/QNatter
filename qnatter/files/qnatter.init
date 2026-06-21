@@ -532,13 +532,9 @@ reload_service() {
 			ubus call service delete "{ \"name\": \"qnatter\", \"instance\": \"${section}\" }" >/dev/null 2>&1 || true
 	done < "$new_list"
 
-	# Phase 4: redeclare all enabled instances through procd
-	# procd diffs the declarations: unchanged leave running, deleted get started
-	command -v procd_open_service >/dev/null 2>&1 && {
-		procd_open_service "qnatter" ""
-		QNATTER_RELOADING=1 qnatter_start_instances
-		procd_close_service "start"
-	}
+	# Phase 4: start procd instances via a fresh init script invocation
+	# procd captures stdout from the external command and diffs declarations
+	QNATTER_RELOADING=1 /etc/init.d/qnatter start >/dev/null 2>&1 || true
 
 	cp "$new_list" "$old_list" 2>/dev/null || true
 	rm -rf "$tmp"
