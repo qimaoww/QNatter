@@ -409,7 +409,9 @@ qnatter_start_instance() {
 	procd_set_param nice 0
 	procd_close_instance
 
-	echo "$(date '+%Y-%m-%d %H:%M:%S') starting ${section}: bind=${resolved_bind:-default route} public_ip=${public_ip_mode}" >> "$log_file"
+	if [ "${QNATTER_RELOADING:-0}" != "1" ]; then
+		echo "$(date '+%Y-%m-%d %H:%M:%S') starting ${section}: bind=${resolved_bind:-default route} public_ip=${public_ip_mode}" >> "$log_file"
+	fi
 }
 
 start_service() {
