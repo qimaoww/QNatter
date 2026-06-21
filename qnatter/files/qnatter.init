@@ -414,7 +414,7 @@ qnatter_start_instance() {
 }
 
 start_service() {
-	local enabled runtime_list_tmp
+	local enabled
 
 	config_load "$CONF"
 	config_get_bool enabled global enabled 0
@@ -423,6 +423,12 @@ start_service() {
 	mkdir -p "$RUN_DIR"
 	qnatter_flush_runtime_rules
 	qnatter_flush_route_rules
+	qnatter_start_instances
+}
+
+qnatter_start_instances() {
+	local runtime_list_tmp
+
 	runtime_list_tmp="${RUN_DIR}/.runtime-instances.$$"
 	: > "$runtime_list_tmp"
 	QNATTER_PREPARE_ONLY=0
@@ -455,7 +461,11 @@ qnatter_hot_reload_service() {
 	unset QNATTER_PREPARE_ONLY QNATTER_RUNTIME_DIR QNATTER_RUNTIME_LIST QNATTER_ROUTE_SLOT QNATTER_ROUTE_MARK QNATTER_ROUTE_TABLE QNATTER_ROUTE_PRIORITY
 
 	old_list="${RUN_DIR}/.runtime-instances"
-	if ! cmp -s "$old_list" "$runtime_list"; then
+	old_sorted="${tmp}/.old-sorted"
+	new_sorted="${tmp}/.new-sorted"
+	sort "$old_list" 2>/dev/null > "$old_sorted" || : > "$old_sorted"
+	sort "$runtime_list" 2>/dev/null > "$new_sorted" || : > "$new_sorted"
+	if ! cmp -s "$old_sorted" "$new_sorted"; then
 		rm -rf "$tmp"
 		return 1
 	fi
@@ -468,12 +478,13 @@ qnatter_hot_reload_service() {
 		fi
 	done < "$runtime_list"
 
+	cp "$runtime_list" "$old_list" 2>/dev/null || true
 	rm -rf "$tmp"
 	return 0
 }
 
 reload_service() {
-	local enabled hot_reload
+	local enabled
 
 	config_load "$CONF"
 	config_get_bool enabled global enabled 0
@@ -482,11 +493,7 @@ reload_service() {
 		return 0
 	fi
 
-	config_get_bool hot_reload global hot_reload 1
-	if [ "$hot_reload" = "1" ] && qnatter_hot_reload_service; then
-		return 0
-	fi
-
-	stop
-	start
+	qnatter_prepare_route_slots || return 1
+	mkdir -p "$RUN_DIR"
+	qnatter_start_instances
 }

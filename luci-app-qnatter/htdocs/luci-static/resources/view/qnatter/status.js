@@ -29,11 +29,12 @@ function detectThemeClass() {
 
 function renderCard(item) {
 	var route = item.outer_ip
-		? '%s://%s:%s'.format(item.protocol || 'tcp', item.outer_ip, item.outer_port || '')
+		? '%s:%s'.format(item.outer_ip, item.outer_port || '')
 		: _('Waiting for mapping');
 	var inner = item.inner_ip
 		? '%s:%s'.format(item.inner_ip, item.inner_port || '')
 		: (item.bind_value || item.network || '');
+	var protocol = (item.protocol || 'tcp').toString().toUpperCase();
 
 	return E('section', { 'class': 'qnatter-card' }, [
 		E('div', { 'class': 'qnatter-card-head' }, [
@@ -44,6 +45,7 @@ function renderCard(item) {
 		E('dl', {}, [
 			E('dt', {}, [ _('Public address') ]), E('dd', {}, [ route ]),
 			E('dt', {}, [ _('Internal address') ]), E('dd', {}, [ inner ]),
+			E('dt', {}, [ _('Network protocol') ]), E('dd', {}, [ protocol ]),
 			E('dt', {}, [ _('WAN network') ]), E('dd', {}, [ item.network || 'wan' ]),
 			E('dt', {}, [ _('qBittorrent') ]), E('dd', {}, [ item.qbittorrent_enabled ? _('Enabled') : _('Disabled') ]),
 			E('dt', {}, [ _('Updated') ]), E('dd', {}, [ item.updated_at || '-' ]),

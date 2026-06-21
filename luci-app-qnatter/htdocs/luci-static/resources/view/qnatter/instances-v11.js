@@ -262,6 +262,7 @@ return view.extend({
 		s.addremove = true;
 		s.anonymous = false;
 		s.nodescriptions = true;
+		s.sortable = true;
 
 		o = s.option(form.Flag, 'enabled', _('Enable'));
 		o.default = '0';

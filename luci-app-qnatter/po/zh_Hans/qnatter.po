@@ -235,6 +235,9 @@ msgstr "公网地址"
 msgid "Internal address"
 msgstr "内部地址"
 
+msgid "Network protocol"
+msgstr "网络协议"
+
 msgid "Enabled"
 msgstr "已启用"
 

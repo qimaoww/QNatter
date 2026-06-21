@@ -70,7 +70,10 @@ config_foreach() {
 	local callback="$1"
 	local type="$2"
 	[ "$type" = "instance" ] || return 0
-	"$callback" wan_ct
+	local s
+	for s in $INSTANCES; do
+		"$callback" "$s"
+	done
 }
 
 config_get_bool() {
@@ -98,6 +101,16 @@ config_get() {
 		wan_ct:cloudflare_api_token) value="$CF_TOKEN" ;;
 		wan_ct:cloudflare_zone_id) value="zone-selected" ;;
 		wan_ct:cloudflare_record_id) value="record-selected" ;;
+		wan_ct:route_slot) value="0" ;;
+		wan_cm:enabled) value="1" ;;
+		wan_cm:label) value="Mobile" ;;
+		wan_cm:protocol) value="tcp" ;;
+		wan_cm:network) value="wan_cmcc" ;;
+		wan_cm:bind_value) value="pppoe-wan-cmcc" ;;
+		wan_cm:forward_method) value="none" ;;
+		wan_cm:auto_firewall) value="1" ;;
+		wan_cm:cloudflare_enabled) value="0" ;;
+		wan_cm:route_slot) value="1" ;;
 	esac
 
 	eval "$__var=\$value"
@@ -127,7 +140,8 @@ QNATTER_LOG_DIR="$tmp/log"
 QNATTER_NFT_BIN="$tmp/nft"
 QNATTER_TEST_NFT_LOG="$nft_log"
 export QNATTER_FUNCTIONS_SH QNATTER_NETWORK_SH QNATTER_COMMON_SH QNATTER_QBITTORRENT_SH QNATTER_RUN_DIR QNATTER_LOG_DIR QNATTER_NFT_BIN QNATTER_TEST_NFT_LOG
-export GLOBAL_ENABLED HOT_RELOAD BIND_VALUE CF_TOKEN
+INSTANCES="wan_ct"
+export GLOBAL_ENABLED HOT_RELOAD BIND_VALUE CF_TOKEN INSTANCES
 
 . "$ROOT/qnatter/files/qnatter.init"
 
@@ -138,6 +152,7 @@ grep -Fqx 'flush chain ip qnatter qnatter_dnat' "$nft_log" || fail "initial star
 grep -Fqx 'flush chain ip qnatter qnatter_snat' "$nft_log" || fail "initial start did not flush stale SNAT rules"
 grep -Fqx 'flush chain ip qnatter qnatter_mark' "$nft_log" || fail "initial start did not flush stale mark rules"
 
+# Test: notify-only change (e.g. CF token) re-declares instances via procd, no flush
 : > "$service_log"
 : > "$procd_log"
 : > "$nft_log"
@@ -145,30 +160,26 @@ CF_TOKEN="token-two"
 reload_service
 
 [ ! -s "$service_log" ] || fail "notify-only reload should not restart backend"
-[ ! -s "$procd_log" ] || fail "notify-only reload should not reopen procd instance"
 [ ! -s "$nft_log" ] || fail "notify-only reload must not flush nft runtime rules"
 grep -Fq "CLOUDFLARE_API_TOKEN='token-two'" "$tmp/run/wan_ct.env" || fail "hot reload did not rewrite notify env"
 
+# Test: runtime change re-declares instances, procd handles per-instance restart
 : > "$service_log"
 : > "$nft_log"
 BIND_VALUE="pppoe-wan-new"
 reload_service
-grep -Fqx 'stop' "$service_log" || fail "runtime reload must stop backend"
-grep -Fqx 'start' "$service_log" || fail "runtime reload must start backend"
-grep -Fqx 'flush chain ip qnatter qnatter_dnat' "$nft_log" || fail "runtime reload did not flush stale DNAT rules"
-grep -Fqx 'flush chain ip qnatter qnatter_snat' "$nft_log" || fail "runtime reload did not flush stale SNAT rules"
-grep -Fqx 'flush chain ip qnatter qnatter_mark' "$nft_log" || fail "runtime reload did not flush stale mark rules"
+[ ! -s "$service_log" ] || fail "runtime reload must not trigger full restart"
+[ ! -s "$nft_log" ] || fail "runtime reload must not flush nft runtime rules"
 
+# Test: HOT_RELOAD=0 same incremental behavior
 : > "$service_log"
 : > "$nft_log"
 HOT_RELOAD=0
 reload_service
-grep -Fqx 'stop' "$service_log" || fail "disabled hot reload must stop backend"
-grep -Fqx 'start' "$service_log" || fail "disabled hot reload must start backend"
-grep -Fqx 'flush chain ip qnatter qnatter_dnat' "$nft_log" || fail "disabled hot reload start did not flush stale DNAT rules"
-grep -Fqx 'flush chain ip qnatter qnatter_snat' "$nft_log" || fail "disabled hot reload start did not flush stale SNAT rules"
-grep -Fqx 'flush chain ip qnatter qnatter_mark' "$nft_log" || fail "disabled hot reload start did not flush stale mark rules"
+[ ! -s "$service_log" ] || fail "reload must not trigger full restart even without hot_reload"
+[ ! -s "$nft_log" ] || fail "reload must not flush nft runtime rules"
 
+# Test: disabled service stops
 : > "$service_log"
 : > "$nft_log"
 GLOBAL_ENABLED=0
@@ -178,5 +189,26 @@ if grep -Fqx 'start' "$service_log"; then
 	fail "disabled service reload must not start backend"
 fi
 [ ! -s "$nft_log" ] || fail "disabled service reload must not flush nft runtime rules"
+
+# Test: adding new instance re-declares, procd starts only the new one
+: > "$service_log"
+: > "$procd_log"
+: > "$nft_log"
+INSTANCES="wan_ct wan_cm"
+GLOBAL_ENABLED=1
+HOT_RELOAD=1
+BIND_VALUE="pppoe-wan"
+reload_service
+[ ! -s "$service_log" ] || fail "adding new instance must not restart existing instances"
+[ ! -s "$nft_log" ] || fail "adding new instance must not flush nft runtime rules"
+
+# Test: reorder-only reload
+: > "$service_log"
+: > "$procd_log"
+: > "$nft_log"
+INSTANCES="wan_cm wan_ct"
+reload_service
+[ ! -s "$service_log" ] || fail "reorder-only reload should not restart backend"
+[ ! -s "$nft_log" ] || fail "reorder-only reload must not flush nft runtime rules"
 
 printf 'qnatter reload checks passed\n'
