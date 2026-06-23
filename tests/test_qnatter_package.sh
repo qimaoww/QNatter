@@ -150,6 +150,8 @@ assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/insta
 assert_not_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances.js 'cbi\('
 assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances.js 'qnatter-theme-aurora'
 assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances.js "L\\.resource\\('qnatter/qnatter\\.css'\\)"
+assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances.js "\\?v=1\\.0\\.0-r25"
+assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances-v11.js "\\?v=1\\.0\\.0-r25"
 assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances.js 'hideInGrid'
 assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances.js 'option\.keylist'
 assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances.js 'indexOf\(String\(value\)\)'
@@ -207,6 +209,7 @@ assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/statu
 assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/status.js 'document\.hidden'
 assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/status.js 'setTimeout'
 assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/status.js 'updateCard'
+assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/status.js "\\?v=1\\.0\\.0-r25"
 assert_not_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/status.js 'grid\.replaceChildren\.apply'
 assert_not_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/status.js "_\\('Group'\\)"
 assert_not_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/status.js 'item\\.label \\|\\| item\\.name'
@@ -214,6 +217,7 @@ assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/log.j
 assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/log.js "expect: \\{ '': \\{ instances: \\[\\] \\} \\}"
 assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/log.js "expect: \\{ '': \\{ log: '' \\} \\}"
 assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/log.js 'data\.log'
+assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/log.js "\\?v=1\\.0\\.0-r25"
 assert_not_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/log.js 'label'
 assert_contains luci-app-qnatter/root/usr/share/luci/menu.d/luci-app-qnatter.json '"type"[[:space:]]*:[[:space:]]*"view"'
 assert_contains luci-app-qnatter/root/usr/share/luci/menu.d/luci-app-qnatter.json '"path"[[:space:]]*:[[:space:]]*"qnatter/instances-v11"'
@@ -256,10 +260,12 @@ assert_contains luci-app-qnatter/htdocs/luci-static/resources/qnatter/qnatter.cs
 assert_contains luci-app-qnatter/htdocs/luci-static/resources/qnatter/qnatter.css 'border-radius: 14px'
 assert_contains luci-app-qnatter/htdocs/luci-static/resources/qnatter/qnatter.css 'var\(--hover-faint'
 assert_contains luci-app-qnatter/htdocs/luci-static/resources/qnatter/qnatter.css 'font-variant-numeric: tabular-nums'
-assert_css_block_contains luci-app-qnatter/htdocs/luci-static/resources/qnatter/qnatter.css '.qnatter-theme-aurora .qnatter-card h3 .cbi-button' 'background: transparent;'
+assert_css_block_contains luci-app-qnatter/htdocs/luci-static/resources/qnatter/qnatter.css '.qnatter-theme-aurora .qnatter-card h3 .cbi-button' 'background: var(--surface-sunken, rgba(248, 250, 253, 0.96));'
+assert_css_block_contains luci-app-qnatter/htdocs/luci-static/resources/qnatter/qnatter.css '.qnatter-theme-aurora .qnatter-card h3 .cbi-button' 'border: 1px solid var(--hairline, rgba(25, 35, 50, 0.12));'
 assert_css_block_contains luci-app-qnatter/htdocs/luci-static/resources/qnatter/qnatter.css '.qnatter-theme-aurora .qnatter-card h3 .cbi-button' 'box-shadow: none;'
 assert_css_block_contains luci-app-qnatter/htdocs/luci-static/resources/qnatter/qnatter.css '.qnatter-theme-aurora .qnatter-card h3 .cbi-button' 'color: var(--text-muted, #667085);'
 assert_css_block_contains luci-app-qnatter/htdocs/luci-static/resources/qnatter/qnatter.css '.qnatter-theme-aurora .qnatter-card h3 .cbi-button' 'font-weight: 600;'
+assert_css_block_contains luci-app-qnatter/htdocs/luci-static/resources/qnatter/qnatter.css '.qnatter-theme-aurora .qnatter-card h3 .cbi-button::before' 'content: "↻";'
 assert_not_contains luci-app-qnatter/htdocs/luci-static/resources/qnatter/qnatter.css 'text-transform: uppercase'
 assert_not_contains luci-app-qnatter/htdocs/luci-static/resources/qnatter/qnatter.css 'rgba\(18, 24, 38'
 assert_not_contains luci-app-qnatter/htdocs/luci-static/resources/qnatter/qnatter.css 'color: #edf6ff'
@@ -368,7 +374,7 @@ assert_not_contains qnatter/Makefile 'qnatter.py'
 assert_not_contains qnatter/Makefile './files/QNatter'
 assert_not_contains qnatter/Makefile 'qnatter-python-wrapper.py'
 luci_release="$(sed -n 's/^PKG_RELEASE:=//p' "$ROOT/luci-app-qnatter/Makefile")"
-[ "$luci_release" -ge 23 ] || fail "luci-app-qnatter package release must increase when LuCI files change"
+[ "$luci_release" -ge 25 ] || fail "luci-app-qnatter package release must increase when LuCI files change"
 assert_contains luci-app-qnatter/Makefile 'LUCI_DEPENDS:=.*\+qnatter'
 assert_contains luci-app-qnatter/Makefile 'LUCI_DEPENDS:=.*\+luci-base'
 assert_contains luci-app-qnatter/Makefile 'LUCI_DEPENDS:=.*\+rpcd'

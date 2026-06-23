@@ -245,8 +245,8 @@
 }
 
 .qnatter-theme-aurora .qnatter-card h3 .cbi-button {
-	background: transparent;
-	border: 1px solid transparent;
+	background: var(--surface-sunken, rgba(248, 250, 253, 0.96));
+	border: 1px solid var(--hairline, rgba(25, 35, 50, 0.12));
 	border-radius: 999px;
 	box-shadow: none;
 	color: var(--text-muted, #667085);
@@ -254,7 +254,14 @@
 	font-weight: 600;
 	line-height: 1.2;
 	margin-left: 0 !important;
-	padding: 3px 8px !important;
+	padding: 3px 9px !important;
+}
+
+.qnatter-theme-aurora .qnatter-card h3 .cbi-button::before {
+	content: "↻";
+	display: inline-block;
+	margin-right: 4px;
+	opacity: 0.72;
 }
 
 .qnatter-theme-aurora .qnatter-card h3 .cbi-button:hover {
