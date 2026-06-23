@@ -27,6 +27,28 @@ assert_not_contains() {
 	fi
 }
 
+assert_css_block_contains() {
+	file="$1"
+	selector="$2"
+	text="$3"
+	awk -v selector="$selector" -v text="$text" '
+		index($0, selector) {
+			found = 1
+			in_block = 1
+			next
+		}
+		in_block && index($0, "}") {
+			in_block = 0
+		}
+		in_block && index($0, text) {
+			seen = 1
+		}
+		END {
+			exit(found && seen ? 0 : 1)
+		}
+	' "$ROOT/$file" || fail "$file selector $selector does not contain text: $text"
+}
+
 assert_option_block_contains() {
 	file="$1"
 	option="$2"
@@ -218,7 +240,7 @@ assert_contains luci-app-qnatter/htdocs/luci-static/resources/qnatter/qnatter.cs
 assert_contains luci-app-qnatter/htdocs/luci-static/resources/qnatter/qnatter.css ':root:not\(\[data-darkmode="true"\]\) \.qnatter-theme-aurora'
 assert_contains luci-app-qnatter/htdocs/luci-static/resources/qnatter/qnatter.css '\[data-darkmode="true"\] \.qnatter-theme-aurora'
 assert_contains luci-app-qnatter/htdocs/luci-static/resources/qnatter/qnatter.css 'var\(--surface-overlay'
-assert_contains luci-app-qnatter/htdocs/luci-static/resources/qnatter/qnatter.css 'var\(--brand-subtle'
+assert_contains luci-app-qnatter/htdocs/luci-static/resources/qnatter/qnatter.css 'var\(--brand'
 assert_contains luci-app-qnatter/htdocs/luci-static/resources/qnatter/qnatter.css 'var\(--text'
 assert_contains luci-app-qnatter/htdocs/luci-static/resources/qnatter/qnatter.css 'var\(--hairline'
 assert_contains luci-app-qnatter/htdocs/luci-static/resources/qnatter/qnatter.css 'var\(--success-surface'
@@ -234,6 +256,10 @@ assert_contains luci-app-qnatter/htdocs/luci-static/resources/qnatter/qnatter.cs
 assert_contains luci-app-qnatter/htdocs/luci-static/resources/qnatter/qnatter.css 'border-radius: 14px'
 assert_contains luci-app-qnatter/htdocs/luci-static/resources/qnatter/qnatter.css 'var\(--hover-faint'
 assert_contains luci-app-qnatter/htdocs/luci-static/resources/qnatter/qnatter.css 'font-variant-numeric: tabular-nums'
+assert_css_block_contains luci-app-qnatter/htdocs/luci-static/resources/qnatter/qnatter.css '.qnatter-theme-aurora .qnatter-card h3 .cbi-button' 'background: transparent;'
+assert_css_block_contains luci-app-qnatter/htdocs/luci-static/resources/qnatter/qnatter.css '.qnatter-theme-aurora .qnatter-card h3 .cbi-button' 'box-shadow: none;'
+assert_css_block_contains luci-app-qnatter/htdocs/luci-static/resources/qnatter/qnatter.css '.qnatter-theme-aurora .qnatter-card h3 .cbi-button' 'color: var(--text-muted, #667085);'
+assert_css_block_contains luci-app-qnatter/htdocs/luci-static/resources/qnatter/qnatter.css '.qnatter-theme-aurora .qnatter-card h3 .cbi-button' 'font-weight: 600;'
 assert_not_contains luci-app-qnatter/htdocs/luci-static/resources/qnatter/qnatter.css 'text-transform: uppercase'
 assert_not_contains luci-app-qnatter/htdocs/luci-static/resources/qnatter/qnatter.css 'rgba\(18, 24, 38'
 assert_not_contains luci-app-qnatter/htdocs/luci-static/resources/qnatter/qnatter.css 'color: #edf6ff'
@@ -342,7 +368,7 @@ assert_not_contains qnatter/Makefile 'qnatter.py'
 assert_not_contains qnatter/Makefile './files/QNatter'
 assert_not_contains qnatter/Makefile 'qnatter-python-wrapper.py'
 luci_release="$(sed -n 's/^PKG_RELEASE:=//p' "$ROOT/luci-app-qnatter/Makefile")"
-[ "$luci_release" -ge 22 ] || fail "luci-app-qnatter package release must increase when LuCI files change"
+[ "$luci_release" -ge 23 ] || fail "luci-app-qnatter package release must increase when LuCI files change"
 assert_contains luci-app-qnatter/Makefile 'LUCI_DEPENDS:=.*\+qnatter'
 assert_contains luci-app-qnatter/Makefile 'LUCI_DEPENDS:=.*\+luci-base'
 assert_contains luci-app-qnatter/Makefile 'LUCI_DEPENDS:=.*\+rpcd'

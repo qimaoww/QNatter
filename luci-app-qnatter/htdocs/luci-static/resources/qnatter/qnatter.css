@@ -245,19 +245,22 @@
 }
 
 .qnatter-theme-aurora .qnatter-card h3 .cbi-button {
-	background: var(--brand-subtle, rgba(236, 245, 255, 0.92));
-	border: 1px solid var(--qnatter-card-border);
+	background: transparent;
+	border: 1px solid transparent;
 	border-radius: 999px;
-	box-shadow: var(--app-shadow-sm);
-	color: var(--brand);
+	box-shadow: none;
+	color: var(--text-muted, #667085);
 	font-size: 11px !important;
+	font-weight: 600;
 	line-height: 1.2;
 	margin-left: 0 !important;
-	padding: 4px 10px !important;
+	padding: 3px 8px !important;
 }
 
 .qnatter-theme-aurora .qnatter-card h3 .cbi-button:hover {
 	background: var(--hover-faint, rgba(255, 255, 255, 0.82));
+	border-color: var(--qnatter-card-border);
+	color: var(--brand);
 }
 
 .qnatter-theme-aurora .qnatter-card dt {
