@@ -245,21 +245,27 @@
 }
 
 .qnatter-theme-aurora .qnatter-card h3 .cbi-button {
+	align-items: center;
 	background: var(--surface-sunken, rgba(248, 250, 253, 0.96));
 	border: 1px solid var(--hairline, rgba(25, 35, 50, 0.12));
 	border-radius: 999px;
 	box-shadow: none;
 	color: var(--text-muted, #667085);
+	display: inline-flex;
 	font-size: 11px !important;
 	font-weight: 600;
+	justify-content: center;
 	line-height: 1.2;
 	margin-left: 0 !important;
+	min-height: 22px;
 	padding: 3px 9px !important;
+	vertical-align: middle;
 }
 
 .qnatter-theme-aurora .qnatter-card h3 .cbi-button::before {
 	content: "↻";
 	display: inline-block;
+	line-height: 1;
 	margin-right: 4px;
 	opacity: 0.72;
 }
