@@ -953,3 +953,15 @@
 	min-width: 200px !important;
 	width: auto !important;
 }
+
+/* ===== 修复 Global Settings 区域宽度 ===== */
+.qnatter-theme-argon.qnatter-form-page .cbi-section {
+	max-width: 100% !important;
+	width: 100% !important;
+}
+
+.qnatter-theme-argon.qnatter-form-page .cbi-map,
+.qnatter-theme-argon.qnatter-form-page .cbi-section-node {
+	max-width: 100% !important;
+	width: 100% !important;
+}
