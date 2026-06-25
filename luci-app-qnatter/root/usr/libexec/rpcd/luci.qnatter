@@ -98,16 +98,30 @@ move_if_exists() {
 	"$QNATTER_MV_BIN" "$src" "$dest" >/dev/null 2>&1 || true
 }
 
-log_action() {
+log_write() {
 	local instance="$1"
-	local action="$2"
-	local slug log_file
+	local level="$2"
+	local message="$3"
+	local slug log_file timestamp
 
 	slug="$(runtime_slug "$instance")"
 	log_file="${QNATTER_LOG_DIR}/${slug}.log"
 
 	[ -d "$QNATTER_LOG_DIR" ] || return 0
-	echo "$(date '+%Y-%m-%d %H:%M:%S') [LuCI] ${action}" >> "$log_file" 2>/dev/null || true
+	timestamp="$(date '+%Y-%m-%d %H:%M:%S')"
+	printf '%s [%s] [LuCI] %s\n' "$timestamp" "$level" "$message" >> "$log_file" 2>/dev/null || true
+}
+
+log_info() {
+	log_write "$1" "INFO" "$2"
+}
+
+log_warn() {
+	log_write "$1" "WARN" "$2"
+}
+
+log_error() {
+	log_write "$1" "ERROR" "$2"
 }
 
 rename_instance() {
@@ -116,14 +130,17 @@ rename_instance() {
 	local old_slug new_slug
 
 	valid_section_name "$old" || {
+		log_error "$old" "rename failed: invalid old instance name"
 		emit_error "Invalid old instance name"
 		return 0
 	}
 	valid_section_name "$new" || {
+		log_error "$old" "rename failed: invalid new instance name '${new}'"
 		emit_error "Invalid new instance name"
 		return 0
 	}
 	[ "$old" != "$new" ] || {
+		log_warn "$old" "rename skipped: old and new names are identical"
 		printf '{"ok":true,"name":'
 		json_string "$new"
 		printf '}\n'
@@ -131,16 +148,19 @@ rename_instance() {
 	}
 
 	if ! "$QNATTER_UCI_BIN" -q get "qnatter.${old}" >/dev/null 2>&1; then
+		log_error "$old" "rename failed: instance not found"
 		emit_error "Instance not found"
 		return 0
 	fi
 	if "$QNATTER_UCI_BIN" -q get "qnatter.${new}" >/dev/null 2>&1; then
+		log_error "$old" "rename failed: target name '${new}' already exists"
 		emit_error "Instance name already exists"
 		return 0
 	fi
 
 	if ! "$QNATTER_UCI_BIN" rename "qnatter.${old}=${new}" ||
 		! "$QNATTER_UCI_BIN" commit qnatter; then
+		log_error "$old" "rename failed: UCI operation error"
 		emit_error "Failed to rename instance"
 		return 0
 	fi
@@ -154,7 +174,7 @@ rename_instance() {
 	move_if_exists "${QNATTER_RUN_DIR}/${old_slug}.notify" "${QNATTER_RUN_DIR}/${new_slug}.notify"
 	move_if_exists "${QNATTER_LOG_DIR}/${old_slug}.log" "${QNATTER_LOG_DIR}/${new_slug}.log"
 
-	log_action "$new" "instance renamed from '${old}'"
+	log_info "$new" "instance renamed from '${old}'"
 
 	if [ -x "$QNATTER_INIT_BIN" ]; then
 		"$QNATTER_INIT_BIN" reload >/dev/null 2>&1 || true
@@ -304,14 +324,16 @@ cloudflare_srv_records() {
 
 toggle_instance() {
 	local instance="$1"
-	local current_state new_state action_desc
+	local current_state new_state
 
 	valid_section_name "$instance" || {
+		log_error "$instance" "toggle failed: invalid instance name"
 		emit_error "Invalid instance name"
 		return 0
 	}
 
 	if ! "$QNATTER_UCI_BIN" -q get "qnatter.${instance}" >/dev/null 2>&1; then
+		log_error "$instance" "toggle failed: instance not found"
 		emit_error "Instance not found"
 		return 0
 	fi
@@ -320,23 +342,28 @@ toggle_instance() {
 	case "$current_state" in
 		1)
 			new_state="0"
-			action_desc="instance disabled"
 			;;
 		*)
 			new_state="1"
-			action_desc="instance enabled"
 			;;
 	esac
 
 	if ! "$QNATTER_UCI_BIN" set "qnatter.${instance}.enabled=${new_state}" ||
 		! "$QNATTER_UCI_BIN" commit qnatter; then
+		log_error "$instance" "toggle failed: UCI commit error (target state: ${new_state})"
 		emit_error "Failed to toggle instance"
-		log_action "$instance" "toggle failed: UCI commit error"
 		return 0
 	fi
 
-	log_action "$instance" "$action_desc"
-	"$QNATTER_INIT_BIN" reload >/dev/null 2>&1 || true
+	if [ "$new_state" = "1" ]; then
+		log_info "$instance" "instance enabled (was: disabled)"
+	else
+		log_info "$instance" "instance disabled (was: enabled)"
+	fi
+
+	"$QNATTER_INIT_BIN" reload >/dev/null 2>&1 || {
+		log_warn "$instance" "service reload failed after toggle"
+	}
 
 	printf '{"ok":true,"enabled":%s}\n' "$new_state"
 }
@@ -360,7 +387,9 @@ case "$1" in
 				;;
 			clear_log)
 				instance="$(json_arg_string instance "$input")"
-				exec "$QNATTER_LOG_BIN" clear "${instance:-default}" 200
+				instance="${instance:-default}"
+				log_info "$instance" "log cleared by user"
+				exec "$QNATTER_LOG_BIN" clear "$instance" 200
 				;;
 			cloudflare_zones)
 				section="$(json_arg_string section "$input")"
