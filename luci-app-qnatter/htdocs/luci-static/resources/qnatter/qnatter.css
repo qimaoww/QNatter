@@ -380,6 +380,184 @@
 	color: var(--argon-text);
 }
 
+/* ===== Argon 表单页面适配 ===== */
+
+/* 表单页面整体容器 */
+.qnatter-page.qnatter-theme-argon.qnatter-form-page {
+	background: #ffffff !important;
+	border-radius: var(--argon-radius);
+	box-shadow: var(--argon-shadow);
+	padding: 20px;
+}
+
+/* 表单标题 */
+.qnatter-theme-argon.qnatter-form-page h2,
+.qnatter-theme-argon.qnatter-form-page h3 {
+	color: var(--argon-text);
+	font-family: var(--argon-font);
+	font-weight: 600;
+}
+
+/* 表单描述文字 */
+.qnatter-theme-argon.qnatter-form-page .cbi-section-descr {
+	color: var(--argon-muted);
+	font-size: 14px;
+	margin-bottom: 16px;
+}
+
+/* 表单区块 */
+.qnatter-theme-argon.qnatter-form-page .cbi-section {
+	background: transparent !important;
+	border: 0 !important;
+	margin-bottom: 24px;
+	padding: 0 !important;
+}
+
+/* 表单区块标题 */
+.qnatter-theme-argon.qnatter-form-page .cbi-section > legend {
+	background: transparent !important;
+	color: var(--argon-text);
+	font-family: var(--argon-font);
+	font-size: 18px;
+	font-weight: 600;
+	margin-bottom: 12px;
+	padding: 0 0 8px 0 !important;
+	border-bottom: 1px solid var(--argon-border);
+}
+
+/* 表格容器 */
+.qnatter-theme-argon.qnatter-form-page .cbi-section-table-titles,
+.qnatter-theme-argon.qnatter-form-page .cbi-section-table {
+	background: #ffffff !important;
+	border: 1px solid var(--argon-border) !important;
+	border-radius: var(--argon-radius);
+	overflow: hidden;
+}
+
+/* 表头 */
+.qnatter-theme-argon.qnatter-form-page .cbi-section-table-titles th,
+.qnatter-theme-argon.qnatter-form-page .cbi-section-table thead th {
+	background: rgba(244, 245, 247, 0.5) !important;
+	border-bottom: 1px solid var(--argon-border) !important;
+	color: var(--argon-muted);
+	font-family: var(--argon-font);
+	font-size: 12px;
+	font-weight: 700;
+	letter-spacing: 0.02em;
+	padding: 12px 16px !important;
+	text-transform: uppercase;
+}
+
+/* 表格行 */
+.qnatter-theme-argon.qnatter-form-page .cbi-section-table-row {
+	background: #ffffff !important;
+	border-bottom: 1px solid var(--argon-border) !important;
+	transition: background 0.15s ease;
+}
+
+.qnatter-theme-argon.qnatter-form-page .cbi-section-table-row:hover {
+	background: rgba(244, 245, 247, 0.3) !important;
+}
+
+.qnatter-theme-argon.qnatter-form-page .cbi-section-table-row:last-child {
+	border-bottom: 0 !important;
+}
+
+/* 表格单元格 */
+.qnatter-theme-argon.qnatter-form-page .cbi-section-table td {
+	background: transparent !important;
+	border-right: 0 !important;
+	color: var(--argon-text);
+	font-family: var(--argon-font);
+	padding: 12px 16px !important;
+	vertical-align: middle;
+}
+
+/* 输入框和下拉框 */
+.qnatter-theme-argon.qnatter-form-page .cbi-input-text,
+.qnatter-theme-argon.qnatter-form-page .cbi-input-select,
+.qnatter-theme-argon.qnatter-form-page .cbi-input-password {
+	background: #ffffff !important;
+	border: 1px solid var(--argon-border) !important;
+	border-radius: var(--argon-radius);
+	color: var(--argon-text);
+	font-family: var(--argon-font);
+	padding: 6px 12px;
+	transition: all 0.2s ease;
+}
+
+.qnatter-theme-argon.qnatter-form-page .cbi-input-text:focus,
+.qnatter-theme-argon.qnatter-form-page .cbi-input-select:focus,
+.qnatter-theme-argon.qnatter-form-page .cbi-input-password:focus {
+	border-color: var(--argon-primary);
+	box-shadow: 0 0 0 3px rgba(94, 114, 228, 0.1);
+	outline: none;
+}
+
+/* 复选框 */
+.qnatter-theme-argon.qnatter-form-page .cbi-checkbox {
+	accent-color: var(--argon-primary);
+}
+
+/* 按钮 */
+.qnatter-theme-argon.qnatter-form-page .cbi-button {
+	background: var(--argon-primary) !important;
+	border: 0 !important;
+	border-radius: var(--argon-radius);
+	color: #ffffff !important;
+	font-family: var(--argon-font);
+	font-weight: 600;
+	padding: 8px 16px;
+	transition: all 0.2s ease;
+}
+
+.qnatter-theme-argon.qnatter-form-page .cbi-button:hover {
+	background: #4c63d2 !important;
+	box-shadow: 0 4px 12px rgba(94, 114, 228, 0.3);
+	transform: translateY(-1px);
+}
+
+.qnatter-theme-argon.qnatter-form-page .cbi-button:active {
+	transform: translateY(0);
+}
+
+/* 删除按钮 */
+.qnatter-theme-argon.qnatter-form-page .cbi-button-remove,
+.qnatter-theme-argon.qnatter-form-page .cbi-button-negative {
+	background: var(--argon-danger) !important;
+}
+
+.qnatter-theme-argon.qnatter-form-page .cbi-button-remove:hover,
+.qnatter-theme-argon.qnatter-form-page .cbi-button-negative:hover {
+	background: #d32f4f !important;
+}
+
+/* 添加按钮 */
+.qnatter-theme-argon.qnatter-form-page .cbi-button-add,
+.qnatter-theme-argon.qnatter-form-page .cbi-button-positive {
+	background: var(--argon-success) !important;
+}
+
+.qnatter-theme-argon.qnatter-form-page .cbi-button-add:hover,
+.qnatter-theme-argon.qnatter-form-page .cbi-button-positive:hover {
+	background: #26b87c !important;
+}
+
+/* 表单字段标签 */
+.qnatter-theme-argon.qnatter-form-page .cbi-value-title {
+	color: var(--argon-muted);
+	font-family: var(--argon-font);
+	font-size: 13px;
+	font-weight: 600;
+}
+
+/* 表单字段描述 */
+.qnatter-theme-argon.qnatter-form-page .cbi-value-description {
+	color: var(--argon-muted);
+	font-family: var(--argon-font);
+	font-size: 12px;
+}
+
 /* ===== Argon 暗色模式 ===== */
 .qnatter-theme-argon.qnatter-argon-dark {
 	--argon-primary: var(--argon-primary-dark);
@@ -666,4 +844,41 @@
 	50% {
 		opacity: 0.5;
 	}
+}
+
+/* ===== Argon 暗色模式表单适配 ===== */
+.qnatter-page.qnatter-theme-argon.qnatter-argon-dark.qnatter-form-page {
+	background: #2a2a2a !important;
+}
+
+.qnatter-theme-argon.qnatter-argon-dark.qnatter-form-page .cbi-section > legend {
+	border-bottom-color: var(--argon-border);
+}
+
+.qnatter-theme-argon.qnatter-argon-dark.qnatter-form-page .cbi-section-table-titles,
+.qnatter-theme-argon.qnatter-argon-dark.qnatter-form-page .cbi-section-table {
+	background: #1e1e1e !important;
+	border-color: var(--argon-border) !important;
+}
+
+.qnatter-theme-argon.qnatter-argon-dark.qnatter-form-page .cbi-section-table-titles th,
+.qnatter-theme-argon.qnatter-argon-dark.qnatter-form-page .cbi-section-table thead th {
+	background: rgba(0, 0, 0, 0.3) !important;
+	border-bottom-color: var(--argon-border) !important;
+}
+
+.qnatter-theme-argon.qnatter-argon-dark.qnatter-form-page .cbi-section-table-row {
+	background: transparent !important;
+	border-bottom-color: var(--argon-border) !important;
+}
+
+.qnatter-theme-argon.qnatter-argon-dark.qnatter-form-page .cbi-section-table-row:hover {
+	background: rgba(255, 255, 255, 0.05) !important;
+}
+
+.qnatter-theme-argon.qnatter-argon-dark.qnatter-form-page .cbi-input-text,
+.qnatter-theme-argon.qnatter-argon-dark.qnatter-form-page .cbi-input-select,
+.qnatter-theme-argon.qnatter-argon-dark.qnatter-form-page .cbi-input-password {
+	background: #1e1e1e !important;
+	border-color: var(--argon-border) !important;
 }
