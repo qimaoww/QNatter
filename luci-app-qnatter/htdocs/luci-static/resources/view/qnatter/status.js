@@ -44,21 +44,21 @@ function toggleInstance(name, btn) {
 	if (btn.disabled)
 		return;
 
+	var wasEnabled = btn.getAttribute('data-enabled') == '1';
 	btn.disabled = true;
-	btn.classList.add('qnatter-state-loading');
+	btn.classList.add('qnatter-pill-loading');
 
 	return callToggleInstance(name).then(function(result) {
 		if (result && result.enabled !== undefined) {
 			btn.setAttribute('data-enabled', result.enabled);
-			btn.setAttribute('title', result.enabled == 1 ? _('Enabled') : _('Disabled'));
-			btn.setAttribute('aria-label', result.enabled == 1 ? _('Enabled - click to disable') : _('Disabled - click to enable'));
 		}
 		return new Promise(function(resolve) { setTimeout(resolve, 1000); });
 	}).catch(function(err) {
+		btn.setAttribute('data-enabled', wasEnabled ? '1' : '0');
 		alert(err.message || String(err));
 	}).finally(function() {
 		btn.disabled = false;
-		btn.classList.remove('qnatter-state-loading');
+		btn.classList.remove('qnatter-pill-loading');
 	});
 }
 
@@ -106,13 +106,6 @@ function itemInner(item) {
 function createCard(item, fieldByName) {
 	var name = itemKey(item);
 	var fields = {};
-	var toggleBtn = E('button', {
-		'class': 'btn qnatter-state-btn',
-		'data-enabled': item.enabled ? '1' : '0',
-		'aria-label': item.enabled ? _('Enabled - click to disable') : _('Disabled - click to enable'),
-		'title': item.enabled ? _('Enabled') : _('Disabled'),
-		'click': function(ev) { toggleInstance(name, this); }
-	}, [ E('span', { 'class': 'qnatter-state-indicator' }) ]);
 	var reloadBtn = E('button', {
 		'class': 'btn cbi-button cbi-button-action',
 		'style': 'margin-left:6px;padding:2px 8px;font-size:11px',
@@ -120,8 +113,11 @@ function createCard(item, fieldByName) {
 	}, [ _('Reload') ]);
 
 	fields.name = E('span', {}, [ name || '-' ]);
-	fields.toggle = toggleBtn;
-	fields.running = E('span', { 'class': 'qnatter-pill' }, []);
+	fields.running = E('button', {
+		'class': 'qnatter-pill qnatter-pill-clickable',
+		'data-enabled': item.enabled ? '1' : '0',
+		'click': function(ev) { toggleInstance(name, this); }
+	}, []);
 	fields.route = E('dd', {}, []);
 	fields.inner = E('dd', {}, []);
 	fields.protocol = E('dd', {}, []);
@@ -135,7 +131,6 @@ function createCard(item, fieldByName) {
 		E('div', { 'class': 'qnatter-card-head' }, [
 			E('h3', { 'style': 'display:flex;align-items:center;gap:4px' }, [
 				fields.name,
-				toggleBtn,
 				reloadBtn
 			]),
 			fields.running
@@ -163,13 +158,11 @@ function updateCard(item, fieldByName) {
 		return;
 
 	setText(fields.name, name || '-');
-	if (fields.toggle && !fields.toggle.disabled) {
-		fields.toggle.setAttribute('data-enabled', item.enabled ? '1' : '0');
-		fields.toggle.setAttribute('title', item.enabled ? _('Enabled') : _('Disabled'));
-		fields.toggle.setAttribute('aria-label', item.enabled ? _('Enabled - click to disable') : _('Disabled - click to enable'));
+	if (fields.running && !fields.running.disabled) {
+		fields.running.setAttribute('data-enabled', item.enabled ? '1' : '0');
+		fields.running.className = 'qnatter-pill qnatter-pill-clickable ' + (item.running ? 'is-running' : 'is-stopped');
+		setText(fields.running, item.running ? _('RUNNING') : _('NOT RUNNING'));
 	}
-	fields.running.className = 'qnatter-pill ' + (item.running ? 'is-running' : 'is-stopped');
-	setText(fields.running, item.running ? _('RUNNING') : _('NOT RUNNING'));
 	setText(fields.route, route);
 	setText(fields.inner, inner);
 	setText(fields.protocol, protocol);

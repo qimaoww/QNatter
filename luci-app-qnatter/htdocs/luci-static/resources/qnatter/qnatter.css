@@ -142,6 +142,29 @@
 	white-space: nowrap;
 }
 
+.qnatter-pill-clickable {
+	cursor: pointer;
+	transition: all 0.2s ease;
+}
+
+.qnatter-pill-clickable:hover {
+	transform: translateY(-1px);
+	box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.qnatter-pill-clickable:active {
+	transform: translateY(0);
+}
+
+.qnatter-pill-clickable:disabled {
+	cursor: not-allowed;
+	opacity: 0.6;
+}
+
+.qnatter-pill-clickable.qnatter-pill-loading {
+	animation: qnatter-pulse 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
 .qnatter-pill.is-running {
 	background: #dcfce7;
 	color: #166534;
@@ -150,6 +173,17 @@
 .qnatter-pill.is-stopped {
 	background: #fee2e2;
 	color: #991b1b;
+}
+
+.qnatter-pill-clickable[data-enabled="0"] {
+	opacity: 0.6;
+	background: #f1f5f9;
+	color: #64748b;
+}
+
+.qnatter-pill-clickable[data-enabled="0"]:hover {
+	opacity: 0.8;
+	background: #e2e8f0;
 }
 
 .qnatter-empty {
@@ -337,6 +371,16 @@
 	color: var(--qnatter-pill-stopped-text);
 }
 
+.qnatter-theme-aurora .qnatter-pill-clickable[data-enabled="0"] {
+	background: var(--surface-sunken, rgba(248, 250, 253, 0.96));
+	color: var(--text-muted, #667085);
+}
+
+.qnatter-theme-aurora .qnatter-pill-clickable[data-enabled="0"]:hover {
+	background: var(--hover-faint, rgba(255, 255, 255, 0.82));
+	color: var(--text, #1f2933);
+}
+
 .qnatter-theme-aurora .qnatter-card dl {
 	gap: 8px 14px;
 	grid-template-columns: minmax(120px, 0.36fr) 1fr;
@@ -394,109 +438,11 @@
 	}
 }
 
-.qnatter-state-btn {
-	align-items: center;
-	background: transparent;
-	border: none;
-	cursor: pointer;
-	display: inline-flex;
-	height: 24px;
-	justify-content: center;
-	margin: 0;
-	padding: 0;
-	position: relative;
-	transition: transform 0.15s ease;
-	width: 24px;
-}
-
-.qnatter-state-btn:hover {
-	transform: scale(1.1);
-}
-
-.qnatter-state-btn:active {
-	transform: scale(0.95);
-}
-
-.qnatter-state-btn:disabled {
-	cursor: not-allowed;
-	opacity: 0.5;
-}
-
-.qnatter-state-indicator {
-	border-radius: 50%;
-	display: block;
-	height: 12px;
-	position: relative;
-	transition: all 0.2s ease;
-	width: 12px;
-}
-
-.qnatter-state-btn[data-enabled="1"] .qnatter-state-indicator {
-	background: #10b981;
-	box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.2);
-}
-
-.qnatter-state-btn[data-enabled="0"] .qnatter-state-indicator {
-	background: transparent;
-	border: 2px solid #94a3b8;
-	box-shadow: none;
-}
-
-.qnatter-state-btn:hover[data-enabled="1"] .qnatter-state-indicator {
-	box-shadow: 0 0 0 4px rgba(16, 185, 129, 0.25);
-}
-
-.qnatter-state-btn:hover[data-enabled="0"] .qnatter-state-indicator {
-	border-color: #64748b;
-	box-shadow: 0 0 0 4px rgba(100, 116, 139, 0.15);
-}
-
-.qnatter-state-btn.qnatter-state-loading .qnatter-state-indicator {
-	animation: qnatter-pulse 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite;
-}
-
 @keyframes qnatter-pulse {
 	0%, 100% {
 		opacity: 1;
 	}
 	50% {
-		opacity: 0.4;
+		opacity: 0.5;
 	}
-}
-
-.qnatter-theme-aurora .qnatter-state-btn[data-enabled="1"] .qnatter-state-indicator {
-	background: var(--success, #10b981);
-	box-shadow: 0 0 0 2px var(--success-surface, rgba(16, 185, 129, 0.2));
-}
-
-.qnatter-theme-aurora .qnatter-state-btn[data-enabled="0"] .qnatter-state-indicator {
-	border-color: var(--text-muted, #94a3b8);
-}
-
-.qnatter-theme-aurora .qnatter-state-btn:hover[data-enabled="1"] .qnatter-state-indicator {
-	box-shadow: 0 0 0 4px var(--success-surface, rgba(16, 185, 129, 0.25));
-}
-
-.qnatter-theme-aurora .qnatter-state-btn:hover[data-enabled="0"] .qnatter-state-indicator {
-	border-color: var(--text, #64748b);
-	box-shadow: 0 0 0 4px var(--hover-faint, rgba(100, 116, 139, 0.15));
-}
-
-[data-darkmode="true"] .qnatter-state-btn[data-enabled="1"] .qnatter-state-indicator {
-	background: #059669;
-	box-shadow: 0 0 0 2px rgba(5, 150, 105, 0.3);
-}
-
-[data-darkmode="true"] .qnatter-state-btn[data-enabled="0"] .qnatter-state-indicator {
-	border-color: rgba(148, 163, 184, 0.6);
-}
-
-[data-darkmode="true"] .qnatter-state-btn:hover[data-enabled="1"] .qnatter-state-indicator {
-	background: #10b981;
-	box-shadow: 0 0 0 4px rgba(16, 185, 129, 0.3);
-}
-
-[data-darkmode="true"] .qnatter-state-btn:hover[data-enabled="0"] .qnatter-state-indicator {
-	border-color: rgba(203, 213, 224, 0.8);
-	box-shadow: 0 0 0 4px rgba(148, 163, 184, 0.2);
 }
