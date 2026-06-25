@@ -882,3 +882,52 @@
 	background: #1e1e1e !important;
 	border-color: var(--argon-border) !important;
 }
+
+/* ===== Argon 日志页面适配 ===== */
+
+/* 日志页面整体容器 */
+.qnatter-page.qnatter-theme-argon.qnatter-log-page {
+	background: #ffffff !important;
+	border-radius: var(--argon-radius);
+	box-shadow: var(--argon-shadow);
+	overflow: hidden;
+}
+
+/* 日志页面工具栏 */
+.qnatter-page.qnatter-theme-argon.qnatter-log-page .qnatter-toolbar {
+	background: transparent;
+	border-bottom: 1px solid var(--argon-border);
+	margin: 0;
+	padding: 16px 20px;
+}
+
+.qnatter-page.qnatter-theme-argon.qnatter-log-page .qnatter-toolbar h2 {
+	background: transparent !important;
+	border-bottom: 0 !important;
+	margin: 0;
+	padding: 0;
+}
+
+/* 日志文本框 */
+.qnatter-page.qnatter-theme-argon.qnatter-log-page .qnatter-log {
+	background: rgba(244, 245, 247, 0.3) !important;
+	border: 0 !important;
+	border-radius: 0 !important;
+	box-shadow: none !important;
+	color: var(--argon-text);
+	font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+	padding: 16px 20px;
+}
+
+/* 暗色模式日志页面 */
+.qnatter-page.qnatter-theme-argon.qnatter-argon-dark.qnatter-log-page {
+	background: #2a2a2a !important;
+}
+
+.qnatter-page.qnatter-theme-argon.qnatter-argon-dark.qnatter-log-page .qnatter-toolbar {
+	border-bottom-color: var(--argon-border);
+}
+
+.qnatter-page.qnatter-theme-argon.qnatter-argon-dark.qnatter-log-page .qnatter-log {
+	background: rgba(0, 0, 0, 0.3) !important;
+}
