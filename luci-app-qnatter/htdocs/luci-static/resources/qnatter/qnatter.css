@@ -965,3 +965,22 @@
 	max-width: 100% !important;
 	width: 100% !important;
 }
+
+/* ===== 修复表单字段区域宽度 ===== */
+.qnatter-theme-argon.qnatter-form-page .cbi-value {
+	display: table !important;
+	table-layout: fixed !important;
+	width: 100% !important;
+}
+
+.qnatter-theme-argon.qnatter-form-page .cbi-value-title {
+	display: table-cell !important;
+	width: 240px !important;
+	vertical-align: middle !important;
+}
+
+.qnatter-theme-argon.qnatter-form-page .cbi-value-field {
+	display: table-cell !important;
+	width: auto !important;
+	vertical-align: middle !important;
+}
