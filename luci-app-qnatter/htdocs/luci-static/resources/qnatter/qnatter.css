@@ -476,22 +476,30 @@
 /* 输入框和下拉框 */
 .qnatter-theme-argon.qnatter-form-page .cbi-input-text,
 .qnatter-theme-argon.qnatter-form-page .cbi-input-select,
-.qnatter-theme-argon.qnatter-form-page .cbi-input-password {
+.qnatter-theme-argon.qnatter-form-page .cbi-input-password,
+.qnatter-theme-argon.qnatter-form-page input[type="text"],
+.qnatter-theme-argon.qnatter-form-page input[type="number"],
+.qnatter-theme-argon.qnatter-form-page input[type="password"],
+.qnatter-theme-argon.qnatter-form-page select {
 	background: #ffffff !important;
-	border: 1px solid var(--argon-border) !important;
-	border-radius: var(--argon-radius);
-	color: var(--argon-text);
-	font-family: var(--argon-font);
-	padding: 6px 12px;
+	border: 1px solid rgba(136, 152, 170, 0.35) !important;
+	border-radius: var(--argon-radius) !important;
+	color: var(--argon-text) !important;
+	font-family: var(--argon-font) !important;
+	padding: 6px 12px !important;
 	transition: all 0.2s ease;
 }
 
 .qnatter-theme-argon.qnatter-form-page .cbi-input-text:focus,
 .qnatter-theme-argon.qnatter-form-page .cbi-input-select:focus,
-.qnatter-theme-argon.qnatter-form-page .cbi-input-password:focus {
-	border-color: var(--argon-primary);
-	box-shadow: 0 0 0 3px rgba(94, 114, 228, 0.1);
-	outline: none;
+.qnatter-theme-argon.qnatter-form-page .cbi-input-password:focus,
+.qnatter-theme-argon.qnatter-form-page input[type="text"]:focus,
+.qnatter-theme-argon.qnatter-form-page input[type="number"]:focus,
+.qnatter-theme-argon.qnatter-form-page input[type="password"]:focus,
+.qnatter-theme-argon.qnatter-form-page select:focus {
+	border-color: var(--argon-primary) !important;
+	box-shadow: 0 0 0 3px rgba(94, 114, 228, 0.1) !important;
+	outline: none !important;
 }
 
 /* 复选框 */
@@ -878,9 +886,13 @@
 
 .qnatter-theme-argon.qnatter-argon-dark.qnatter-form-page .cbi-input-text,
 .qnatter-theme-argon.qnatter-argon-dark.qnatter-form-page .cbi-input-select,
-.qnatter-theme-argon.qnatter-argon-dark.qnatter-form-page .cbi-input-password {
+.qnatter-theme-argon.qnatter-argon-dark.qnatter-form-page .cbi-input-password,
+.qnatter-theme-argon.qnatter-argon-dark.qnatter-form-page input[type="text"],
+.qnatter-theme-argon.qnatter-argon-dark.qnatter-form-page input[type="number"],
+.qnatter-theme-argon.qnatter-argon-dark.qnatter-form-page input[type="password"],
+.qnatter-theme-argon.qnatter-argon-dark.qnatter-form-page select {
 	background: #1e1e1e !important;
-	border-color: var(--argon-border) !important;
+	border-color: rgba(136, 152, 170, 0.35) !important;
 }
 
 /* ===== Argon 日志页面适配 ===== */

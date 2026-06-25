@@ -114,7 +114,7 @@ return view.extend({
 		return E('div', { 'class': 'qnatter-page qnatter-log-page' + detectThemeClass() }, [
 			E('link', {
 				'rel': 'stylesheet',
-				'href': L.resource('qnatter/qnatter.css') + '?v=1.0.0-r34'
+				'href': L.resource('qnatter/qnatter.css') + '?v=1.0.0-r35'
 			}),
 			E('div', { 'class': 'qnatter-toolbar' }, [
 				E('h2', {}, [ _('QNatter Logs') ]),
