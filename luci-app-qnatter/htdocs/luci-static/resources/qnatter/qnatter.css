@@ -943,3 +943,13 @@
 .qnatter-page.qnatter-theme-argon.qnatter-argon-dark.qnatter-log-page .qnatter-log {
 	background: rgba(0, 0, 0, 0.3) !important;
 }
+
+/* ===== 修复表单输入框宽度 ===== */
+.qnatter-theme-argon.qnatter-form-page .cbi-value-field input[type="text"],
+.qnatter-theme-argon.qnatter-form-page .cbi-value-field input[type="number"],
+.qnatter-theme-argon.qnatter-form-page .cbi-value-field select,
+.qnatter-theme-argon.qnatter-form-page .cbi-value-field .cbi-input-text,
+.qnatter-theme-argon.qnatter-form-page .cbi-value-field .cbi-input-select {
+	min-width: 200px !important;
+	width: auto !important;
+}

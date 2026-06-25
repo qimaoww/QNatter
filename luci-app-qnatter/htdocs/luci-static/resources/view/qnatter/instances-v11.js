@@ -456,7 +456,7 @@ return view.extend({
 			return E('div', { 'class': 'qnatter-page qnatter-form-page' + detectThemeClass() }, [
 				E('link', {
 					'rel': 'stylesheet',
-					'href': L.resource('qnatter/qnatter.css') + '?v=1.0.0-r35'
+					'href': L.resource('qnatter/qnatter.css') + '?v=1.0.0-r36'
 				}),
 				node
 			]);
