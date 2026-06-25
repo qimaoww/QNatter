@@ -954,33 +954,12 @@
 	width: auto !important;
 }
 
-/* ===== 修复 Global Settings 区域宽度 ===== */
-.qnatter-theme-argon.qnatter-form-page .cbi-section {
-	max-width: 100% !important;
-	width: 100% !important;
-}
-
-.qnatter-theme-argon.qnatter-form-page .cbi-map,
-.qnatter-theme-argon.qnatter-form-page .cbi-section-node {
-	max-width: 100% !important;
-	width: 100% !important;
-}
-
-/* ===== 修复表单字段区域宽度 ===== */
-.qnatter-theme-argon.qnatter-form-page .cbi-value {
-	display: table !important;
-	table-layout: fixed !important;
-	width: 100% !important;
-}
-
-.qnatter-theme-argon.qnatter-form-page .cbi-value-title {
-	display: table-cell !important;
-	width: 240px !important;
-	vertical-align: middle !important;
-}
-
-.qnatter-theme-argon.qnatter-form-page .cbi-value-field {
-	display: table-cell !important;
-	width: auto !important;
-	vertical-align: middle !important;
+/* ===== 优化表单字段宽度（不改变布局）===== */
+.qnatter-theme-argon.qnatter-form-page .cbi-value-field input[type="text"],
+.qnatter-theme-argon.qnatter-form-page .cbi-value-field input[type="number"],
+.qnatter-theme-argon.qnatter-form-page .cbi-value-field select,
+.qnatter-theme-argon.qnatter-form-page .cbi-value-field .cbi-input-text,
+.qnatter-theme-argon.qnatter-form-page .cbi-value-field .cbi-input-select {
+	max-width: 400px !important;
+	min-width: 200px !important;
 }
