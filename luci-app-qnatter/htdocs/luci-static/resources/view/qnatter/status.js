@@ -40,21 +40,25 @@ var callToggleInstance = rpc.declare({
 	expect: { '': { ok: true } }
 });
 
-function toggleInstance(name, checkbox) {
-	if (checkbox.disabled)
+function toggleInstance(name, btn) {
+	if (btn.disabled)
 		return;
 
-	checkbox.disabled = true;
+	btn.disabled = true;
+	btn.classList.add('qnatter-state-loading');
+
 	return callToggleInstance(name).then(function(result) {
 		if (result && result.enabled !== undefined) {
-			checkbox.checked = result.enabled == 1;
+			btn.setAttribute('data-enabled', result.enabled);
+			btn.setAttribute('title', result.enabled == 1 ? _('Enabled') : _('Disabled'));
+			btn.setAttribute('aria-label', result.enabled == 1 ? _('Enabled - click to disable') : _('Disabled - click to enable'));
 		}
 		return new Promise(function(resolve) { setTimeout(resolve, 1000); });
 	}).catch(function(err) {
-		checkbox.checked = !checkbox.checked;
 		alert(err.message || String(err));
 	}).finally(function() {
-		checkbox.disabled = false;
+		btn.disabled = false;
+		btn.classList.remove('qnatter-state-loading');
 	});
 }
 
@@ -102,12 +106,13 @@ function itemInner(item) {
 function createCard(item, fieldByName) {
 	var name = itemKey(item);
 	var fields = {};
-	var toggleSwitch = E('input', {
-		'type': 'checkbox',
-		'class': 'qnatter-toggle',
-		'checked': item.enabled ? true : false,
-		'change': function(ev) { toggleInstance(name, this); }
-	});
+	var toggleBtn = E('button', {
+		'class': 'btn qnatter-state-btn',
+		'data-enabled': item.enabled ? '1' : '0',
+		'aria-label': item.enabled ? _('Enabled - click to disable') : _('Disabled - click to enable'),
+		'title': item.enabled ? _('Enabled') : _('Disabled'),
+		'click': function(ev) { toggleInstance(name, this); }
+	}, [ E('span', { 'class': 'qnatter-state-indicator' }) ]);
 	var reloadBtn = E('button', {
 		'class': 'btn cbi-button cbi-button-action',
 		'style': 'margin-left:6px;padding:2px 8px;font-size:11px',
@@ -115,7 +120,7 @@ function createCard(item, fieldByName) {
 	}, [ _('Reload') ]);
 
 	fields.name = E('span', {}, [ name || '-' ]);
-	fields.toggle = toggleSwitch;
+	fields.toggle = toggleBtn;
 	fields.running = E('span', { 'class': 'qnatter-pill' }, []);
 	fields.route = E('dd', {}, []);
 	fields.inner = E('dd', {}, []);
@@ -130,12 +135,10 @@ function createCard(item, fieldByName) {
 		E('div', { 'class': 'qnatter-card-head' }, [
 			E('h3', { 'style': 'display:flex;align-items:center;gap:4px' }, [
 				fields.name,
+				toggleBtn,
 				reloadBtn
 			]),
-			E('div', { 'style': 'display:flex;align-items:center;gap:8px' }, [
-				toggleSwitch,
-				fields.running
-			])
+			fields.running
 		]),
 		E('dl', {}, [
 			E('dt', {}, [ _('Public address') ]), fields.route,
@@ -161,7 +164,9 @@ function updateCard(item, fieldByName) {
 
 	setText(fields.name, name || '-');
 	if (fields.toggle && !fields.toggle.disabled) {
-		fields.toggle.checked = item.enabled ? true : false;
+		fields.toggle.setAttribute('data-enabled', item.enabled ? '1' : '0');
+		fields.toggle.setAttribute('title', item.enabled ? _('Enabled') : _('Disabled'));
+		fields.toggle.setAttribute('aria-label', item.enabled ? _('Enabled - click to disable') : _('Disabled - click to enable'));
 	}
 	fields.running.className = 'qnatter-pill ' + (item.running ? 'is-running' : 'is-stopped');
 	setText(fields.running, item.running ? _('RUNNING') : _('NOT RUNNING'));
