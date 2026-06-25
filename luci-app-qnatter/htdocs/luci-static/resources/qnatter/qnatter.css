@@ -270,7 +270,7 @@
 }
 
 /* 整个页面用白色容器包裹 */
-.qnatter-theme-argon .qnatter-page {
+.qnatter-page.qnatter-theme-argon {
 	background: #ffffff !important;
 	border-radius: var(--argon-radius);
 	box-shadow: var(--argon-shadow);
@@ -278,7 +278,7 @@
 }
 
 /* 网格区域 */
-.qnatter-theme-argon .qnatter-grid {
+.qnatter-page.qnatter-theme-argon .qnatter-grid {
 	background: rgba(244, 245, 247, 0.3);
 	padding: 20px;
 }
@@ -390,11 +390,11 @@
 	--argon-shadow: 0 0 0.5rem 0 rgba(0, 0, 0, 0.35);
 }
 
-.qnatter-theme-argon.qnatter-argon-dark .qnatter-page {
+.qnatter-page.qnatter-theme-argon.qnatter-argon-dark {
 	background: #2a2a2a !important;
 }
 
-.qnatter-theme-argon.qnatter-argon-dark .qnatter-grid {
+.qnatter-page.qnatter-theme-argon.qnatter-argon-dark .qnatter-grid {
 	background: rgba(0, 0, 0, 0.2);
 }
 
