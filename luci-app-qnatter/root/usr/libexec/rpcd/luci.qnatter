@@ -288,9 +288,40 @@ cloudflare_srv_records() {
 	cloudflare_emit_srv_records "$response"
 }
 
+toggle_instance() {
+	local instance="$1"
+	local current_state new_state
+
+	valid_section_name "$instance" || {
+		emit_error "Invalid instance name"
+		return 0
+	}
+
+	if ! "$QNATTER_UCI_BIN" -q get "qnatter.${instance}" >/dev/null 2>&1; then
+		emit_error "Instance not found"
+		return 0
+	fi
+
+	current_state="$("$QNATTER_UCI_BIN" -q get "qnatter.${instance}.enabled" 2>/dev/null || echo "0")"
+	case "$current_state" in
+		1) new_state="0" ;;
+		*) new_state="1" ;;
+	esac
+
+	if ! "$QNATTER_UCI_BIN" set "qnatter.${instance}.enabled=${new_state}" ||
+		! "$QNATTER_UCI_BIN" commit qnatter; then
+		emit_error "Failed to toggle instance"
+		return 0
+	fi
+
+	"$QNATTER_INIT_BIN" reload >/dev/null 2>&1 || true
+
+	printf '{"ok":true,"enabled":%s}\n' "$new_state"
+}
+
 case "$1" in
 	list)
-		printf '{"status":{},"log":{"instance":"String","lines":"Integer"},"clear_log":{"instance":"String"},"cloudflare_zones":{"section":"String","token":"String"},"cloudflare_srv_records":{"section":"String","zone_id":"String","token":"String"},"rename_instance":{"old":"String","new":"String"},"reload_instance":{"instance":"String"}}\n'
+		printf '{"status":{},"log":{"instance":"String","lines":"Integer"},"clear_log":{"instance":"String"},"cloudflare_zones":{"section":"String","token":"String"},"cloudflare_srv_records":{"section":"String","zone_id":"String","token":"String"},"rename_instance":{"old":"String","new":"String"},"reload_instance":{"instance":"String"},"toggle_instance":{"instance":"String"}}\n'
 		;;
 	call)
 		read -r input
@@ -333,6 +364,11 @@ case "$1" in
 					ubus call service delete "{ \"name\": \"qnatter\", \"instance\": \"${instance}\" }" >/dev/null 2>&1 || true
 				"$QNATTER_INIT_BIN" reload >/dev/null 2>&1 || true
 				printf '{"ok":true}\n'
+				;;
+			toggle_instance)
+				instance="$(json_arg_string instance "$input")"
+				[ -n "$instance" ] || { emit_error "Missing instance"; exit 0; }
+				toggle_instance "$instance"
 				;;
 		esac
 		;;

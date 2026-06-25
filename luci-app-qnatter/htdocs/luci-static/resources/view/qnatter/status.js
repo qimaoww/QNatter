@@ -33,6 +33,31 @@ var callReloadInstance = rpc.declare({
 	expect: { '': { ok: true } }
 });
 
+var callToggleInstance = rpc.declare({
+	object: 'luci.qnatter',
+	method: 'toggle_instance',
+	params: [ 'instance' ],
+	expect: { '': { ok: true } }
+});
+
+function toggleInstance(name, checkbox) {
+	if (checkbox.disabled)
+		return;
+
+	checkbox.disabled = true;
+	return callToggleInstance(name).then(function(result) {
+		if (result && result.enabled !== undefined) {
+			checkbox.checked = result.enabled == 1;
+		}
+		return new Promise(function(resolve) { setTimeout(resolve, 1000); });
+	}).catch(function(err) {
+		checkbox.checked = !checkbox.checked;
+		alert(err.message || String(err));
+	}).finally(function() {
+		checkbox.disabled = false;
+	});
+}
+
 function reloadInstance(name, btn) {
 	if (btn) {
 		btn.disabled = true;
@@ -77,6 +102,12 @@ function itemInner(item) {
 function createCard(item, fieldByName) {
 	var name = itemKey(item);
 	var fields = {};
+	var toggleSwitch = E('input', {
+		'type': 'checkbox',
+		'class': 'qnatter-toggle',
+		'checked': item.enabled ? true : false,
+		'change': function(ev) { toggleInstance(name, this); }
+	});
 	var reloadBtn = E('button', {
 		'class': 'btn cbi-button cbi-button-action',
 		'style': 'margin-left:6px;padding:2px 8px;font-size:11px',
@@ -84,6 +115,7 @@ function createCard(item, fieldByName) {
 	}, [ _('Reload') ]);
 
 	fields.name = E('span', {}, [ name || '-' ]);
+	fields.toggle = toggleSwitch;
 	fields.running = E('span', { 'class': 'qnatter-pill' }, []);
 	fields.route = E('dd', {}, []);
 	fields.inner = E('dd', {}, []);
@@ -100,7 +132,10 @@ function createCard(item, fieldByName) {
 				fields.name,
 				reloadBtn
 			]),
-			fields.running
+			E('div', { 'style': 'display:flex;align-items:center;gap:8px' }, [
+				toggleSwitch,
+				fields.running
+			])
 		]),
 		E('dl', {}, [
 			E('dt', {}, [ _('Public address') ]), fields.route,
@@ -125,6 +160,9 @@ function updateCard(item, fieldByName) {
 		return;
 
 	setText(fields.name, name || '-');
+	if (fields.toggle && !fields.toggle.disabled) {
+		fields.toggle.checked = item.enabled ? true : false;
+	}
 	fields.running.className = 'qnatter-pill ' + (item.running ? 'is-running' : 'is-stopped');
 	setText(fields.running, item.running ? _('RUNNING') : _('NOT RUNNING'));
 	setText(fields.route, route);

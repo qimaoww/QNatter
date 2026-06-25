@@ -393,3 +393,71 @@
 		width: 100%;
 	}
 }
+
+.qnatter-toggle {
+	appearance: none;
+	background: #cbd5e0;
+	border-radius: 999px;
+	cursor: pointer;
+	height: 20px;
+	position: relative;
+	transition: background-color 0.2s ease;
+	width: 36px;
+}
+
+.qnatter-toggle::before {
+	background: #ffffff;
+	border-radius: 50%;
+	box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+	content: "";
+	height: 16px;
+	left: 2px;
+	position: absolute;
+	top: 2px;
+	transition: transform 0.2s ease;
+	width: 16px;
+}
+
+.qnatter-toggle:checked {
+	background: #10b981;
+}
+
+.qnatter-toggle:checked::before {
+	transform: translateX(16px);
+}
+
+.qnatter-toggle:disabled {
+	cursor: not-allowed;
+	opacity: 0.5;
+}
+
+.qnatter-theme-aurora .qnatter-toggle {
+	background: var(--surface-sunken, rgba(203, 213, 224, 0.8));
+	height: 22px;
+	width: 40px;
+}
+
+.qnatter-theme-aurora .qnatter-toggle::before {
+	height: 18px;
+	width: 18px;
+}
+
+.qnatter-theme-aurora .qnatter-toggle:checked {
+	background: var(--success, #10b981);
+}
+
+.qnatter-theme-aurora .qnatter-toggle:checked::before {
+	transform: translateX(18px);
+}
+
+[data-darkmode="true"] .qnatter-toggle {
+	background: rgba(71, 85, 105, 0.7);
+}
+
+[data-darkmode="true"] .qnatter-toggle::before {
+	background: rgba(248, 250, 252, 0.95);
+}
+
+[data-darkmode="true"] .qnatter-toggle:checked {
+	background: #059669;
+}
