@@ -98,6 +98,18 @@ move_if_exists() {
 	"$QNATTER_MV_BIN" "$src" "$dest" >/dev/null 2>&1 || true
 }
 
+log_action() {
+	local instance="$1"
+	local action="$2"
+	local slug log_file
+
+	slug="$(runtime_slug "$instance")"
+	log_file="${QNATTER_LOG_DIR}/${slug}.log"
+
+	[ -d "$QNATTER_LOG_DIR" ] || return 0
+	echo "$(date '+%Y-%m-%d %H:%M:%S') [LuCI] ${action}" >> "$log_file" 2>/dev/null || true
+}
+
 rename_instance() {
 	local old="$1"
 	local new="$2"
@@ -141,6 +153,8 @@ rename_instance() {
 	move_if_exists "${QNATTER_RUN_DIR}/${old_slug}.env" "${QNATTER_RUN_DIR}/${new_slug}.env"
 	move_if_exists "${QNATTER_RUN_DIR}/${old_slug}.notify" "${QNATTER_RUN_DIR}/${new_slug}.notify"
 	move_if_exists "${QNATTER_LOG_DIR}/${old_slug}.log" "${QNATTER_LOG_DIR}/${new_slug}.log"
+
+	log_action "$new" "instance renamed from '${old}'"
 
 	if [ -x "$QNATTER_INIT_BIN" ]; then
 		"$QNATTER_INIT_BIN" reload >/dev/null 2>&1 || true
@@ -290,7 +304,7 @@ cloudflare_srv_records() {
 
 toggle_instance() {
 	local instance="$1"
-	local current_state new_state
+	local current_state new_state action_desc
 
 	valid_section_name "$instance" || {
 		emit_error "Invalid instance name"
@@ -304,16 +318,24 @@ toggle_instance() {
 
 	current_state="$("$QNATTER_UCI_BIN" -q get "qnatter.${instance}.enabled" 2>/dev/null || echo "0")"
 	case "$current_state" in
-		1) new_state="0" ;;
-		*) new_state="1" ;;
+		1)
+			new_state="0"
+			action_desc="instance disabled"
+			;;
+		*)
+			new_state="1"
+			action_desc="instance enabled"
+			;;
 	esac
 
 	if ! "$QNATTER_UCI_BIN" set "qnatter.${instance}.enabled=${new_state}" ||
 		! "$QNATTER_UCI_BIN" commit qnatter; then
 		emit_error "Failed to toggle instance"
+		log_action "$instance" "toggle failed: UCI commit error"
 		return 0
 	fi
 
+	log_action "$instance" "$action_desc"
 	"$QNATTER_INIT_BIN" reload >/dev/null 2>&1 || true
 
 	printf '{"ok":true,"enabled":%s}\n' "$new_state"
@@ -321,7 +343,7 @@ toggle_instance() {
 
 case "$1" in
 	list)
-		printf '{"status":{},"log":{"instance":"String","lines":"Integer"},"clear_log":{"instance":"String"},"cloudflare_zones":{"section":"String","token":"String"},"cloudflare_srv_records":{"section":"String","zone_id":"String","token":"String"},"rename_instance":{"old":"String","new":"String"},"reload_instance":{"instance":"String"},"toggle_instance":{"instance":"String"}}\n'
+		printf '{"status":{},"log":{"instance":"String","lines":"Integer"},"clear_log":{"instance":"String"},"cloudflare_zones":{"section":"String","token":"String"},"cloudflare_srv_records":{"section":"String","zone_id":"String","token":"String"},"rename_instance":{"old":"String","new":"String"},"toggle_instance":{"instance":"String"}}\n'
 		;;
 	call)
 		read -r input
@@ -355,15 +377,6 @@ case "$1" in
 				old="$(json_arg_string old "$input")"
 				new="$(json_arg_string new "$input")"
 				rename_instance "$old" "$new"
-				;;
-			reload_instance)
-				instance="$(json_arg_string instance "$input")"
-				[ -n "$instance" ] || { emit_error "Missing instance"; exit 0; }
-				valid_section_name "$instance" || { emit_error "Invalid instance name"; exit 0; }
-				command -v ubus >/dev/null 2>&1 && \
-					ubus call service delete "{ \"name\": \"qnatter\", \"instance\": \"${instance}\" }" >/dev/null 2>&1 || true
-				"$QNATTER_INIT_BIN" reload >/dev/null 2>&1 || true
-				printf '{"ok":true}\n'
 				;;
 			toggle_instance)
 				instance="$(json_arg_string instance "$input")"
