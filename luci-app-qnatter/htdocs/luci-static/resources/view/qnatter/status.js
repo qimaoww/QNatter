@@ -9,21 +9,39 @@ var callStatus = rpc.declare({
 });
 
 function detectThemeClass() {
-	var text = [
-		document.documentElement.className || '',
-		document.body ? document.body.className || '' : '',
-		Array.prototype.map.call(document.querySelectorAll('link[href]'), function(link) {
-			return link.getAttribute('href') || '';
-		}).join(' ')
-	].join(' ');
+	var hints = [];
+	try {
+		hints.push(document.documentElement.className || '');
+	} catch (e) {}
+	if (document.body) {
+		try { hints.push(document.body.className || ''); } catch (e) {}
+		try { hints.push(getComputedStyle(document.body).backgroundColor || ''); } catch (e) {}
+	}
+	try {
+		for (var i = 0; i < document.styleSheets.length; i++) {
+			try { hints.push(document.styleSheets[i].href || ''); } catch (e) {}
+		}
+	} catch (e) {}
+	try {
+		var links = document.querySelectorAll('link[href]');
+		for (var j = 0; j < links.length; j++)
+			hints.push(links[j].getAttribute('href') || '');
+	} catch (e) {}
+	var text = hints.join(' ');
 
-	if (/luci-theme-aurora|theme-aurora|aurora/i.test(text))
-		return ' qnatter-theme-aurora';
+	var result = '';
+	// 先检测 Argon（优先级高，防止被 Aurora 误判）
+	if (/\/argon\/|luci-theme-argon|theme-argon/i.test(text)) {
+		var dark = /argon\/css\/dark\.css/i.test(text) ||
+			(document.body && /rgb\(30,\s*30,\s*30\)|#1e1e1e/i.test(getComputedStyle(document.body).backgroundColor || ''));
+		result = ' qnatter-theme-argon' + (dark ? ' qnatter-argon-dark' : '');
+	} else if (/\/aurora\/|luci-theme-aurora|theme-aurora/i.test(text)) {
+		result = ' qnatter-theme-aurora';
+	}
 
-	if (/luci-theme-argon|theme-argon|argon/i.test(text))
-		return ' qnatter-theme-argon';
-
-	return '';
+	// 诊断用：在 DOM 上暴露检测结果
+	try { document.documentElement.setAttribute('data-qnatter-theme', (result || 'none').trim()); } catch (e) {}
+	return result;
 }
 
 var callToggleInstance = rpc.declare({
@@ -150,7 +168,7 @@ return view.extend({
 		var root = E('div', { 'class': 'qnatter-page' + detectThemeClass() }, [
 			E('link', {
 				'rel': 'stylesheet',
-				'href': L.resource('qnatter/qnatter.css') + '?v=1.0.0-r26'
+				'href': L.resource('qnatter/qnatter.css?v=1.0.0-r30')
 			}),
 			E('div', { 'class': 'qnatter-toolbar' }, [
 				E('h2', {}, [ _('QNatter Status') ])

@@ -1,3 +1,4 @@
+/* ===== 基础样式 ===== */
 .qnatter-page {
 	box-sizing: border-box;
 	color: var(--text-color, #1f2933);
@@ -204,18 +205,215 @@
 	width: 100%;
 }
 
+/* ===== luci-theme-argon 完整适配 ===== */
+.qnatter-theme-argon {
+	--argon-primary: #5e72e4;
+	--argon-primary-dark: #483d8b;
+	--argon-success: #2dce89;
+	--argon-danger: #f5365c;
+	--argon-text: #32325d;
+	--argon-muted: #525f7f;
+	--argon-surface: rgba(255, 255, 255, 0.88);
+	--argon-border: rgba(136, 152, 170, 0.18);
+	--argon-shadow: 0 0 1rem 0 rgba(136, 152, 170, 0.15);
+	--argon-radius: 0.25rem;
+	--argon-blur: 10px;
+	--argon-font: "Google Sans", "Microsoft Yahei", "WenQuanYi Micro Hei", sans-serif, "Helvetica Neue", Helvetica, "Hiragino Sans GB";
+	color: var(--argon-text);
+	font-family: var(--argon-font);
+}
+
+/* 卡片和空状态容器 */
 .qnatter-theme-argon .qnatter-card,
 .qnatter-theme-argon .qnatter-empty {
-	background: rgba(255, 255, 255, 0.72);
-	border-color: rgba(95, 107, 255, 0.20);
-	box-shadow: 0 12px 32px rgba(31, 38, 135, 0.10);
+	background: var(--argon-surface) !important;
+	-webkit-backdrop-filter: blur(var(--argon-blur));
+	backdrop-filter: blur(var(--argon-blur));
+	border: 0 !important;
+	border-radius: var(--argon-radius) !important;
+	box-shadow: var(--argon-shadow) !important;
+	color: var(--argon-text);
+	font-family: var(--argon-font);
+}
+
+.qnatter-theme-argon .qnatter-card {
+	padding: 16px 18px;
+}
+
+.qnatter-theme-argon .qnatter-empty {
+	padding: 20px;
+}
+
+/* 强制所有子元素背景透明（Argon 全局 CSS 会覆盖） */
+.qnatter-theme-argon .qnatter-card *,
+.qnatter-theme-argon .qnatter-empty * {
+	background: transparent !important;
+}
+
+/* 工具栏 */
+.qnatter-theme-argon .qnatter-toolbar {
+	margin: 0 !important;
+}
+
+.qnatter-theme-argon .qnatter-toolbar h2 {
+	background: #ffffff !important;
+	border-radius: var(--argon-radius);
+	box-shadow: var(--argon-shadow);
+	color: var(--argon-text);
+	font-family: var(--argon-font);
+	font-size: 1.25rem;
+	font-weight: 700;
+	letter-spacing: -0.01em;
+	margin: 0 0 14px;
+	padding: 16px 20px;
+}
+
+/* 卡片头部 */
+.qnatter-theme-argon .qnatter-card-head {
+	align-items: center;
+	border-bottom: 1px solid var(--argon-border);
+	margin-bottom: 12px;
+	padding-bottom: 12px;
+}
+
+.qnatter-theme-argon .qnatter-card h3 {
+	color: var(--argon-text);
+	font-family: var(--argon-font);
+	font-size: 1.05rem;
+	font-weight: 600;
+	letter-spacing: -0.01em;
+	line-height: 1.3;
+}
+
+/* 定义列表 */
+.qnatter-theme-argon .qnatter-card dl {
+	gap: 8px 14px;
+	grid-template-columns: minmax(120px, 0.36fr) 1fr;
+}
+
+.qnatter-theme-argon .qnatter-card dt {
+	color: var(--argon-muted);
+	font-size: 12px;
+	font-weight: 700;
+	letter-spacing: 0.02em;
+}
+
+.qnatter-theme-argon .qnatter-card dd {
+	color: var(--argon-text);
+	font-variant-numeric: tabular-nums;
+	line-height: 1.45;
+}
+
+/* 状态徽章 */
+.qnatter-theme-argon .qnatter-pill {
+	border-radius: 999px;
+	font-weight: 700;
 }
 
 .qnatter-theme-argon .qnatter-pill.is-running {
-	background: rgba(48, 209, 88, 0.18);
-	color: #12823b;
+	background: rgba(45, 206, 137, 0.15);
+	color: #1f9d63;
 }
 
+.qnatter-theme-argon .qnatter-pill.is-stopped {
+	background: rgba(245, 54, 92, 0.15);
+	color: #d12e50;
+}
+
+/* 可点击徽章 */
+.qnatter-theme-argon .qnatter-pill-clickable {
+	transition: all 0.2s ease;
+}
+
+.qnatter-theme-argon .qnatter-pill-clickable:hover {
+	box-shadow: 0 4px 12px rgba(94, 114, 228, 0.18);
+	transform: translateY(-1px);
+}
+
+.qnatter-theme-argon .qnatter-pill-clickable:focus-visible {
+	outline: none;
+	box-shadow: 0 0 0 3px rgba(94, 114, 228, 0.35);
+}
+
+.qnatter-theme-argon .qnatter-pill-clickable:active {
+	transform: translateY(0);
+}
+
+.qnatter-theme-argon .qnatter-pill-clickable[data-enabled="0"] {
+	background: rgba(136, 152, 170, 0.15);
+	color: var(--argon-muted);
+}
+
+.qnatter-theme-argon .qnatter-pill-clickable[data-enabled="0"]:hover {
+	background: rgba(94, 114, 228, 0.15);
+	color: var(--argon-primary);
+}
+
+.qnatter-theme-argon .qnatter-pill-clickable:disabled {
+	cursor: not-allowed;
+	opacity: 0.55;
+}
+
+/* 日志视图 */
+.qnatter-theme-argon .qnatter-log {
+	background: var(--argon-surface);
+	-webkit-backdrop-filter: blur(var(--argon-blur));
+	backdrop-filter: blur(var(--argon-blur));
+	border: 1px solid var(--argon-border);
+	border-radius: var(--argon-radius);
+	box-shadow: var(--argon-shadow);
+	color: var(--argon-text);
+}
+
+/* ===== Argon 暗色模式 ===== */
+.qnatter-theme-argon.qnatter-argon-dark {
+	--argon-primary: var(--argon-primary-dark);
+	--argon-text: #cccccc;
+	--argon-muted: #9a9a9a;
+	--argon-surface: #1e1e1e;
+	--argon-border: #3c3c3c;
+	--argon-shadow: 0 0 0.5rem 0 rgba(0, 0, 0, 0.35);
+}
+
+.qnatter-theme-argon.qnatter-argon-dark .qnatter-card,
+.qnatter-theme-argon.qnatter-argon-dark .qnatter-empty,
+.qnatter-theme-argon.qnatter-argon-dark .qnatter-log {
+	background: var(--argon-surface);
+	border-color: var(--argon-border);
+	box-shadow: var(--argon-shadow);
+}
+
+.qnatter-theme-argon.qnatter-argon-dark .qnatter-toolbar h2 {
+	background: #333333 !important;
+	box-shadow: 0 0 0.5rem 0 rgba(0, 0, 0, 0.15);
+}
+
+.qnatter-theme-argon.qnatter-argon-dark .qnatter-toolbar h2,
+.qnatter-theme-argon.qnatter-argon-dark .qnatter-card h3,
+.qnatter-theme-argon.qnatter-argon-dark .qnatter-card dd {
+	color: var(--argon-text);
+}
+
+.qnatter-theme-argon.qnatter-argon-dark .qnatter-card dt {
+	color: var(--argon-muted);
+}
+
+.qnatter-theme-argon.qnatter-argon-dark .qnatter-pill.is-running {
+	background: rgba(45, 206, 137, 0.2);
+	color: #4ed99a;
+}
+
+.qnatter-theme-argon.qnatter-argon-dark .qnatter-pill.is-stopped {
+	background: rgba(245, 54, 92, 0.2);
+	color: #f56e8a;
+}
+
+.qnatter-theme-argon.qnatter-argon-dark .qnatter-pill-clickable[data-enabled="0"] {
+	background: rgba(136, 152, 170, 0.2);
+	color: var(--argon-muted);
+}
+
+/* ===== luci-theme-aurora 完整适配 ===== */
 .qnatter-theme-aurora {
 	color: var(--text, var(--text-color, #1f2933));
 	--qnatter-card-bg: var(--surface-overlay, rgba(255, 255, 255, 0.92));
@@ -408,6 +606,7 @@
 	padding: 14px;
 }
 
+/* ===== 响应式布局 ===== */
 @media (max-width: 640px) {
 	.qnatter-toolbar {
 		align-items: stretch;
