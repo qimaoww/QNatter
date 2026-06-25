@@ -226,12 +226,12 @@
 /* 卡片和空状态容器 */
 .qnatter-theme-argon .qnatter-card,
 .qnatter-theme-argon .qnatter-empty {
-	background: var(--argon-surface) !important;
-	-webkit-backdrop-filter: blur(var(--argon-blur));
-	backdrop-filter: blur(var(--argon-blur));
-	border: 0 !important;
+	background: #ffffff !important;
+	-webkit-backdrop-filter: none;
+	backdrop-filter: none;
+	border: 1px solid var(--argon-border) !important;
 	border-radius: var(--argon-radius) !important;
-	box-shadow: var(--argon-shadow) !important;
+	box-shadow: 0 1px 3px rgba(136, 152, 170, 0.08) !important;
 	color: var(--argon-text);
 	font-family: var(--argon-font);
 }
@@ -256,16 +256,31 @@
 }
 
 .qnatter-theme-argon .qnatter-toolbar h2 {
-	background: #ffffff !important;
-	border-radius: var(--argon-radius);
-	box-shadow: var(--argon-shadow);
+	background: transparent !important;
+	border-radius: 0 !important;
+	box-shadow: none !important;
 	color: var(--argon-text);
 	font-family: var(--argon-font);
 	font-size: 1.25rem;
 	font-weight: 700;
 	letter-spacing: -0.01em;
-	margin: 0 0 14px;
+	margin: 0;
 	padding: 16px 20px;
+	border-bottom: 1px solid var(--argon-border);
+}
+
+/* 整个页面用白色容器包裹 */
+.qnatter-theme-argon .qnatter-page {
+	background: #ffffff !important;
+	border-radius: var(--argon-radius);
+	box-shadow: var(--argon-shadow);
+	overflow: hidden;
+}
+
+/* 网格区域 */
+.qnatter-theme-argon .qnatter-grid {
+	background: rgba(244, 245, 247, 0.3);
+	padding: 20px;
 }
 
 /* 卡片头部 */
@@ -375,17 +390,24 @@
 	--argon-shadow: 0 0 0.5rem 0 rgba(0, 0, 0, 0.35);
 }
 
+.qnatter-theme-argon.qnatter-argon-dark .qnatter-page {
+	background: #2a2a2a !important;
+}
+
+.qnatter-theme-argon.qnatter-argon-dark .qnatter-grid {
+	background: rgba(0, 0, 0, 0.2);
+}
+
 .qnatter-theme-argon.qnatter-argon-dark .qnatter-card,
 .qnatter-theme-argon.qnatter-argon-dark .qnatter-empty,
 .qnatter-theme-argon.qnatter-argon-dark .qnatter-log {
-	background: var(--argon-surface);
-	border-color: var(--argon-border);
-	box-shadow: var(--argon-shadow);
+	background: #1e1e1e !important;
+	border-color: var(--argon-border) !important;
+	box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3) !important;
 }
 
 .qnatter-theme-argon.qnatter-argon-dark .qnatter-toolbar h2 {
-	background: #333333 !important;
-	box-shadow: 0 0 0.5rem 0 rgba(0, 0, 0, 0.15);
+	border-bottom-color: var(--argon-border);
 }
 
 .qnatter-theme-argon.qnatter-argon-dark .qnatter-toolbar h2,
