@@ -26,9 +26,17 @@
 			"path": "qnatter/instances-v11"
 		}
 	},
+	"admin/services/qnatter/stun": {
+		"title": "STUN",
+		"order": 3,
+		"action": {
+			"type": "view",
+			"path": "qnatter/stun"
+		}
+	},
 	"admin/services/qnatter/log": {
 		"title": "Logs",
-		"order": 3,
+		"order": 4,
 		"action": {
 			"type": "view",
 			"path": "qnatter/log"

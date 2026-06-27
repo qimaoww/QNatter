@@ -266,12 +266,55 @@ qnatter_write_notify_env() {
 }
 
 qnatter_add_stun_server() {
-	local item="$1"
+	qnatter_append_stun_value stun_servers "$1"
+}
+
+qnatter_add_global_tcp_stun_server() {
+	qnatter_append_stun_value QNATTER_GLOBAL_TCP_STUN_SERVERS "$1"
+}
+
+qnatter_add_global_udp_stun_server() {
+	qnatter_append_stun_value QNATTER_GLOBAL_UDP_STUN_SERVERS "$1"
+}
+
+qnatter_append_stun_value() {
+	local var="$1"
+	local item="$2"
+	local current
+	local existing
+
 	[ -n "$item" ] || return 0
-	if [ -n "$stun_servers" ]; then
-		stun_servers="${stun_servers} ${item}"
+	eval "current=\"\${${var}:-}\""
+	for existing in $current; do
+		[ "$existing" = "$item" ] && return 0
+	done
+	if [ -n "$current" ]; then
+		current="${current} ${item}"
 	else
-		stun_servers="$item"
+		current="$item"
+	fi
+	eval "$var=\"\$current\""
+}
+
+qnatter_load_global_stun_servers() {
+	QNATTER_GLOBAL_TCP_STUN_SERVERS=""
+	QNATTER_GLOBAL_UDP_STUN_SERVERS=""
+	config_list_foreach stun tcp_server qnatter_add_global_tcp_stun_server
+	config_list_foreach stun udp_server qnatter_add_global_udp_stun_server
+}
+
+qnatter_select_stun_servers() {
+	local protocol="$1"
+	local instance_servers="$2"
+
+	if [ -n "$instance_servers" ]; then
+		printf '%s\n' "$instance_servers"
+		return 0
+	fi
+	if [ "$protocol" = "udp" ]; then
+		printf '%s\n' "${QNATTER_GLOBAL_UDP_STUN_SERVERS:-}"
+	else
+		printf '%s\n' "${QNATTER_GLOBAL_TCP_STUN_SERVERS:-}"
 	fi
 }
 
@@ -342,6 +385,7 @@ qnatter_start_instance() {
 	config_get qb_forward_method "$section" qbittorrent_forward_method "nftables"
 	stun_servers=""
 	config_list_foreach "$section" stun_server qnatter_add_stun_server
+	stun_servers="$(qnatter_select_stun_servers "$protocol" "$stun_servers")"
 
 	slug="$(qnatter_runtime_slug "$section")"
 	mkdir -p "$RUN_DIR" "$LOG_DIR"
@@ -420,6 +464,7 @@ start_service() {
 	config_load "$CONF"
 	config_get_bool enabled global enabled 0
 	[ "$enabled" = "1" ] || return 0
+	qnatter_load_global_stun_servers
 	qnatter_prepare_route_slots || return 1
 	mkdir -p "$RUN_DIR"
 	if [ "${QNATTER_RELOADING:-0}" != "1" ]; then
@@ -447,6 +492,7 @@ qnatter_hot_reload_service() {
 	local tmp runtime_list old_list slug
 
 	config_load "$CONF"
+	qnatter_load_global_stun_servers
 	qnatter_prepare_route_slots || return 1
 	mkdir -p "$RUN_DIR"
 	tmp="$(mktemp -d "${RUN_DIR}/.reload.XXXXXX")" || return 1
@@ -495,6 +541,7 @@ reload_service() {
 		stop
 		return 0
 	fi
+	qnatter_load_global_stun_servers
 	qnatter_prepare_route_slots || return 1
 	mkdir -p "$RUN_DIR"
 

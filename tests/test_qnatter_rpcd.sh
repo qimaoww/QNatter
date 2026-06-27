@@ -61,6 +61,7 @@ case "\$1" in
 	get)
 		case "\$2" in
 			qnatter.wan_ct) printf 'instance\n' ;;
+			qnatter.wan_ct.enabled) printf '0\n' ;;
 			qnatter.wan_new) exit 1 ;;
 			qnatter.bad-name) exit 1 ;;
 			qnatter.wan_ct.cloudflare_api_token) printf 'cf-token\n' ;;
@@ -68,7 +69,7 @@ case "\$1" in
 			*) exit 1 ;;
 		esac
 		;;
-	rename|delete|commit)
+	rename|delete|commit|set)
 		exit 0
 		;;
 	*)
@@ -152,8 +153,8 @@ printf '%s' "$list_output" | grep -Fq '"cloudflare_srv_records":{"section":"Stri
 	fail "rpc list is missing cloudflare_srv_records signature: $list_output"
 printf '%s' "$list_output" | grep -Fq '"rename_instance":{"old":"String","new":"String"}' || \
 	fail "rpc list is missing rename_instance signature: $list_output"
-printf '%s' "$list_output" | grep -Fq '"reload_instance":{"instance":"String"}' || \
-	fail "rpc list is missing reload_instance signature: $list_output"
+printf '%s' "$list_output" | grep -Fq '"toggle_instance":{"instance":"String"}' || \
+	fail "rpc list is missing toggle_instance signature: $list_output"
 
 status_output="$(
 	printf '{}\n' | QNATTER_STATUS_BIN="$status_bin" QNATTER_LOG_BIN="$log_bin" "$rpcd" call status
@@ -219,16 +220,15 @@ grep -Fqx "$run_dir/wan_ct.notify $run_dir/wan_new.notify" "$mv_calls" || fail "
 grep -Fqx "$log_dir/wan_ct.log $log_dir/wan_new.log" "$mv_calls" || fail "rename did not move log file"
 grep -Fqx 'reload' "$init_calls" || fail "rename did not reload QNatter"
 
-reload_output="$(
+toggle_output="$(
 	printf '{"instance":"wan_ct"}\n' | \
-		PATH="$tmp:$PATH" \
+		QNATTER_UCI_BIN="$uci_bin" \
 		QNATTER_INIT_BIN="$init_bin" \
-		"$rpcd" call reload_instance
+		"$rpcd" call toggle_instance
 )"
-[ "$reload_output" = '{"ok":true}' ] || fail "reload_instance output = $reload_output"
-grep -Fqx 'call service delete { "name": "qnatter", "instance": "wan_ct" }' "$ubus_calls" || \
-	fail "reload_instance did not delete only the requested procd instance"
-grep -Fqx 'reload' "$init_calls" || fail "reload_instance did not reload QNatter"
+[ "$toggle_output" = '{"ok":true,"enabled":1}' ] || fail "toggle_instance output = $toggle_output"
+grep -Fqx 'set qnatter.wan_ct.enabled=1' "$uci_calls" || fail "toggle_instance did not enable the instance"
+grep -Fqx 'reload' "$init_calls" || fail "toggle_instance did not reload QNatter"
 
 invalid_rename_output="$(
 	printf '{"old":"wan_ct","new":"bad-name"}\n' | QNATTER_UCI_BIN="$uci_bin" "$rpcd" call rename_instance

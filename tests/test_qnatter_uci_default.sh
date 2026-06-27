@@ -40,6 +40,9 @@ case "\$*" in
 	"-q get qnatter.global.hot_reload")
 		exit 1
 		;;
+	"-q get qnatter.stun")
+		exit 1
+		;;
 	"-q get qnatter.wan_ct.route_slot")
 		exit 1
 		;;
@@ -55,7 +58,7 @@ case "\$*" in
 		printf '%s\n' 'qnatter.global=global' 'qnatter.wan_ct=instance' 'qnatter.wan_cm=instance' 'qnatter.wan_qb=instance'
 		exit 0
 		;;
-	"set qnatter.global.hot_reload=1"|"-q delete qnatter.wan_ct.label"|"-q delete qnatter.wan_cm.label"|"-q delete qnatter.wan_qb.label"|"set qnatter.wan_ct.route_slot=0"|"set qnatter.wan_cm.route_slot=1"|"set qnatter.wan_qb.route_slot=2"|"commit qnatter")
+	"set qnatter.global.hot_reload=1"|"set qnatter.stun=stun"|add_list\ qnatter.stun.tcp_server=*|add_list\ qnatter.stun.udp_server=*|"-q delete qnatter.wan_ct.label"|"-q delete qnatter.wan_cm.label"|"-q delete qnatter.wan_qb.label"|"set qnatter.wan_ct.route_slot=0"|"set qnatter.wan_cm.route_slot=1"|"set qnatter.wan_qb.route_slot=2"|"commit qnatter")
 		exit 0
 		;;
 esac
@@ -72,6 +75,12 @@ QNATTER_UCI_BIN="$uci_bin" \
 for want in \
 	'-q get qnatter.global.hot_reload' \
 	'set qnatter.global.hot_reload=1' \
+	'-q get qnatter.stun' \
+	'set qnatter.stun=stun' \
+	'add_list qnatter.stun.tcp_server=fwa.lifesizecloud.com' \
+	'add_list qnatter.stun.tcp_server=turn.cloud-rtc.com:80' \
+	'add_list qnatter.stun.udp_server=stun.miwifi.com' \
+	'add_list qnatter.stun.udp_server=stun.douyucdn.cn:18000' \
 	'-q show qnatter' \
 	'-q delete qnatter.wan_ct.label' \
 	'-q delete qnatter.wan_cm.label' \

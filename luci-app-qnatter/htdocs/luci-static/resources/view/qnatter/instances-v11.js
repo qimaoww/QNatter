@@ -61,6 +61,114 @@ function addMissingValue(option, value, label) {
 	option.value(value, label || value);
 }
 
+function normalizeListValue(value) {
+	return String(value || '').replace(/^\s+|\s+$/g, '');
+}
+
+function asList(values) {
+	if (Array.isArray(values))
+		return values;
+
+	if (values == null || values === '')
+		return [];
+
+	return [ values ];
+}
+
+function uniqueListValues(values) {
+	var items = asList(values);
+	var seen = {};
+	var result = [];
+
+	for (var i = 0; i < items.length; i++) {
+		var value = normalizeListValue(items[i]);
+
+		if (!value || seen[value])
+			continue;
+
+		seen[value] = true;
+		result.push(value);
+	}
+
+	return result;
+}
+
+function duplicateListValue(values) {
+	var items = asList(values);
+	var seen = {};
+
+	for (var i = 0; i < items.length; i++) {
+		var value = normalizeListValue(items[i]);
+
+		if (!value)
+			continue;
+
+		if (seen[value])
+			return value;
+
+		seen[value] = true;
+	}
+
+	return '';
+}
+
+function listValueMap(values) {
+	var result = {};
+
+	for (var i = 0; i < values.length; i++)
+		result[values[i]] = values[i];
+
+	return result;
+}
+
+function filterListValues(candidates, selected) {
+	var selectedMap = listValueMap(selected);
+	var result = [];
+
+	for (var i = 0; i < candidates.length; i++)
+		if (!selectedMap[candidates[i]])
+			result.push(candidates[i]);
+
+	return result;
+}
+
+function stunCandidateValues(section_id) {
+	var protocol = uci.get('qnatter', section_id, 'protocol') === 'udp' ? 'udp' : 'tcp';
+	var option = protocol === 'udp' ? 'udp_server' : 'tcp_server';
+
+	return uniqueListValues(uci.get('qnatter', 'stun', option));
+}
+
+function refreshDynamicListChoices(widget, candidates) {
+	var available = filterListValues(candidates, uniqueListValues(widget.getValue()));
+
+	widget.clearChoices();
+	widget.addChoices(available, listValueMap(available));
+}
+
+function renderStunDynamicList(option, section_id, cfgvalue) {
+	var values = uniqueListValues(cfgvalue != null ? cfgvalue : option.default);
+	var candidates = stunCandidateValues(section_id);
+	var available = filterListValues(candidates, values);
+	var widget = new ui.DynamicList(values, listValueMap(available), {
+		id: option.cbid(section_id),
+		sort: available,
+		allowduplicates: false,
+		optional: option.optional || option.rmempty,
+		datatype: option.datatype,
+		placeholder: option.placeholder,
+		validate: option.getValidator(section_id),
+		disabled: (option.readonly != null) ? option.readonly : option.map.readonly
+	});
+	var node = widget.render();
+
+	node.addEventListener('cbi-dynlist-change', function() {
+		refreshDynamicListChoices(widget, candidates);
+	});
+
+	return node;
+}
+
 function cloudflareRecordLabel(record) {
 	var label = record.name || record.id || '';
 
@@ -341,7 +449,20 @@ return view.extend({
 		o.depends('qbittorrent_forward', '0');
 
 		o = hideInGrid(s.option(form.DynamicList, 'stun_server', _('STUN server')));
-		o.placeholder = 'stun.example.com:3478';
+		o.placeholder = _('Custom');
+		o.description = _('Use this only to override the global STUN list for this instance.');
+		o.rmempty = true;
+		o.renderWidget = function(section_id, option_index, cfgvalue) {
+			return renderStunDynamicList(this, section_id, cfgvalue);
+		};
+		o.validate = function(section_id) {
+			var duplicate = duplicateListValue(this.formvalue(section_id));
+
+			if (duplicate)
+				return _('Duplicate STUN server: %s').format(duplicate);
+
+			return true;
+		};
 
 		o = hideInGrid(s.option(form.Value, 'keepalive_interval', _('Keep-alive interval')));
 		o.datatype = 'uinteger';
@@ -456,7 +577,7 @@ return view.extend({
 			return E('div', { 'class': 'qnatter-page qnatter-form-page' + detectThemeClass() }, [
 				E('link', {
 					'rel': 'stylesheet',
-					'href': L.resource('qnatter/qnatter.css') + '?v=1.0.0-r39'
+					'href': L.resource('qnatter/qnatter.css') + '?v=1.0.0-r40'
 				}),
 				node
 			]);

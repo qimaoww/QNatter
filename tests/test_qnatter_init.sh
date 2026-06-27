@@ -153,6 +153,26 @@ config_set() {
 }
 
 config_list_foreach() {
+	local section="$1"
+	local option="$2"
+	local callback="$3"
+
+	case "$section:$option" in
+		stun:tcp_server)
+			"$callback" tcp-global-one.example.com
+			"$callback" tcp-global-one.example.com
+			"$callback" tcp-global-two.example.com:80
+			;;
+		stun:udp_server)
+			"$callback" udp-global-one.example.com
+			"$callback" udp-global-one.example.com
+			"$callback" udp-global-two.example.com:18000
+			;;
+		wan_qb:stun_server)
+			"$callback" tcp-instance-qb.example.com
+			"$callback" tcp-instance-qb.example.com
+			;;
+	esac
 	return 0
 }
 EOF
@@ -236,9 +256,20 @@ grep -Fqx 'wan_qb append command -t' "$procd_log" || fail "qBittorrent instance 
 grep -Fqx 'wan_qb append command 10.10.10.30' "$procd_log" || fail "qBittorrent instance did not pass target IP"
 grep -Fqx 'wan_qb append command -p' "$procd_log" || fail "qBittorrent instance did not pass target port flag"
 grep -Fqx 'wan_qb append command 51415' "$procd_log" || fail "qBittorrent instance did not pass target port"
+grep -Fqx 'wan_ct append command tcp-global-one.example.com' "$procd_log" || fail "TCP instance did not use global TCP STUN server"
+grep -Fqx 'wan_ct append command tcp-global-two.example.com:80' "$procd_log" || fail "TCP instance did not use second global TCP STUN server"
+grep -Fqx 'wan_cm append command udp-global-one.example.com' "$procd_log" || fail "UDP instance did not use global UDP STUN server"
+grep -Fqx 'wan_cm append command udp-global-two.example.com:18000' "$procd_log" || fail "UDP instance did not use second global UDP STUN server"
+grep -Fqx 'wan_qb append command tcp-instance-qb.example.com' "$procd_log" || fail "Instance STUN override was not used"
+[ "$(grep -Fxc 'wan_ct append command tcp-global-one.example.com' "$procd_log")" = "1" ] || fail "TCP global STUN duplicate was passed to QNatter"
+[ "$(grep -Fxc 'wan_cm append command udp-global-one.example.com' "$procd_log")" = "1" ] || fail "UDP global STUN duplicate was passed to QNatter"
+[ "$(grep -Fxc 'wan_qb append command tcp-instance-qb.example.com' "$procd_log")" = "1" ] || fail "Instance STUN duplicate was passed to QNatter"
 
 if grep -Fq 'wan_ct append command eth1.2' "$procd_log"; then
 	fail "Telecom instance received Mobile bind value"
+fi
+if grep -Fq 'wan_qb append command tcp-global-one.example.com' "$procd_log"; then
+	fail "Instance STUN override must not include global TCP STUN servers"
 fi
 
 if grep -Fq 'wan_cm append command pppoe-wan' "$procd_log"; then

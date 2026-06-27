@@ -59,6 +59,45 @@ qnatter_migrate_route_slot() {
 	fi
 }
 
+qnatter_add_default_stun_servers() {
+	"$QNATTER_UCI_BIN" set qnatter.stun='stun' >/dev/null 2>&1 || return 0
+	for server in \
+		fwa.lifesizecloud.com \
+		global.turn.twilio.com \
+		turn.cloudflare.com \
+		stun.nextcloud.com \
+		stun.freeswitch.org \
+		stun.voip.blackberry.com \
+		stun.sipnet.com \
+		stun.radiojar.com \
+		stun.sonetel.com \
+		stun.telnyx.com \
+		turn.cloud-rtc.com:80
+	do
+		"$QNATTER_UCI_BIN" add_list "qnatter.stun.tcp_server=${server}" >/dev/null 2>&1 || true
+	done
+	for server in \
+		stun.miwifi.com \
+		stun.chat.bilibili.com \
+		stun.hitv.com \
+		stun.cdnbye.com \
+		stun.douyucdn.cn:18000 \
+		fwa.lifesizecloud.com \
+		global.turn.twilio.com \
+		turn.cloudflare.com \
+		stun.nextcloud.com \
+		stun.freeswitch.org \
+		stun.voip.blackberry.com \
+		stun.sipnet.com \
+		stun.radiojar.com \
+		stun.sonetel.com \
+		stun.telnyx.com
+	do
+		"$QNATTER_UCI_BIN" add_list "qnatter.stun.udp_server=${server}" >/dev/null 2>&1 || true
+	done
+	changed=1
+}
+
 if [ ! -e "$QNATTER_UCI_CONFIG" ]; then
 	[ -r "$QNATTER_UCI_DEFAULT" ] || exit 0
 	cp "$QNATTER_UCI_DEFAULT" "$QNATTER_UCI_CONFIG"
@@ -69,6 +108,9 @@ if command -v "$QNATTER_UCI_BIN" >/dev/null 2>&1; then
 	QNATTER_ROUTE_USED_SLOTS=""
 	if ! "$QNATTER_UCI_BIN" -q get qnatter.global.hot_reload >/dev/null 2>&1; then
 		"$QNATTER_UCI_BIN" set qnatter.global.hot_reload='1' >/dev/null 2>&1 && changed=1
+	fi
+	if ! "$QNATTER_UCI_BIN" -q get qnatter.stun >/dev/null 2>&1; then
+		qnatter_add_default_stun_servers
 	fi
 	for section in $("$QNATTER_UCI_BIN" -q show qnatter 2>/dev/null | sed -n 's/^qnatter\.\([A-Za-z0-9_][A-Za-z0-9_]*\)=instance$/\1/p'); do
 		"$QNATTER_UCI_BIN" -q delete "qnatter.${section}.label" >/dev/null 2>&1 && changed=1

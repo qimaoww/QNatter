@@ -13,6 +13,30 @@ msgstr "状态"
 msgid "Logs"
 msgstr "日志"
 
+msgid "STUN"
+msgstr "STUN"
+
+msgid "Manage the default STUN server pools used by QNatter instances."
+msgstr "管理 QNatter 实例默认使用的 STUN 服务器池。"
+
+msgid "STUN servers"
+msgstr "STUN 服务器"
+
+msgid "TCP STUN servers"
+msgstr "TCP STUN 服务器"
+
+msgid "UDP STUN servers"
+msgstr "UDP STUN 服务器"
+
+msgid "Duplicate STUN server: %s"
+msgstr "STUN 服务器重复：%s"
+
+msgid "Custom"
+msgstr "自定义"
+
+msgid "One server per line."
+msgstr "每行一个服务器。"
+
 msgid "Global Settings"
 msgstr "全局设置"
 
@@ -123,6 +147,9 @@ msgstr "转发目标端口"
 
 msgid "STUN server"
 msgstr "STUN 服务器"
+
+msgid "Use this only to override the global STUN list for this instance."
+msgstr "仅在需要为此实例覆盖全局 STUN 列表时填写。"
 
 msgid "Keep-alive interval"
 msgstr "保活间隔"
