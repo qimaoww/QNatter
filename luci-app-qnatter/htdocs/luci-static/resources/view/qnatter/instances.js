@@ -450,7 +450,7 @@ return view.extend({
 
 		o = hideInGrid(s.option(form.DynamicList, 'stun_server', _('STUN server')));
 		o.placeholder = _('Custom');
-		o.description = _('Use this only to override the global STUN list for this instance.');
+		o.description = _('Try these instance STUN servers before the global list.');
 		o.rmempty = true;
 		o.renderWidget = function(section_id, option_index, cfgvalue) {
 			return renderStunDynamicList(this, section_id, cfgvalue);
@@ -577,7 +577,7 @@ return view.extend({
 			return E('div', { 'class': 'qnatter-page qnatter-form-page' + detectThemeClass() }, [
 				E('link', {
 					'rel': 'stylesheet',
-					'href': L.resource('qnatter/qnatter.css') + '?v=1.0.0-r40'
+					'href': L.resource('qnatter/qnatter.css') + '?v=1.1.0-r1'
 				}),
 				node
 			]);

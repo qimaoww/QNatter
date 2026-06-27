@@ -170,6 +170,7 @@ config_list_foreach() {
 			;;
 		wan_qb:stun_server)
 			"$callback" tcp-instance-qb.example.com
+			"$callback" tcp-global-one.example.com
 			"$callback" tcp-instance-qb.example.com
 			;;
 	esac
@@ -261,17 +262,16 @@ grep -Fqx 'wan_ct append command tcp-global-two.example.com:80' "$procd_log" || 
 grep -Fqx 'wan_cm append command udp-global-one.example.com' "$procd_log" || fail "UDP instance did not use global UDP STUN server"
 grep -Fqx 'wan_cm append command udp-global-two.example.com:18000' "$procd_log" || fail "UDP instance did not use second global UDP STUN server"
 grep -Fqx 'wan_qb append command tcp-instance-qb.example.com' "$procd_log" || fail "Instance STUN override was not used"
+grep -Fqx 'wan_qb append command tcp-global-one.example.com' "$procd_log" || fail "Instance STUN fallback did not include global TCP STUN server"
+grep -Fqx 'wan_qb append command tcp-global-two.example.com:80' "$procd_log" || fail "Instance STUN fallback did not include second global TCP STUN server"
 [ "$(grep -Fxc 'wan_ct append command tcp-global-one.example.com' "$procd_log")" = "1" ] || fail "TCP global STUN duplicate was passed to QNatter"
 [ "$(grep -Fxc 'wan_cm append command udp-global-one.example.com' "$procd_log")" = "1" ] || fail "UDP global STUN duplicate was passed to QNatter"
 [ "$(grep -Fxc 'wan_qb append command tcp-instance-qb.example.com' "$procd_log")" = "1" ] || fail "Instance STUN duplicate was passed to QNatter"
+[ "$(grep -Fxc 'wan_qb append command tcp-global-one.example.com' "$procd_log")" = "1" ] || fail "Instance STUN fallback duplicate was passed to QNatter"
 
 if grep -Fq 'wan_ct append command eth1.2' "$procd_log"; then
 	fail "Telecom instance received Mobile bind value"
 fi
-if grep -Fq 'wan_qb append command tcp-global-one.example.com' "$procd_log"; then
-	fail "Instance STUN override must not include global TCP STUN servers"
-fi
-
 if grep -Fq 'wan_cm append command pppoe-wan' "$procd_log"; then
 	fail "Mobile instance received Telecom bind value"
 fi

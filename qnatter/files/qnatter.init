@@ -306,16 +306,24 @@ qnatter_load_global_stun_servers() {
 qnatter_select_stun_servers() {
 	local protocol="$1"
 	local instance_servers="$2"
+	local selected=""
+	local server
 
 	if [ -n "$instance_servers" ]; then
-		printf '%s\n' "$instance_servers"
-		return 0
+		for server in $instance_servers; do
+			qnatter_append_stun_value selected "$server"
+		done
 	fi
 	if [ "$protocol" = "udp" ]; then
-		printf '%s\n' "${QNATTER_GLOBAL_UDP_STUN_SERVERS:-}"
+		for server in ${QNATTER_GLOBAL_UDP_STUN_SERVERS:-}; do
+			qnatter_append_stun_value selected "$server"
+		done
 	else
-		printf '%s\n' "${QNATTER_GLOBAL_TCP_STUN_SERVERS:-}"
+		for server in ${QNATTER_GLOBAL_TCP_STUN_SERVERS:-}; do
+			qnatter_append_stun_value selected "$server"
+		done
 	fi
+	printf '%s\n' "$selected"
 }
 
 qnatter_write_runtime_fingerprint() {

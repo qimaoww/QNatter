@@ -144,6 +144,8 @@ assert_no_path luci-app-qnatter/root/www/luci-static/qnatter
 
 assert_not_contains luci-app-qnatter/Makefile 'luci-compat'
 assert_not_contains luci-app-qnatter/Makefile 'LUCI_DEPENDS:=.*\+luci-compat'
+assert_contains luci-app-qnatter/Makefile '^PKG_VERSION:=1\.1\.0$'
+assert_contains luci-app-qnatter/Makefile '^PKG_RELEASE:=1$'
 assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances.js "^'require form';"
 assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances.js "^'require fs';"
 assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances.js "^'require rpc';"
@@ -151,9 +153,9 @@ assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/insta
 assert_not_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances.js 'cbi\('
 assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances.js 'qnatter-theme-aurora'
 assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances.js "L\\.resource\\('qnatter/qnatter\\.css'\\)"
-assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances.js "\\?v=1\\.0\\.0-r40"
-assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances-v11.js "\\?v=1\\.0\\.0-r40"
-assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/stun.js "\\?v=1\\.0\\.0-r40"
+assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances.js "\\?v=1\\.1\\.0-r1"
+assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances-v11.js "\\?v=1\\.1\\.0-r1"
+assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/stun.js "\\?v=1\\.1\\.0-r1"
 assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances.js 'hideInGrid'
 assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances.js 'option\.keylist'
 assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances.js 'indexOf\(String\(value\)\)'
@@ -190,7 +192,7 @@ assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/insta
 assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances.js "filterListValues"
 assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances.js "refreshDynamicListChoices"
 assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances.js "o\\.placeholder = _\\('Custom'\\)"
-assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances.js "Use this only to override the global STUN list"
+assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances.js "Try these instance STUN servers before the global list"
 assert_not_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances.js "custom_placeholder = 'host\\[:port\\]'"
 assert_not_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances.js "Select a candidate or enter a custom host\\[:port\\]"
 assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances.js "uniqueListValues"
@@ -235,7 +237,7 @@ assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/statu
 assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/status.js 'document\.hidden'
 assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/status.js 'setTimeout'
 assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/status.js 'updateCard'
-assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/status.js "\\?v=1\\.0\\.0-r40"
+assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/status.js "\\?v=1\\.1\\.0-r1"
 assert_not_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/status.js 'grid\.replaceChildren\.apply'
 assert_not_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/status.js "_\\('Group'\\)"
 assert_not_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/status.js 'item\.label'
@@ -244,7 +246,7 @@ assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/log.j
 assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/log.js "expect: \\{ '': \\{ instances: \\[\\] \\} \\}"
 assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/log.js "expect: \\{ '': \\{ log: '' \\} \\}"
 assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/log.js 'data\.log'
-assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/log.js "\\?v=1\\.0\\.0-r40"
+assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/log.js "\\?v=1\\.1\\.0-r1"
 assert_not_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/log.js 'label'
 assert_contains luci-app-qnatter/root/usr/share/luci/menu.d/luci-app-qnatter.json '"type"[[:space:]]*:[[:space:]]*"view"'
 assert_contains luci-app-qnatter/root/usr/share/luci/menu.d/luci-app-qnatter.json '"path"[[:space:]]*:[[:space:]]*"qnatter/instances-v11"'
@@ -409,8 +411,7 @@ assert_not_contains qnatter/Makefile '\+python3-light'
 assert_not_contains qnatter/Makefile 'qnatter.py'
 assert_not_contains qnatter/Makefile './files/QNatter'
 assert_not_contains qnatter/Makefile 'qnatter-python-wrapper.py'
-luci_release="$(sed -n 's/^PKG_RELEASE:=//p' "$ROOT/luci-app-qnatter/Makefile")"
-[ "$luci_release" -ge 26 ] || fail "luci-app-qnatter package release must increase when LuCI files change"
+assert_contains luci-app-qnatter/Makefile '^PKG_RELEASE:=1$'
 assert_contains luci-app-qnatter/Makefile 'LUCI_DEPENDS:=.*\+qnatter'
 assert_contains luci-app-qnatter/Makefile 'LUCI_DEPENDS:=.*\+luci-base'
 assert_contains luci-app-qnatter/Makefile 'LUCI_DEPENDS:=.*\+rpcd'
@@ -476,7 +477,7 @@ assert_po_translation 'Instance name already exists' '实例 ID 已存在'
 assert_po_translation 'Forward target port' '转发目标端口'
 assert_po_translation 'Custom' '自定义'
 assert_po_translation 'STUN server' 'STUN 服务器'
-assert_po_translation 'Use this only to override the global STUN list for this instance.' '仅在需要为此实例覆盖全局 STUN 列表时填写。'
+assert_po_translation 'Try these instance STUN servers before the global list.' '优先尝试这些实例 STUN 服务器，然后继续尝试全局列表。'
 assert_po_translation 'Cloudflare SRV' 'Cloudflare SRV'
 assert_po_translation 'Cloudflare API token/key' 'Cloudflare API Token/Key'
 assert_po_translation 'Read zones' '读取区域'

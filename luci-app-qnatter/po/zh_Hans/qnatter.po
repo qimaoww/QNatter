@@ -148,8 +148,8 @@ msgstr "转发目标端口"
 msgid "STUN server"
 msgstr "STUN 服务器"
 
-msgid "Use this only to override the global STUN list for this instance."
-msgstr "仅在需要为此实例覆盖全局 STUN 列表时填写。"
+msgid "Try these instance STUN servers before the global list."
+msgstr "优先尝试这些实例 STUN 服务器，然后继续尝试全局列表。"
 
 msgid "Keep-alive interval"
 msgstr "保活间隔"
