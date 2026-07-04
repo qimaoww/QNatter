@@ -68,4 +68,25 @@ define Package/qnatter/install
 	$(INSTALL_BIN) ./files/qnatter.hotplug $(1)/etc/hotplug.d/iface/95-qnatter
 endef
 
+define Package/qnatter/postinst
+#!/bin/sh
+root="$${IPKG_INSTROOT:-}"
+for path in \
+	/etc/config/qnatter.default \
+	/etc/hotplug.d/iface/95-qnatter \
+	/etc/init.d/qnatter \
+	/etc/uci-defaults/99-qnatter \
+	/usr/bin/qnatter-go \
+	/usr/share/qnatter/qnatter-common.sh \
+	/usr/share/qnatter/qnatter-notify \
+	/usr/share/qnatter/qnatter-qbittorrent.sh \
+	/usr/share/qnatter/qnatter-run
+do
+	[ -e "$$root$$path" ] || continue
+	chown root:root "$$root$$path" 2>/dev/null || true
+done
+chown -h root:root "$$root/usr/bin/QNatter" 2>/dev/null || true
+exit 0
+endef
+
 $(eval $(call BuildPackage,qnatter))
