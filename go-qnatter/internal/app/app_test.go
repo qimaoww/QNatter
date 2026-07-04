@@ -11,7 +11,9 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"syscall"
 	"testing"
+	"time"
 
 	"qnatter-openwrt/go-qnatter/internal/config"
 	"qnatter-openwrt/go-qnatter/internal/engine"
@@ -324,6 +326,18 @@ func TestLogNotifyScriptSkipsEmptyPath(t *testing.T) {
 
 	if stderr.Len() != 0 {
 		t.Fatalf("stderr = %q, want empty", stderr.String())
+	}
+}
+
+func TestLogRetrySummarizesMissingBindDevice(t *testing.T) {
+	var stderr bytes.Buffer
+	logRetry(&stderr, fmt.Errorf("%w: %w: full STUN failure detail", stun.ErrNoServerAvailable, syscall.ENODEV), 15*time.Second)
+
+	if !strings.Contains(stderr.String(), "[W] bind interface is unavailable; retrying in 15s") {
+		t.Fatalf("stderr = %q, missing summarized retry log", stderr.String())
+	}
+	if strings.Contains(stderr.String(), "full STUN failure detail") {
+		t.Fatalf("stderr = %q, should not include full STUN failure detail", stderr.String())
 	}
 }
 

@@ -16,11 +16,13 @@ procd_log="$tmp/procd.log"
 service_log="$tmp/service.log"
 trigger_log="$tmp/triggers.log"
 nft_log="$tmp/nft.log"
+ip_log="$tmp/ip.log"
 current_instance=""
 GLOBAL_ENABLED=1
 HOT_RELOAD=1
 BIND_VALUE="pppoe-wan"
 CF_TOKEN="token-one"
+WAN_ADDR="100.64.1.1"
 
 procd_open_instance() {
 	current_instance="$1"
@@ -122,7 +124,19 @@ config_list_foreach() {
 EOF
 
 cat > "$tmp/network.sh" <<'EOF'
-# Not needed by qnatter.init in tests.
+network_get_device() {
+	local __var="$1"
+	local network="$2"
+	local device=""
+
+	case "$network" in
+		wan) device="pppoe-wan" ;;
+		wan_cmcc) device="pppoe-wan-cmcc" ;;
+	esac
+
+	[ -n "$device" ] || return 1
+	eval "$__var=\$device"
+}
 EOF
 
 cat > "$tmp/nft" <<'EOF'
@@ -131,6 +145,19 @@ printf '%s\n' "$*" >> "$QNATTER_TEST_NFT_LOG"
 EOF
 chmod +x "$tmp/nft"
 
+cat > "$tmp/ip" <<'EOF'
+#!/bin/sh
+printf '%s\n' "$*" >> "$QNATTER_TEST_IP_LOG"
+case "$*" in
+	"-4 -o addr show dev pppoe-wan scope global")
+		printf '7: pppoe-wan inet %s/32 peer 100.64.0.1 scope global pppoe-wan\n' "$WAN_ADDR"
+		;;
+	"rule show")
+		;;
+esac
+EOF
+chmod +x "$tmp/ip"
+
 QNATTER_FUNCTIONS_SH="$tmp/functions.sh"
 QNATTER_NETWORK_SH="$tmp/network.sh"
 QNATTER_COMMON_SH="$ROOT/qnatter/files/qnatter-common.sh"
@@ -138,19 +165,44 @@ QNATTER_QBITTORRENT_SH="$ROOT/qnatter/files/qnatter-qbittorrent.sh"
 QNATTER_RUN_DIR="$tmp/run"
 QNATTER_LOG_DIR="$tmp/log"
 QNATTER_NFT_BIN="$tmp/nft"
+QNATTER_IP_BIN="$tmp/ip"
 QNATTER_TEST_NFT_LOG="$nft_log"
-export QNATTER_FUNCTIONS_SH QNATTER_NETWORK_SH QNATTER_COMMON_SH QNATTER_QBITTORRENT_SH QNATTER_RUN_DIR QNATTER_LOG_DIR QNATTER_NFT_BIN QNATTER_TEST_NFT_LOG
+QNATTER_TEST_IP_LOG="$ip_log"
+export QNATTER_FUNCTIONS_SH QNATTER_NETWORK_SH QNATTER_COMMON_SH QNATTER_QBITTORRENT_SH QNATTER_RUN_DIR QNATTER_LOG_DIR QNATTER_NFT_BIN QNATTER_IP_BIN QNATTER_TEST_NFT_LOG QNATTER_TEST_IP_LOG
 INSTANCES="wan_ct"
-export GLOBAL_ENABLED HOT_RELOAD BIND_VALUE CF_TOKEN INSTANCES
+export GLOBAL_ENABLED HOT_RELOAD BIND_VALUE CF_TOKEN INSTANCES WAN_ADDR
 
 . "$ROOT/qnatter/files/qnatter.init"
 
 start_service
 [ -s "$tmp/run/wan_ct.runtime" ] || fail "start_service did not write runtime fingerprint"
+grep -Fqx 'bind_ipv4=100.64.1.1' "$tmp/run/wan_ct.runtime" || fail "runtime fingerprint missing current bind IPv4"
 grep -Fq "CLOUDFLARE_API_TOKEN='token-one'" "$tmp/run/wan_ct.env" || fail "initial notify env missing token"
 grep -Fqx 'flush chain ip qnatter qnatter_dnat' "$nft_log" || fail "initial start did not flush stale DNAT rules"
 grep -Fqx 'flush chain ip qnatter qnatter_snat' "$nft_log" || fail "initial start did not flush stale SNAT rules"
 grep -Fqx 'flush chain ip qnatter qnatter_mark' "$nft_log" || fail "initial start did not flush stale mark rules"
+
+# Test: same config but different interface address must produce a different
+# runtime fingerprint so WAN redial reloads the instance.
+mkdir -p "$tmp/addr-old" "$tmp/addr-new"
+WAN_ADDR="100.64.1.1"
+QNATTER_PREPARE_ONLY=1
+QNATTER_RUNTIME_DIR="$tmp/addr-old"
+QNATTER_RUNTIME_LIST="$tmp/addr-old/.runtime-instances"
+QNATTER_ROUTE_SLOT=0
+: > "$QNATTER_RUNTIME_LIST"
+qnatter_start_instance wan_ct
+WAN_ADDR="100.64.2.2"
+QNATTER_RUNTIME_DIR="$tmp/addr-new"
+QNATTER_RUNTIME_LIST="$tmp/addr-new/.runtime-instances"
+QNATTER_ROUTE_SLOT=0
+: > "$QNATTER_RUNTIME_LIST"
+qnatter_start_instance wan_ct
+unset QNATTER_PREPARE_ONLY QNATTER_RUNTIME_DIR QNATTER_RUNTIME_LIST QNATTER_ROUTE_SLOT QNATTER_ROUTE_MARK QNATTER_ROUTE_TABLE QNATTER_ROUTE_PRIORITY
+if cmp -s "$tmp/addr-old/wan_ct.runtime" "$tmp/addr-new/wan_ct.runtime"; then
+	fail "runtime fingerprint must change when bind IPv4 changes"
+fi
+grep -Fqx 'bind_ipv4=100.64.2.2' "$tmp/addr-new/wan_ct.runtime" || fail "updated runtime fingerprint missing new bind IPv4"
 
 # Test: notify-only change (e.g. CF token) re-declares instances via procd, no flush
 : > "$service_log"

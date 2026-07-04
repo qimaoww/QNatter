@@ -7,7 +7,9 @@ import (
 	"io"
 	"net"
 	"net/netip"
+	"os"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 )
@@ -119,6 +121,125 @@ func TestClientGetMappingReturnsTypedErrorWhenAllServersUnavailable(t *testing.T
 	}
 }
 
+func TestClientResetsSourceWhenAllServersFailAfterCachedMapping(t *testing.T) {
+	txid := [12]byte{'N', 'A', 'T', 'R', 6, 6, 6, 6, 6, 6, 6, 6}
+	initial := netip.MustParseAddrPort("0.0.0.0:0")
+	cached := netip.MustParseAddrPort("100.64.107.104:36787")
+	transport := &fakeTransport{
+		errs: []error{
+			nil,
+			errors.New("first timeout"),
+			errors.New("second timeout"),
+		},
+		inner:    cached,
+		response: mappedResponse(txid, netip.MustParseAddrPort("121.9.143.109:9628")),
+	}
+	client := Client{
+		Servers: []Server{
+			{Host: "first.example", Port: 3478},
+			{Host: "second.example", Port: 3478},
+		},
+		Source: initial,
+		TxID:   fixedTxID(txid),
+		Do:     transport.Exchange,
+	}
+
+	if _, err := client.GetMapping(context.Background()); err != nil {
+		t.Fatalf("initial GetMapping returned error: %v", err)
+	}
+	if client.Source != cached {
+		t.Fatalf("client source after initial mapping = %s, want cached source %s", client.Source, cached)
+	}
+
+	_, err := client.GetMapping(context.Background())
+	if !errors.Is(err, ErrNoServerAvailable) {
+		t.Fatalf("GetMapping error = %v, want ErrNoServerAvailable", err)
+	}
+	if client.Source != initial {
+		t.Fatalf("client source after failed retry = %s, want reset source %s", client.Source, initial)
+	}
+	if transport.sources[0] != initial || transport.sources[1] != cached || transport.sources[2] != cached {
+		t.Fatalf("sources = %#v, want initial then cached cached", transport.sources)
+	}
+}
+
+func TestClientResetsSourceWhenCachedLocalAddressDisappears(t *testing.T) {
+	txid := [12]byte{'N', 'A', 'T', 'R', 7, 7, 7, 7, 7, 7, 7, 7}
+	initial := netip.MustParseAddrPort("0.0.0.0:0")
+	cached := netip.MustParseAddrPort("100.64.232.200:40713")
+	localAddressErr := os.NewSyscallError("bind", syscall.EADDRNOTAVAIL)
+	transport := &fakeTransport{
+		errs: []error{
+			nil,
+			localAddressErr,
+			localAddressErr,
+		},
+		inner:    cached,
+		response: mappedResponse(txid, netip.MustParseAddrPort("121.9.141.13:2465")),
+	}
+	client := Client{
+		Servers: []Server{
+			{Host: "first.example", Port: 3478},
+			{Host: "second.example", Port: 3478},
+		},
+		Source: initial,
+		TxID:   fixedTxID(txid),
+		Do:     transport.Exchange,
+	}
+
+	if _, err := client.GetMapping(context.Background()); err != nil {
+		t.Fatalf("initial GetMapping returned error: %v", err)
+	}
+	if client.Source != cached {
+		t.Fatalf("client source after initial mapping = %s, want cached source %s", client.Source, cached)
+	}
+
+	_, err := client.GetMapping(context.Background())
+	if !errors.Is(err, ErrNoServerAvailable) {
+		t.Fatalf("GetMapping error = %v, want ErrNoServerAvailable", err)
+	}
+	if !errors.Is(err, syscall.EADDRNOTAVAIL) {
+		t.Fatalf("GetMapping error = %v, want EADDRNOTAVAIL", err)
+	}
+	if client.Source != initial {
+		t.Fatalf("client source after local address error = %s, want reset source %s", client.Source, initial)
+	}
+	if len(transport.sources) != 3 {
+		t.Fatalf("sources = %#v, want three attempts", transport.sources)
+	}
+	if transport.sources[0] != initial || transport.sources[1] != cached || transport.sources[2] != cached {
+		t.Fatalf("sources = %#v, want initial then cached cached", transport.sources)
+	}
+}
+
+func TestClientReportsUnavailableBindDevice(t *testing.T) {
+	txid := [12]byte{'N', 'A', 'T', 'R', 8, 8, 8, 8, 8, 8, 8, 8}
+	deviceErr := os.NewSyscallError("connect", syscall.ENODEV)
+	transport := &fakeTransport{
+		errs: []error{
+			deviceErr,
+			deviceErr,
+		},
+	}
+	client := Client{
+		Servers: []Server{
+			{Host: "first.example", Port: 3478},
+			{Host: "second.example", Port: 3478},
+		},
+		Source: netip.MustParseAddrPort("0.0.0.0:0"),
+		TxID:   fixedTxID(txid),
+		Do:     transport.Exchange,
+	}
+
+	_, err := client.GetMapping(context.Background())
+	if !errors.Is(err, ErrNoServerAvailable) {
+		t.Fatalf("GetMapping error = %v, want ErrNoServerAvailable", err)
+	}
+	if !errors.Is(err, syscall.ENODEV) {
+		t.Fatalf("GetMapping error = %v, want ENODEV", err)
+	}
+}
+
 func TestNetworkTransportExchangesTCP(t *testing.T) {
 	txid := [12]byte{'N', 'A', 'T', 'R', 1, 1, 1, 1, 1, 1, 1, 1}
 	server, stop := startLocalTCPStun(t, txid, netip.MustParseAddrPort("203.0.113.20:53000"))
@@ -198,6 +319,7 @@ func TestNetworkTransportExchangesUDP(t *testing.T) {
 
 type fakeTransport struct {
 	servers  []Server
+	sources  []netip.AddrPort
 	requests [][]byte
 	errs     []error
 	inner    netip.AddrPort
@@ -206,6 +328,7 @@ type fakeTransport struct {
 
 func (t *fakeTransport) Exchange(ctx context.Context, network string, server Server, source netip.AddrPort, request []byte) (netip.AddrPort, []byte, error) {
 	t.servers = append(t.servers, server)
+	t.sources = append(t.sources, source)
 	t.requests = append(t.requests, append([]byte(nil), request...))
 	if len(t.errs) > 0 {
 		err := t.errs[0]

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"syscall"
 	"time"
 
 	"qnatter-openwrt/go-qnatter/internal/check"
@@ -149,61 +150,72 @@ func runEngine(ctx context.Context, cfg config.Config) error {
 }
 
 func runEngineWithLog(ctx context.Context, cfg config.Config, log io.Writer) error {
-	stunClient, err := engine.NewSTUNClientFromConfig(cfg)
-	if err != nil {
-		return err
-	}
 	bind, err := engine.BindFromConfig(cfg)
 	if err != nil {
 		return err
 	}
 	lanPortChecker := portcheck.Checker{}
 	wanPortChecker := portcheck.Checker{Interface: bind.Interface}
-	deps := engine.Dependencies{
-		STUN: stunClient,
-		NewKeepAlive: func(mapping stun.Mapping) (engine.KeepAlive, error) {
-			return engine.NewKeepAliveFromConfig(cfg, mapping)
-		},
-		NewForwarder: forward.NewForwarder,
-		Notify: func(mapping status.Mapping) error {
-			logNotifyScript(log, cfg.NotifyPath)
-			result, err := notify.Run(notify.Options{
-				Instance:   os.Getenv("QNATTER_INSTANCE"),
-				StatusFile: os.Getenv("QNATTER_STATUS_FILE"),
-				UserScript: cfg.NotifyPath,
-			}, mapping)
-			logNotifyResult(log, result)
-			return err
-		},
-		OnMapped: func(result engine.Result) {
-			logMapping(log, cfg, result)
-		},
-		OnUPnPError: func(operation string, err error) {
-			logUPnPError(log, operation, err)
-		},
-		PortCheck:    lanPortChecker,
-		InitialCheck: splitPortChecker{lan: lanPortChecker, wan: wanPortChecker},
-	}
-	if cfg.UPnP {
-		logUPnPScanning(log)
-		upnpMapper, err := engine.NewUPnPMapperFromConfig(cfg)
+	return engine.RunWithRetry(ctx, cfg, func(ctx context.Context) error {
+		stunClient, err := engine.NewSTUNClientFromConfig(cfg)
 		if err != nil {
 			return err
 		}
-		if client, ok := upnpMapper.(*engine.UPnPClient); ok {
-			client.OnFoundRouter = func(ip string) {
-				logUPnPFoundRouter(log, ip)
-			}
+		deps := engine.Dependencies{
+			STUN: stunClient,
+			NewKeepAlive: func(mapping stun.Mapping) (engine.KeepAlive, error) {
+				return engine.NewKeepAliveFromConfig(cfg, mapping)
+			},
+			NewForwarder: forward.NewForwarder,
+			Notify: func(mapping status.Mapping) error {
+				logNotifyScript(log, cfg.NotifyPath)
+				result, err := notify.Run(notify.Options{
+					Instance:   os.Getenv("QNATTER_INSTANCE"),
+					StatusFile: os.Getenv("QNATTER_STATUS_FILE"),
+					UserScript: cfg.NotifyPath,
+				}, mapping)
+				logNotifyResult(log, result)
+				return err
+			},
+			OnMapped: func(result engine.Result) {
+				logMapping(log, cfg, result)
+			},
+			OnUPnPError: func(operation string, err error) {
+				logUPnPError(log, operation, err)
+			},
+			PortCheck:    lanPortChecker,
+			InitialCheck: splitPortChecker{lan: lanPortChecker, wan: wanPortChecker},
 		}
-		deps.UPnP = upnpMapper
-	}
-	return engine.RunWithRetry(ctx, cfg, func(ctx context.Context) error {
+		if cfg.UPnP {
+			logUPnPScanning(log)
+			upnpMapper, err := engine.NewUPnPMapperFromConfig(cfg)
+			if err != nil {
+				return err
+			}
+			if client, ok := upnpMapper.(*engine.UPnPClient); ok {
+				client.OnFoundRouter = func(ip string) {
+					logUPnPFoundRouter(log, ip)
+				}
+			}
+			deps.UPnP = upnpMapper
+		}
 		return engine.RunLoop(ctx, cfg, deps, engine.LoopOptions{})
 	}, engine.RetryOptions{
 		OnRetry: func(err error, delay time.Duration) {
-			logLine(log, "W", "%v; retrying in %s", err, delay)
+			logRetry(log, err, delay)
 		},
 	})
+}
+
+func logRetry(w io.Writer, err error, delay time.Duration) {
+	switch {
+	case errors.Is(err, syscall.ENODEV):
+		logLine(w, "W", "bind interface is unavailable; retrying in %s", delay)
+	case errors.Is(err, syscall.EADDRNOTAVAIL):
+		logLine(w, "W", "local address is unavailable; retrying in %s", delay)
+	default:
+		logLine(w, "W", "%v; retrying in %s", err, delay)
+	}
 }
 
 func logNotifyScript(w io.Writer, path string) {

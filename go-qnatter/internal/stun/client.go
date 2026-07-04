@@ -9,6 +9,7 @@ import (
 	"net/netip"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 
 	"qnatter-openwrt/go-qnatter/internal/socketopts"
@@ -36,15 +37,22 @@ type Client struct {
 	TxID      func() ([12]byte, error)
 	Do        ExchangeFunc
 	Transport NetworkTransport
+
+	initialSource netip.AddrPort
 }
 
 func (c *Client) GetMapping(ctx context.Context) (Mapping, error) {
 	if len(c.Servers) == 0 {
 		return Mapping{}, errors.New("STUN server list is empty")
 	}
+	if !c.initialSource.IsValid() {
+		c.initialSource = c.Source
+	}
 
 	attempts := len(c.Servers)
 	failures := make([]string, 0, attempts)
+	localAddressUnavailable := false
+	localDeviceUnavailable := false
 	for i := 0; i < attempts; i++ {
 		txid, err := c.transactionID()
 		if err != nil {
@@ -58,6 +66,12 @@ func (c *Client) GetMapping(ctx context.Context) (Mapping, error) {
 
 		inner, response, err := c.exchange()(ctx, network, server, c.Source, BuildBindingRequest(txid))
 		if err != nil {
+			if errors.Is(err, syscall.EADDRNOTAVAIL) {
+				localAddressUnavailable = true
+			}
+			if errors.Is(err, syscall.ENODEV) {
+				localDeviceUnavailable = true
+			}
 			failures = append(failures, fmt.Sprintf("%s://%s is unavailable: %v", network, server.Address(), err))
 			c.rotateServer()
 			continue
@@ -74,6 +88,13 @@ func (c *Client) GetMapping(ctx context.Context) (Mapping, error) {
 
 	if len(failures) == 0 {
 		return Mapping{}, ErrNoServerAvailable
+	}
+	c.Source = c.initialSource
+	if localAddressUnavailable {
+		return Mapping{}, fmt.Errorf("%w: %w: %s", ErrNoServerAvailable, syscall.EADDRNOTAVAIL, strings.Join(failures, "; "))
+	}
+	if localDeviceUnavailable {
+		return Mapping{}, fmt.Errorf("%w: %w: %s", ErrNoServerAvailable, syscall.ENODEV, strings.Join(failures, "; "))
 	}
 	return Mapping{}, fmt.Errorf("%w: %s", ErrNoServerAvailable, strings.Join(failures, "; "))
 }

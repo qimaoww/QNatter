@@ -130,14 +130,13 @@ func TestRunLoopRechecksMappingAndStopsWhenOuterAddressChanges(t *testing.T) {
 	}
 }
 
-func TestRunLoopSkipsSTUNRecheckWhenTCPPortCheckIsOpen(t *testing.T) {
+func TestRunLoopRechecksTCPMappingEvenWhenPortCheckIsOpen(t *testing.T) {
 	events := []string{}
 	ticks := make(chan time.Time)
-	ctx, cancel := context.WithCancel(context.Background())
 
 	errCh := make(chan error, 1)
 	go func() {
-		errCh <- RunLoop(ctx, config.Config{ForwardMethod: "none"}, Dependencies{
+		errCh <- RunLoop(context.Background(), config.Config{ForwardMethod: "none"}, Dependencies{
 			STUN: &fakeSTUN{
 				mappings: []stun.Mapping{
 					{
@@ -147,6 +146,10 @@ func TestRunLoopSkipsSTUNRecheckWhenTCPPortCheckIsOpen(t *testing.T) {
 					{
 						Inner: netip.MustParseAddrPort("10.10.10.3:41000"),
 						Outer: netip.MustParseAddrPort("203.0.113.11:62010"),
+					},
+					{
+						Inner: netip.MustParseAddrPort("10.10.10.3:41000"),
+						Outer: netip.MustParseAddrPort("203.0.113.11:62011"),
 					},
 				},
 				events: &events,
@@ -163,10 +166,9 @@ func TestRunLoopSkipsSTUNRecheckWhenTCPPortCheckIsOpen(t *testing.T) {
 	}()
 
 	ticks <- time.Now()
-	cancel()
 
-	if err := <-errCh; err != nil {
-		t.Fatalf("RunLoop returned error: %v", err)
+	if err := <-errCh; !errors.Is(err, ErrMappingChanged) {
+		t.Fatalf("RunLoop error = %v, want ErrMappingChanged", err)
 	}
 	wantEvents := []string{
 		"stun",
@@ -174,7 +176,7 @@ func TestRunLoopSkipsSTUNRecheckWhenTCPPortCheckIsOpen(t *testing.T) {
 		"stun",
 		"forward",
 		"keepalive",
-		"portcheck",
+		"stun",
 		"forward-stop",
 		"keepalive-close",
 	}
@@ -272,6 +274,58 @@ func TestRunLoopReportsLocalAddressChange(t *testing.T) {
 		"stun",
 		"forward",
 		"keepalive",
+		"forward-stop",
+		"keepalive-close",
+	}
+	if !reflect.DeepEqual(events, wantEvents) {
+		t.Fatalf("events = %#v, want %#v", events, wantEvents)
+	}
+}
+
+func TestRunLoopReportsLocalAddressChangeFromSTUNRecheck(t *testing.T) {
+	events := []string{}
+	ticks := make(chan time.Time)
+
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- RunLoop(context.Background(), config.Config{UDP: true, ForwardMethod: "none"}, Dependencies{
+			STUN: &fakeSTUN{
+				mappings: []stun.Mapping{
+					{
+						Inner: netip.MustParseAddrPort("100.64.232.200:40713"),
+						Outer: netip.MustParseAddrPort("121.9.141.13:2465"),
+					},
+					{
+						Inner: netip.MustParseAddrPort("100.64.232.200:40713"),
+						Outer: netip.MustParseAddrPort("121.9.141.13:2465"),
+					},
+				},
+				errs: []error{
+					nil,
+					nil,
+					os.NewSyscallError("bind", syscall.EADDRNOTAVAIL),
+				},
+				events: &events,
+			},
+			KeepAlive: &fakeKeepAlive{events: &events},
+			NewForwarder: func(method string) (forward.Forwarder, error) {
+				return &fakeForwarder{events: &events}, nil
+			},
+		}, LoopOptions{Ticks: ticks, RecheckEvery: 1})
+	}()
+
+	ticks <- time.Now()
+
+	if err := <-errCh; !errors.Is(err, ErrLocalAddressChanged) {
+		t.Fatalf("RunLoop error = %v, want ErrLocalAddressChanged", err)
+	}
+	wantEvents := []string{
+		"stun",
+		"keepalive",
+		"stun",
+		"forward",
+		"keepalive",
+		"stun",
 		"forward-stop",
 		"keepalive-close",
 	}

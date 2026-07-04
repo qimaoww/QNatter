@@ -296,13 +296,10 @@ grep -Fq "CLOUDFLARE_SRV_ENABLED='0'" "$tmp/run/wan_cm.env" || fail "Mobile noti
 grep -Fq "QNATTER_FIREWALL_DEST='lan'" "$tmp/run/wan_qb.env" || fail "qBittorrent notify env missing firewall destination zone"
 
 grep -Fqx 'reload qnatter' "$trigger_log" || fail "config reload trigger missing"
-grep -Fqx 'interface interface.* wan3 /etc/init.d/qnatter reload' "$trigger_log" || fail "unbound instance network trigger missing"
-if grep -Fqx 'interface interface.* wan /etc/init.d/qnatter reload' "$trigger_log"; then
-	fail "bound wan instance must not register network trigger"
-fi
-if grep -Fqx 'interface interface.* wan2 /etc/init.d/qnatter reload' "$trigger_log"; then
-	fail "bound wan2 instance must not register network trigger"
-fi
+grep -Fqx 'interface interface.*.up wan /etc/init.d/qnatter reload' "$trigger_log" || fail "bound wan instance network trigger missing"
+grep -Fqx 'interface interface.*.up wan2 /etc/init.d/qnatter reload' "$trigger_log" || fail "bound wan2 instance network trigger missing"
+grep -Fqx 'interface interface.*.up wan3 /etc/init.d/qnatter reload' "$trigger_log" || fail "unbound instance network trigger missing"
+[ "$(grep -Fxc 'interface interface.*.up wan /etc/init.d/qnatter reload' "$trigger_log")" = "1" ] || fail "wan trigger must be registered once"
 if grep -Fq ' lan ' "$trigger_log"; then
 	fail "disabled instance must not register interface trigger"
 fi

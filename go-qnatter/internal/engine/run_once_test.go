@@ -358,12 +358,20 @@ func TestRunOnceClosesSessionResources(t *testing.T) {
 
 type fakeSTUN struct {
 	mappings []stun.Mapping
+	errs     []error
 	events   *[]string
 }
 
 func (s *fakeSTUN) GetMapping(context.Context) (stun.Mapping, error) {
 	if s.events != nil {
 		*s.events = append(*s.events, "stun")
+	}
+	if len(s.errs) > 0 {
+		err := s.errs[0]
+		s.errs = s.errs[1:]
+		if err != nil {
+			return stun.Mapping{}, err
+		}
 	}
 	if len(s.mappings) == 0 {
 		return stun.Mapping{}, errNoSTUNMapping
