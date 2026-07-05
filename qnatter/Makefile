@@ -4,7 +4,7 @@ include $(TOPDIR)/rules.mk
 
 PKG_NAME:=qnatter
 PKG_VERSION:=2.2.1
-PKG_RELEASE:=31
+PKG_RELEASE:=40
 
 PKG_SOURCE:=$(PKG_NAME)-$(PKG_VERSION).tar.gz
 PKG_SOURCE_PROTO:=git

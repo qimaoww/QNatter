@@ -28,6 +28,15 @@ var callRenameInstance = rpc.declare({
 	expect: { '': { ok: false } }
 });
 
+var callCompletionWebhookTest = rpc.declare({
+	object: 'luci.qnatter',
+	method: 'completion_webhook_test',
+	params: [ 'section', 'url', 'method', 'headers', 'body', 'success', 'disable_success_check', 'timeout' ],
+	expect: { '': {} }
+});
+
+var DEFAULT_WEBHOOK_BODY = '{"event":"mapped","instance":"#{instance}","protocol":"#{protocol}","inner_ip":"#{inner_ip}","inner_port":#{inner_port},"outer_ip":"#{outer_ip}","outer_port":#{outer_port}}';
+
 function detectThemeClass() {
 	var text = [
 		document.documentElement.className || '',
@@ -179,6 +188,251 @@ function cloudflareRecordLabel(record) {
 		label += ':' + record.port;
 
 	return label || record.id;
+}
+
+function automationId(section_id, option) {
+	return 'qnatter-automation-' + String(section_id || 'default').replace(/[^A-Za-z0-9_-]/g, '_') + '-' + option;
+}
+
+function automationConfig(section_id, option, fallback) {
+	var value = uci.get('qnatter', section_id, option);
+
+	return value != null ? value : fallback;
+}
+
+function automationChecked(section_id, option, fallback) {
+	return automationConfig(section_id, option, fallback || '0') === '1';
+}
+
+function automationNode(section_id, option) {
+	return document.getElementById(automationId(section_id, option));
+}
+
+function automationValue(section_id, option) {
+	var node = automationNode(section_id, option);
+
+	if (!node)
+		return '';
+
+	if (node.type === 'checkbox')
+		return node.checked ? '1' : '0';
+
+	return node.value || '';
+}
+
+function writeAutomationField(section_id, option, value) {
+	value = value == null ? '' : String(value);
+
+	if (value === '')
+		uci.unset('qnatter', section_id, option);
+	else
+		uci.set('qnatter', section_id, option, value);
+}
+
+function writeAutomationFlag(section_id, option, value) {
+	uci.set('qnatter', section_id, option, value === '1' ? '1' : '0');
+}
+
+function automationCheckbox(section_id, option, label, checked) {
+	var id = automationId(section_id, option);
+
+	return E('label', { 'class': 'qnatter-automation-checkbox', 'for': id }, [
+		E('input', {
+			'id': id,
+			'type': 'checkbox',
+			'checked': checked ? '' : null
+		}),
+		E('span', {}, [ label ])
+	]);
+}
+
+function automationInput(section_id, option, fallback, placeholder, type) {
+	return E('input', {
+		'id': automationId(section_id, option),
+		'class': 'qnatter-automation-input',
+		'type': type || 'text',
+		'value': automationConfig(section_id, option, fallback || ''),
+		'placeholder': placeholder || ''
+	});
+}
+
+function automationTextarea(section_id, option, fallback, placeholder, rows, monospace) {
+	return E('textarea', {
+		'id': automationId(section_id, option),
+		'class': 'qnatter-automation-textarea' + (monospace ? ' qnatter-automation-monospace' : ''),
+		'rows': rows || 6,
+		'placeholder': placeholder || ''
+	}, [ automationConfig(section_id, option, fallback || '') ]);
+}
+
+function automationSelect(section_id, option, fallback, choices) {
+	var value = automationConfig(section_id, option, fallback || '');
+	var nodes = [];
+
+	for (var i = 0; i < choices.length; i++)
+		nodes.push(E('option', {
+			'value': choices[i][0],
+			'selected': value === choices[i][0] ? '' : null
+		}, [ choices[i][1] ]));
+
+	return E('select', {
+		'id': automationId(section_id, option),
+		'class': 'qnatter-automation-input qnatter-automation-select'
+	}, nodes);
+}
+
+function automationRow(section_id, option, label, control, extraClass, visibleWhen) {
+	return E('div', {
+		'class': 'qnatter-automation-row' + (extraClass ? ' ' + extraClass : ''),
+		'data-show-when': visibleWhen || null
+	}, [
+		E('label', { 'class': 'qnatter-automation-label', 'for': automationId(section_id, option) }, [ label ]),
+		E('div', { 'class': 'qnatter-automation-control' }, [ control ])
+	]);
+}
+
+function setAutomationVisible(nodes, visible) {
+	for (var i = 0; i < nodes.length; i++)
+		nodes[i].classList.toggle('is-hidden', !visible);
+}
+
+function setupAutomationPanel(section_id, root) {
+	var scriptToggle = automationNode(section_id, 'completion_script_enabled');
+	var webhookToggle = automationNode(section_id, 'completion_webhook_enabled');
+	var successCheck = automationNode(section_id, 'completion_webhook_success_check');
+	var testButton = root.querySelector('[data-action="webhook-test"]');
+
+	function updateVisibility() {
+		var scriptEnabled = scriptToggle && scriptToggle.checked;
+		var webhookEnabled = webhookToggle && webhookToggle.checked;
+		var successEnabled = successCheck && successCheck.checked;
+
+		setAutomationVisible(root.querySelectorAll('[data-show-when="script"]'), scriptEnabled);
+		setAutomationVisible(root.querySelectorAll('[data-show-when="webhook"]'), webhookEnabled);
+		setAutomationVisible(root.querySelectorAll('[data-show-when="webhook-success"]'), webhookEnabled && successEnabled);
+	}
+
+	root.addEventListener('change', updateVisibility);
+	updateVisibility();
+
+	if (testButton) {
+		testButton.addEventListener('click', function(ev) {
+			ev.preventDefault();
+			testButton.disabled = true;
+			testButton.classList.add('spinning');
+
+			callCompletionWebhookTest(
+				section_id,
+				automationValue(section_id, 'completion_webhook_url'),
+				automationValue(section_id, 'completion_webhook_method'),
+				automationValue(section_id, 'completion_webhook_headers'),
+				automationValue(section_id, 'completion_webhook_body'),
+				automationValue(section_id, 'completion_webhook_success'),
+				automationValue(section_id, 'completion_webhook_success_check') === '1' ? '0' : '1',
+				automationValue(section_id, 'completion_webhook_timeout')
+			).then(function(result) {
+				var ok = result && result.ok;
+				var text = ok
+					? _('Webhook test succeeded') + (result.response ? ': ' + result.response : '')
+					: _('Webhook test failed') + (result && result.error ? ': ' + result.error : '');
+
+				ui.addNotification(null, E('p', [ text ]), ok ? 'info' : 'danger');
+			}).catch(function(err) {
+				ui.addNotification(null, E('p', [ _('Webhook test failed') + ': ' + err.message ]), 'danger');
+			}).finally(function() {
+				testButton.disabled = false;
+				testButton.classList.remove('spinning');
+			});
+		});
+	}
+}
+
+function renderAutomationPanel(section_id) {
+	var successCheck = automationConfig(section_id, 'completion_webhook_disable_success_check', '1') !== '1';
+	var root = E('div', { 'class': 'qnatter-automation-panel' }, [
+		E('div', { 'class': 'qnatter-automation-header' }, [
+			E('div', { 'class': 'qnatter-automation-title' }, [ _('Custom triggers') ])
+		]),
+		E('div', { 'class': 'qnatter-automation-section' }, [
+			E('div', { 'class': 'qnatter-automation-section-head' }, [
+				E('strong', {}, [ _('Custom script') ]),
+				automationCheckbox(section_id, 'completion_script_enabled', _('Enable'), automationChecked(section_id, 'completion_script_enabled', '0'))
+			]),
+			automationRow(
+				section_id,
+				'completion_script_inline',
+				_('Script content'),
+				automationTextarea(section_id, 'completion_script_inline', '', '', 12, true),
+				'qnatter-automation-row-wide',
+				'script'
+			)
+		]),
+		E('div', { 'class': 'qnatter-automation-section' }, [
+			E('div', { 'class': 'qnatter-automation-section-head' }, [
+				E('strong', {}, [ _('Webhook') ]),
+				automationCheckbox(section_id, 'completion_webhook_enabled', _('Enable'), automationChecked(section_id, 'completion_webhook_enabled', '0')),
+				E('button', {
+					'class': 'cbi-button cbi-button-neutral qnatter-automation-test',
+					'data-action': 'webhook-test'
+				}, [ _('Webhook manual trigger test') ])
+			]),
+			E('div', { 'class': 'qnatter-automation-webhook-fields', 'data-show-when': 'webhook' }, [
+				E('div', { 'class': 'qnatter-automation-grid' }, [
+					automationRow(section_id, 'completion_webhook_method', _('Request method'),
+						automationSelect(section_id, 'completion_webhook_method', 'POST', [
+							[ 'POST', 'POST' ],
+							[ 'GET', 'GET' ],
+							[ 'PUT', 'PUT' ],
+							[ 'PATCH', 'PATCH' ],
+							[ 'DELETE', 'DELETE' ]
+						]), 'qnatter-automation-row-stack'),
+					automationRow(section_id, 'completion_webhook_timeout', _('Timeout'),
+						automationInput(section_id, 'completion_webhook_timeout', '8', '8', 'number'), 'qnatter-automation-row-stack'),
+					automationRow(section_id, 'completion_webhook_skip_unchanged', _('Trigger rule'),
+						automationCheckbox(section_id, 'completion_webhook_skip_unchanged', _('Only when changed'), automationChecked(section_id, 'completion_webhook_skip_unchanged', '0')), 'qnatter-automation-row-stack')
+				]),
+				automationRow(section_id, 'completion_webhook_url', _('Request URL'),
+					automationInput(section_id, 'completion_webhook_url', '', 'https://example.com/qnatter'), 'qnatter-automation-row-wide'),
+				automationRow(section_id, 'completion_webhook_headers', _('Request headers'),
+					automationTextarea(section_id, 'completion_webhook_headers', 'Content-Type: application/json', 'Content-Type: application/json', 4, true), 'qnatter-automation-row-wide'),
+				automationRow(section_id, 'completion_webhook_body', _('Request body'),
+					automationTextarea(section_id, 'completion_webhook_body', DEFAULT_WEBHOOK_BODY, 'json={"listen_port":#{port}}', 6, true), 'qnatter-automation-row-wide'),
+				E('div', { 'class': 'qnatter-automation-grid qnatter-automation-success-grid' }, [
+					automationRow(section_id, 'completion_webhook_success_check', _('Response check'),
+						automationCheckbox(section_id, 'completion_webhook_success_check', _('Check success string'), successCheck), 'qnatter-automation-row-stack'),
+					automationRow(section_id, 'completion_webhook_success', _('Success string'),
+						automationInput(section_id, 'completion_webhook_success', '', 'ok'), 'qnatter-automation-row-stack', 'webhook-success')
+				])
+			])
+		])
+	]);
+
+	window.requestAnimationFrame(function() {
+		setupAutomationPanel(section_id, root);
+	});
+
+	return root;
+}
+
+function parseAutomationPanel(section_id) {
+	var timeout = automationValue(section_id, 'completion_webhook_timeout');
+
+	if (timeout && !/^[0-9]+$/.test(timeout))
+		return Promise.reject(new TypeError(_('Webhook timeout must be a positive integer.')));
+
+	writeAutomationFlag(section_id, 'completion_script_enabled', automationValue(section_id, 'completion_script_enabled'));
+	writeAutomationField(section_id, 'completion_script_inline', automationValue(section_id, 'completion_script_inline'));
+	writeAutomationFlag(section_id, 'completion_webhook_enabled', automationValue(section_id, 'completion_webhook_enabled'));
+	writeAutomationFlag(section_id, 'completion_webhook_skip_unchanged', automationValue(section_id, 'completion_webhook_skip_unchanged'));
+	writeAutomationField(section_id, 'completion_webhook_url', automationValue(section_id, 'completion_webhook_url'));
+	writeAutomationField(section_id, 'completion_webhook_method', automationValue(section_id, 'completion_webhook_method') || 'POST');
+	writeAutomationField(section_id, 'completion_webhook_timeout', timeout || '8');
+	writeAutomationField(section_id, 'completion_webhook_headers', automationValue(section_id, 'completion_webhook_headers') || 'Content-Type: application/json');
+	writeAutomationField(section_id, 'completion_webhook_body', automationValue(section_id, 'completion_webhook_body') || DEFAULT_WEBHOOK_BODY);
+	writeAutomationFlag(section_id, 'completion_webhook_disable_success_check', automationValue(section_id, 'completion_webhook_success_check') === '1' ? '0' : '1');
+	writeAutomationField(section_id, 'completion_webhook_success', automationValue(section_id, 'completion_webhook_success'));
+
+	return Promise.resolve();
 }
 
 return view.extend({
@@ -471,10 +725,6 @@ return view.extend({
 		o = hideInGrid(s.option(form.Value, 'keepalive_server', _('Keep-alive server')));
 		o.placeholder = 'www.baidu.com';
 
-		o = hideInGrid(s.option(form.Value, 'notify_script', _('Notify script')));
-		o.placeholder = '/usr/bin/qnatter-notify-user';
-		o.description = _('Optional script called with protocol, inner IP, inner port, outer IP, and outer port after a mapping is detected.');
-
 		o = hideInGrid(s.option(form.Flag, 'cloudflare_enabled', _('Cloudflare SRV')));
 		o.default = '0';
 		o.description = _('Automatically patches the configured Cloudflare SRV record port to the current mapped public port.');
@@ -569,15 +819,23 @@ return view.extend({
 		if (tools.socat)
 			o.value('socat', 'socat');
 		if (tools.gost)
-			o.value('gost', 'gost');
+		o.value('gost', 'gost');
 		o.default = 'nftables';
 		o.depends('qbittorrent_forward', '1');
+
+		o = hideInGrid(s.option(form.DummyValue, '_automation_panel', ''));
+		o.renderWidget = function(section_id) {
+			return renderAutomationPanel(section_id);
+		};
+		o.parse = function(section_id) {
+			return parseAutomationPanel(section_id);
+		};
 
 		return Promise.resolve(m.render()).then(function(node) {
 			return E('div', { 'class': 'qnatter-page qnatter-form-page' + detectThemeClass() }, [
 				E('link', {
 					'rel': 'stylesheet',
-					'href': L.resource('qnatter/qnatter.css') + '?v=1.1.0-r1'
+					'href': L.resource('qnatter/qnatter.css') + '?v=1.1.0-r1&layout=automation4'
 				}),
 				node
 			]);

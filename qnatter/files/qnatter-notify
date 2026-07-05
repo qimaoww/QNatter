@@ -67,8 +67,70 @@ qnatter_json_string() {
 	'
 }
 
+qnatter_json_number_key() {
+	local key="$1"
+
+	printf '%s\n' "${2:-}" | sed -n 's/.*"'"$key"'"[[:space:]]*:[[:space:]]*\([0-9][0-9]*\).*/\1/p' | head -n 1
+}
+
+qnatter_mapping_json() {
+	printf '{"event":"mapped","instance":"%s","protocol":"%s","inner_ip":"%s","inner_port":%s,"outer_ip":"%s","outer_port":%s}' \
+		"$(qnatter_json_escape "${QNATTER_INSTANCE:-default}")" \
+		"$(qnatter_json_escape "$protocol")" \
+		"$(qnatter_json_escape "$inner_ip")" \
+		"$(qnatter_status_port "$inner_port")" \
+		"$(qnatter_json_escape "$outer_ip")" \
+		"$(qnatter_status_port "$outer_port")"
+}
+
+qnatter_render_template() {
+	printf '%s' "${1:-}" | awk \
+		-v instance="${QNATTER_INSTANCE:-default}" \
+		-v protocol="$protocol" \
+		-v inner_ip="$inner_ip" \
+		-v inner_port="$(qnatter_status_port "$inner_port")" \
+		-v outer_ip="$outer_ip" \
+		-v outer_port="$(qnatter_status_port "$outer_port")" \
+		'
+		function replace_all(text, key, value,    out, pos) {
+			out = ""
+			while ((pos = index(text, key)) > 0) {
+				out = out substr(text, 1, pos - 1) value
+				text = substr(text, pos + length(key))
+			}
+			return out text
+		}
+		{
+			line = $0
+			line = replace_all(line, "#{instance}", instance)
+			line = replace_all(line, "#{protocol}", protocol)
+			line = replace_all(line, "#{inner_ip}", inner_ip)
+			line = replace_all(line, "#{inner_port}", inner_port)
+			line = replace_all(line, "#{outer_ip}", outer_ip)
+			line = replace_all(line, "#{outer_port}", outer_port)
+			line = replace_all(line, "#{public_ip}", outer_ip)
+			line = replace_all(line, "#{public_port}", outer_port)
+			line = replace_all(line, "#{ip}", outer_ip)
+			line = replace_all(line, "#{port}", outer_port)
+			line = replace_all(line, "#{listen_port}", outer_port)
+			printf "%s%s", (NR > 1 ? "\n" : ""), line
+		}
+	'
+}
+
+qnatter_mapping_unchanged() {
+	[ -n "${previous_status:-}" ] || return 1
+	[ "$(qnatter_json_string protocol "$previous_status")" = "$protocol" ] || return 1
+	[ "$(qnatter_json_string inner_ip "$previous_status")" = "$inner_ip" ] || return 1
+	[ "$(qnatter_json_number_key inner_port "$previous_status")" = "$(qnatter_status_port "$inner_port")" ] || return 1
+	[ "$(qnatter_json_string outer_ip "$previous_status")" = "$outer_ip" ] || return 1
+	[ "$(qnatter_json_number_key outer_port "$previous_status")" = "$(qnatter_status_port "$outer_port")" ] || return 1
+	return 0
+}
+
 runtime_slug="$(qnatter_runtime_slug "${QNATTER_INSTANCE:-default}")"
 status_file="${QNATTER_STATUS_FILE:-/var/run/qnatter/${runtime_slug}.json}"
+previous_status="$(cat "$status_file" 2>/dev/null || true)"
 qnatter_write_status_json "$status_file" "${QNATTER_INSTANCE:-default}" "$protocol" "$inner_ip" "$inner_port" "$outer_ip" "$outer_port" "mapped"
 
 update_auto_firewall() {
@@ -210,20 +272,102 @@ update_cloudflare_srv() {
 update_auto_firewall
 update_cloudflare_srv
 
+run_completion_webhook() {
+	local enabled="${QNATTER_COMPLETION_WEBHOOK_ENABLED:-0}"
+	local url="${QNATTER_COMPLETION_WEBHOOK_URL:-}"
+	local timeout="${QNATTER_COMPLETION_WEBHOOK_TIMEOUT:-8}"
+	local method="${QNATTER_COMPLETION_WEBHOOK_METHOD:-POST}"
+	local headers="${QNATTER_COMPLETION_WEBHOOK_HEADERS:-Content-Type: application/json}"
+	local body="${QNATTER_COMPLETION_WEBHOOK_BODY:-}"
+	local success="${QNATTER_COMPLETION_WEBHOOK_SUCCESS:-}"
+	local disable_success_check="${QNATTER_COMPLETION_WEBHOOK_DISABLE_SUCCESS_CHECK:-1}"
+	local skip_unchanged="${QNATTER_COMPLETION_WEBHOOK_SKIP_UNCHANGED:-0}"
+	local payload response rc header
+
+	qnatter_bool "$enabled" || return 0
+	[ -n "$url" ] || return 0
+	case "$timeout" in
+		''|*[!0-9]*) timeout="8" ;;
+	esac
+	method="$(printf '%s' "$method" | tr '[:lower:]' '[:upper:]')"
+	case "$method" in
+		GET|POST|PUT|PATCH|DELETE|HEAD) ;;
+		*) method="POST" ;;
+	esac
+
+	if ! command -v "$QNATTER_CURL_BIN" >/dev/null 2>&1; then
+		log "completion webhook skipped for ${QNATTER_INSTANCE:-default}: curl not found"
+		return 0
+	fi
+
+	if qnatter_bool "$skip_unchanged" && qnatter_mapping_unchanged; then
+		log "completion webhook skipped for ${QNATTER_INSTANCE:-default}: mapping unchanged"
+		return 0
+	fi
+
+	url="$(qnatter_render_template "$url")"
+	if [ -n "$body" ]; then
+		payload="$(qnatter_render_template "$body")"
+	else
+		payload="$(qnatter_mapping_json)"
+	fi
+	success="$(qnatter_render_template "$success")"
+
+	set -- -fsS -m "$timeout" -X "$method"
+	while IFS= read -r header; do
+		header="$(qnatter_render_template "$header")"
+		[ -n "$header" ] || continue
+		set -- "$@" -H "$header"
+	done <<EOF
+$headers
+EOF
+	case "$method" in
+		GET|HEAD)
+			;;
+		*)
+			[ -n "$payload" ] && set -- "$@" --data "$payload"
+			;;
+	esac
+
+	response="$("$QNATTER_CURL_BIN" "$@" "$url" 2>&1)"
+	rc=$?
+	if [ "$rc" -ne 0 ]; then
+		log "completion webhook failed for ${QNATTER_INSTANCE:-default}: response=$(qnatter_one_line "$response")"
+		return 0
+	fi
+	if ! qnatter_bool "$disable_success_check" && [ -n "$success" ] && ! printf '%s' "$response" | grep -Fq -- "$success"; then
+		log "completion webhook failed for ${QNATTER_INSTANCE:-default}: success string not found response=$(qnatter_one_line "$response")"
+		return 0
+	fi
+
+	log "completion webhook sent for ${QNATTER_INSTANCE:-default}: endpoint=$url"
+	return 0
+}
+
+run_completion_script() {
+	local enabled="${QNATTER_COMPLETION_SCRIPT_ENABLED:-0}"
+	local inline="${QNATTER_COMPLETION_SCRIPT_INLINE:-}"
+
+	qnatter_bool "$enabled" || return 0
+	if [ -n "$inline" ]; then
+		if printf '%s\n' "$inline" | QNATTER_SCRIPT_PROTOCOL="$protocol" \
+			QNATTER_SCRIPT_INNER_IP="$inner_ip" \
+			QNATTER_SCRIPT_INNER_PORT="$inner_port" \
+			QNATTER_SCRIPT_OUTER_IP="$outer_ip" \
+			QNATTER_SCRIPT_OUTER_PORT="$outer_port" \
+			/bin/sh -s -- "$protocol" "$inner_ip" "$inner_port" "$outer_ip" "$outer_port"; then
+			log "completion inline script ran for ${QNATTER_INSTANCE:-default}"
+		else
+			log "completion inline script failed for ${QNATTER_INSTANCE:-default}"
+		fi
+		return 0
+	fi
+	return 0
+}
+
 run_user_notify() {
-	local script="${QNATTER_USER_NOTIFY:-}"
-
-	[ -n "$script" ] || return 0
-	if [ ! -x "$script" ]; then
-		log "notify script is not executable for ${QNATTER_INSTANCE:-default}: $script"
-		return 1
-	fi
-
-	if ! "$script" "$protocol" "$inner_ip" "$inner_port" "$outer_ip" "$outer_port"; then
-		log "notify script failed for ${QNATTER_INSTANCE:-default}: $script"
-		return 1
-	fi
-
+	run_completion_webhook
+	run_completion_script
 	return 0
 }
 

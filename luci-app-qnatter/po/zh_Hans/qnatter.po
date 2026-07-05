@@ -157,11 +157,86 @@ msgstr "保活间隔"
 msgid "Keep-alive server"
 msgstr "保活服务器"
 
-msgid "Notify script"
-msgstr "通知脚本"
+msgid "AUTOMATION"
+msgstr "AUTOMATION"
 
-msgid "Optional script called with protocol, inner IP, inner port, outer IP, and outer port after a mapping is detected."
-msgstr "检测到映射后调用的可选脚本，参数依次为协议、内部 IP、内部端口、外部 IP、外部端口。"
+msgid "Custom script trigger"
+msgstr "自定义脚本触发"
+
+msgid "Custom automation"
+msgstr "自定义触发"
+
+msgid "Custom triggers"
+msgstr "自定义触发"
+
+msgid "Script content"
+msgstr "脚本内容"
+
+msgid "Webhook"
+msgstr "Webhook"
+
+msgid "Webhook trigger"
+msgstr "Webhook 触发"
+
+msgid "Webhook manual trigger test"
+msgstr "Webhook 手动触发测试"
+
+msgid "Webhook test succeeded"
+msgstr "Webhook 测试成功"
+
+msgid "Webhook test failed"
+msgstr "Webhook 测试失败"
+
+msgid "Trigger only when the address differs from the last one"
+msgstr "仅在地址和上一次不同触发 Webhook"
+
+msgid "Trigger rule"
+msgstr "触发规则"
+
+msgid "Only when changed"
+msgstr "仅变化时"
+
+msgid "Response check"
+msgstr "响应校验"
+
+msgid "Check success string"
+msgstr "校验成功字符串"
+
+msgid "Request URL"
+msgstr "接口地址"
+
+msgid "Request method"
+msgstr "请求方法"
+
+msgid "Request headers"
+msgstr "请求头"
+
+msgid "Request body"
+msgstr "请求主体"
+
+msgid "Success string"
+msgstr "成功字符串"
+
+msgid "Disable success string check"
+msgstr "禁用接口调用成功字符串检测"
+
+msgid "Timeout"
+msgstr "超时"
+
+msgid "Webhook timeout must be a positive integer."
+msgstr "Webhook 超时必须是正整数。"
+
+msgid "Completion webhook URL"
+msgstr "Webhook 接口地址"
+
+msgid "Completion webhook timeout"
+msgstr "Webhook 超时"
+
+msgid "Custom script"
+msgstr "自定义脚本"
+
+msgid "Run this shell script after punching succeeds. Arguments are protocol, internal IP, internal port, public IP, public port."
+msgstr "打洞成功后执行这段 Shell 脚本；参数依次为协议、内部 IP、内部端口、公网 IP、公网端口。"
 
 msgid "Cloudflare SRV"
 msgstr "Cloudflare SRV"

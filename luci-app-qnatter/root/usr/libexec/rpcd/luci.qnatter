@@ -23,6 +23,22 @@ json_arg_number() {
 	printf '%s' "$input" | sed -n 's/.*"'"$key"'"[[:space:]]*:[[:space:]]*\([0-9][0-9]*\).*/\1/p' | head -n 1
 }
 
+json_arg_text() {
+	local key="$1"
+	local input="$2"
+	local value
+
+	if command -v "$QNATTER_JSONFILTER_BIN" >/dev/null 2>&1; then
+		value="$(printf '%s' "$input" | "$QNATTER_JSONFILTER_BIN" -e "@.${key}" 2>/dev/null || true)"
+		if [ -n "$value" ]; then
+			printf '%s' "$value"
+			return 0
+		fi
+	fi
+
+	json_arg_string "$key" "$input"
+}
+
 json_escape_stream() {
 	awk 'BEGIN { ORS = ""; tab = sprintf("%c", 9); cr = sprintf("%c", 13) } {
 		if (NR > 1)
@@ -322,6 +338,121 @@ cloudflare_srv_records() {
 	cloudflare_emit_srv_records "$response"
 }
 
+webhook_one_line() {
+	printf '%s' "${1:-}" | tr '\r\n' '  ' | sed 's/[[:space:]][[:space:]]*/ /g; s/^ //; s/ $//' | cut -c 1-300
+}
+
+webhook_render_template() {
+	printf '%s' "${1:-}" | awk \
+		-v instance="${2:-manual_test}" \
+		-v protocol="tcp" \
+		-v inner_ip="192.168.1.100" \
+		-v inner_port="51413" \
+		-v outer_ip="203.0.113.10" \
+		-v outer_port="62000" \
+		'
+		function replace_all(text, key, value,    out, pos) {
+			out = ""
+			while ((pos = index(text, key)) > 0) {
+				out = out substr(text, 1, pos - 1) value
+				text = substr(text, pos + length(key))
+			}
+			return out text
+		}
+		{
+			line = $0
+			line = replace_all(line, "#{instance}", instance)
+			line = replace_all(line, "#{protocol}", protocol)
+			line = replace_all(line, "#{inner_ip}", inner_ip)
+			line = replace_all(line, "#{inner_port}", inner_port)
+			line = replace_all(line, "#{outer_ip}", outer_ip)
+			line = replace_all(line, "#{outer_port}", outer_port)
+			line = replace_all(line, "#{public_ip}", outer_ip)
+			line = replace_all(line, "#{public_port}", outer_port)
+			line = replace_all(line, "#{ip}", outer_ip)
+			line = replace_all(line, "#{port}", outer_port)
+			line = replace_all(line, "#{listen_port}", outer_port)
+			printf "%s%s", (NR > 1 ? "\n" : ""), line
+		}
+	'
+}
+
+completion_webhook_test() {
+	local input="$1"
+	local section url method headers body success disable_success_check timeout payload response rc header
+
+	section="$(json_arg_text section "$input")"
+	section="${section:-manual_test}"
+	url="$(json_arg_text url "$input")"
+	method="$(json_arg_text method "$input")"
+	headers="$(json_arg_text headers "$input")"
+	body="$(json_arg_text body "$input")"
+	success="$(json_arg_text success "$input")"
+	disable_success_check="$(json_arg_text disable_success_check "$input")"
+	timeout="$(json_arg_text timeout "$input")"
+
+	[ -n "$url" ] || {
+		emit_error "Webhook URL is empty"
+		return 0
+	}
+	case "$timeout" in
+		''|*[!0-9]*) timeout="8" ;;
+	esac
+	method="$(printf '%s' "${method:-POST}" | tr '[:lower:]' '[:upper:]')"
+	case "$method" in
+		GET|POST|PUT|PATCH|DELETE|HEAD) ;;
+		*) method="POST" ;;
+	esac
+	[ -n "$headers" ] || headers="Content-Type: application/json"
+	if [ -n "$body" ]; then
+		payload="$(webhook_render_template "$body" "$section")"
+	else
+		payload="$(webhook_render_template '{"event":"manual_test","instance":"#{instance}","protocol":"#{protocol}","inner_ip":"#{inner_ip}","inner_port":#{inner_port},"outer_ip":"#{outer_ip}","outer_port":#{outer_port}}' "$section")"
+	fi
+	url="$(webhook_render_template "$url" "$section")"
+	success="$(webhook_render_template "$success" "$section")"
+
+	if ! command -v "$QNATTER_CURL_BIN" >/dev/null 2>&1; then
+		emit_error "curl not found"
+		return 0
+	fi
+
+	set -- -fsS -m "$timeout" -X "$method"
+	while IFS= read -r header; do
+		header="$(webhook_render_template "$header" "$section")"
+		[ -n "$header" ] || continue
+		set -- "$@" -H "$header"
+	done <<EOF
+$headers
+EOF
+	case "$method" in
+		GET|HEAD)
+			;;
+		*)
+			[ -n "$payload" ] && set -- "$@" --data "$payload"
+			;;
+	esac
+
+	response="$("$QNATTER_CURL_BIN" "$@" "$url" 2>&1)"
+	rc=$?
+	if [ "$rc" -ne 0 ]; then
+		printf '{"ok":false,"error":'
+		json_string "$(webhook_one_line "$response")"
+		printf '}\n'
+		return 0
+	fi
+	if [ "$disable_success_check" != "1" ] && [ -n "$success" ] && ! printf '%s' "$response" | grep -Fq -- "$success"; then
+		printf '{"ok":false,"error":"Webhook response did not contain success string","response":'
+		json_string "$(webhook_one_line "$response")"
+		printf '}\n'
+		return 0
+	fi
+
+	printf '{"ok":true,"response":'
+	json_string "$(webhook_one_line "$response")"
+	printf '}\n'
+}
+
 toggle_instance() {
 	local instance="$1"
 	local current_state new_state
@@ -370,7 +501,7 @@ toggle_instance() {
 
 case "$1" in
 	list)
-		printf '{"status":{},"log":{"instance":"String","lines":"Integer"},"clear_log":{"instance":"String"},"cloudflare_zones":{"section":"String","token":"String"},"cloudflare_srv_records":{"section":"String","zone_id":"String","token":"String"},"rename_instance":{"old":"String","new":"String"},"toggle_instance":{"instance":"String"}}\n'
+		printf '{"status":{},"log":{"instance":"String","lines":"Integer"},"clear_log":{"instance":"String"},"cloudflare_zones":{"section":"String","token":"String"},"cloudflare_srv_records":{"section":"String","zone_id":"String","token":"String"},"completion_webhook_test":{"section":"String","url":"String","method":"String","headers":"String","body":"String","success":"String","disable_success_check":"String","timeout":"Integer"},"rename_instance":{"old":"String","new":"String"},"toggle_instance":{"instance":"String"}}\n'
 		;;
 	call)
 		read -r input
@@ -401,6 +532,9 @@ case "$1" in
 				zone_id="$(json_arg_string zone_id "$input")"
 				token="$(json_arg_string token "$input")"
 				cloudflare_srv_records "${section:-default}" "$zone_id" "$token"
+				;;
+			completion_webhook_test)
+				completion_webhook_test "$input"
 				;;
 			rename_instance)
 				old="$(json_arg_string old "$input")"

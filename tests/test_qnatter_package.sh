@@ -93,6 +93,23 @@ assert_option_block_not_contains() {
 	' "$ROOT/$file" || fail "$file option $option contains forbidden text: $text"
 }
 
+assert_line_order() {
+	file="$1"
+	first="$2"
+	second="$3"
+	awk -v first="$first" -v second="$second" '
+		index($0, first) && first_line == 0 {
+			first_line = NR
+		}
+		index($0, second) && second_line == 0 {
+			second_line = NR
+		}
+		END {
+			exit(first_line > 0 && second_line > 0 && first_line < second_line ? 0 : 1)
+		}
+	' "$ROOT/$file" || fail "$file must place '$first' before '$second'"
+}
+
 assert_po_translation() {
 	msgid="$1"
 	msgstr="$2"
@@ -213,7 +230,33 @@ assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/stun.
 assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/stun.js "Duplicate STUN server"
 assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/stun.js "uniqueServerValues"
 assert_contains luci-app-qnatter/root/usr/share/luci/menu.d/luci-app-qnatter.json '"path": "qnatter/stun"'
-assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances.js "hideInGrid\\(s\\.option\\(form\\.Value, 'notify_script'"
+assert_contains luci-app-qnatter/root/usr/share/rpcd/acl.d/luci-app-qnatter.json '"completion_webhook_test"'
+assert_not_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances.js "form\\.Value, 'notify_script'"
+assert_not_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances.js 'addOptionClass'
+assert_not_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances.js 'qnatter-automation-card-start'
+assert_not_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances.js 'qnatter-automation-card'
+assert_not_contains luci-app-qnatter/htdocs/luci-static/resources/qnatter/qnatter.css 'qnatter-automation-card'
+assert_line_order luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances.js "s.option(form.ListValue, 'qbittorrent_forward_method'" "s.option(form.DummyValue, '_automation_panel'"
+assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances.js "qnatter-automation-title"
+assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances.js "layout=automation4"
+assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances.js "s\\.option\\(form\\.DummyValue, '_automation_panel'"
+assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances.js 'renderAutomationPanel'
+assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances.js 'writeAutomationField'
+assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances.js 'callCompletionWebhookTest'
+assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances.js 'completion_webhook_success_check'
+assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances.js 'completion_webhook_method'
+assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances.js 'completion_webhook_headers'
+assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances.js 'completion_webhook_body'
+assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances.js 'completion_webhook_success'
+assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances.js 'completion_webhook_disable_success_check'
+assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances.js 'completion_webhook_skip_unchanged'
+assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances.js 'completion_script_inline'
+assert_contains luci-app-qnatter/htdocs/luci-static/resources/qnatter/qnatter.css 'qnatter-automation-panel'
+assert_contains luci-app-qnatter/htdocs/luci-static/resources/qnatter/qnatter.css 'qnatter-automation-section'
+assert_contains luci-app-qnatter/htdocs/luci-static/resources/qnatter/qnatter.css 'qnatter-automation-grid'
+assert_css_block_contains luci-app-qnatter/htdocs/luci-static/resources/qnatter/qnatter.css '.qnatter-automation-panel' 'width: 100%'
+assert_css_block_contains luci-app-qnatter/htdocs/luci-static/resources/qnatter/qnatter.css '.qnatter-form-page .cbi-value[data-name="_automation_panel"] > .cbi-value-title' 'display: none'
+assert_css_block_contains luci-app-qnatter/htdocs/luci-static/resources/qnatter/qnatter.css '.qnatter-form-page .cbi-value[data-name="_automation_panel"] > .cbi-value-field' 'width: 100%'
 assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances.js "hideInGrid\\(s\\.option\\(form\\.Flag, 'cloudflare_enabled'"
 assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances.js "hideInGrid\\(s\\.option\\(form\\.Value, 'cloudflare_api_token'"
 assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances.js "hideInGrid\\(s\\.option\\(form\\.ListValue, 'cloudflare_zone_id'"
@@ -338,6 +381,18 @@ assert_contains qnatter/files/qnatter.config "option cloudflare_api_url ''"
 assert_contains qnatter/files/qnatter.config "option cloudflare_api_token ''"
 assert_contains qnatter/files/qnatter.config "option cloudflare_zone_id ''"
 assert_contains qnatter/files/qnatter.config "option cloudflare_record_id ''"
+assert_not_contains qnatter/files/qnatter.config "option notify_script"
+assert_contains qnatter/files/qnatter.config "option completion_webhook_enabled '0'"
+assert_contains qnatter/files/qnatter.config "option completion_webhook_url ''"
+assert_contains qnatter/files/qnatter.config "option completion_webhook_timeout '8'"
+assert_contains qnatter/files/qnatter.config "option completion_webhook_method 'POST'"
+assert_contains qnatter/files/qnatter.config "option completion_webhook_headers 'Content-Type: application/json'"
+assert_contains qnatter/files/qnatter.config "option completion_webhook_body"
+assert_contains qnatter/files/qnatter.config "option completion_webhook_success ''"
+assert_contains qnatter/files/qnatter.config "option completion_webhook_disable_success_check '1'"
+assert_contains qnatter/files/qnatter.config "option completion_webhook_skip_unchanged '0'"
+assert_contains qnatter/files/qnatter.config "option completion_script_enabled '0'"
+assert_contains qnatter/files/qnatter.config "option completion_script_inline ''"
 assert_contains qnatter/files/qnatter.config "config stun 'stun'"
 assert_contains qnatter/files/qnatter.config "list tcp_server 'fwa.lifesizecloud.com'"
 assert_contains qnatter/files/qnatter.config "list tcp_server 'turn.cloud-rtc.com:80'"
@@ -361,6 +416,18 @@ assert_contains qnatter/files/qnatter.init 'CLOUDFLARE_API_URL'
 assert_contains qnatter/files/qnatter.init 'CLOUDFLARE_API_TOKEN'
 assert_contains qnatter/files/qnatter.init 'CLOUDFLARE_ZONE_ID'
 assert_contains qnatter/files/qnatter.init 'CLOUDFLARE_RECORD_ID'
+assert_not_contains qnatter/files/qnatter.init 'QNATTER_USER_NOTIFY'
+assert_not_contains qnatter/files/qnatter.init 'QNATTER_COMPLETION_SCRIPT_FILE'
+assert_contains qnatter/files/qnatter.init 'QNATTER_COMPLETION_WEBHOOK_ENABLED'
+assert_contains qnatter/files/qnatter.init 'QNATTER_COMPLETION_WEBHOOK_URL'
+assert_contains qnatter/files/qnatter.init 'QNATTER_COMPLETION_WEBHOOK_METHOD'
+assert_contains qnatter/files/qnatter.init 'QNATTER_COMPLETION_WEBHOOK_HEADERS'
+assert_contains qnatter/files/qnatter.init 'QNATTER_COMPLETION_WEBHOOK_BODY'
+assert_contains qnatter/files/qnatter.init 'QNATTER_COMPLETION_WEBHOOK_SUCCESS'
+assert_contains qnatter/files/qnatter.init 'QNATTER_COMPLETION_WEBHOOK_DISABLE_SUCCESS_CHECK'
+assert_contains qnatter/files/qnatter.init 'QNATTER_COMPLETION_WEBHOOK_SKIP_UNCHANGED'
+assert_contains qnatter/files/qnatter.init 'QNATTER_COMPLETION_SCRIPT_ENABLED'
+assert_contains qnatter/files/qnatter.init 'QNATTER_COMPLETION_SCRIPT_INLINE'
 assert_contains qnatter/files/qnatter-notify 'QNATTER_AUTO_FIREWALL'
 assert_contains qnatter/files/qnatter-notify 'QNATTER_UCI_BIN'
 assert_contains qnatter/files/qnatter-notify 'firewall\.\$\{section\}\.dest_port=\$\{port\}'
@@ -373,6 +440,21 @@ assert_contains qnatter/files/qnatter-notify 'Cloudflare SRV update started'
 assert_contains qnatter/files/qnatter-notify 'Cloudflare SRV current record'
 assert_contains qnatter/files/qnatter-notify 'Cloudflare SRV port changed'
 assert_contains qnatter/files/qnatter-notify 'Cloudflare SRV updated'
+assert_contains qnatter/files/qnatter-notify 'run_completion_webhook'
+assert_contains qnatter/files/qnatter-notify 'run_completion_script'
+assert_not_contains qnatter/files/qnatter-notify 'QNATTER_USER_NOTIFY'
+assert_not_contains qnatter/files/qnatter-notify 'QNATTER_COMPLETION_SCRIPT_FILE'
+assert_contains qnatter/files/qnatter-notify 'QNATTER_COMPLETION_WEBHOOK_ENABLED'
+assert_contains qnatter/files/qnatter-notify 'QNATTER_COMPLETION_WEBHOOK_URL'
+assert_contains qnatter/files/qnatter-notify 'QNATTER_COMPLETION_WEBHOOK_METHOD'
+assert_contains qnatter/files/qnatter-notify 'QNATTER_COMPLETION_WEBHOOK_HEADERS'
+assert_contains qnatter/files/qnatter-notify 'QNATTER_COMPLETION_WEBHOOK_BODY'
+assert_contains qnatter/files/qnatter-notify 'QNATTER_COMPLETION_WEBHOOK_SUCCESS'
+assert_contains qnatter/files/qnatter-notify 'QNATTER_COMPLETION_WEBHOOK_DISABLE_SUCCESS_CHECK'
+assert_contains qnatter/files/qnatter-notify 'QNATTER_COMPLETION_WEBHOOK_SKIP_UNCHANGED'
+assert_contains qnatter/files/qnatter-notify 'qnatter_render_template'
+assert_contains qnatter/files/qnatter-notify 'QNATTER_COMPLETION_SCRIPT_ENABLED'
+assert_contains qnatter/files/qnatter-notify 'QNATTER_COMPLETION_SCRIPT_INLINE'
 assert_contains qnatter/files/qnatter-notify 'QNATTER_LOG_FILE'
 assert_not_contains qnatter/files/qnatter.config 'option runtime'
 assert_not_contains qnatter/files/qnatter.init 'config_get runtime'
@@ -496,6 +578,13 @@ assert_po_translation 'Read zones' '读取区域'
 assert_po_translation 'Cloudflare zone' 'Cloudflare 区域'
 assert_po_translation 'Cloudflare SRV record' 'Cloudflare SRV 记录'
 assert_po_translation 'Read SRV records' '读取 SRV 记录'
+assert_po_translation 'AUTOMATION' 'AUTOMATION'
+assert_po_translation 'Custom script trigger' '自定义脚本触发'
+assert_po_translation 'Webhook trigger' 'Webhook 触发'
+assert_po_translation 'Completion webhook URL' 'Webhook 接口地址'
+assert_po_translation 'Completion webhook timeout' 'Webhook 超时'
+assert_po_translation 'Custom script' '自定义脚本'
+assert_po_translation 'Run this shell script after punching succeeds. Arguments are protocol, internal IP, internal port, public IP, public port.' '打洞成功后执行这段 Shell 脚本；参数依次为协议、内部 IP、内部端口、公网 IP、公网端口。'
 assert_not_contains luci-app-qnatter/po/zh_Hans/qnatter.po 'Port 0 forwards to the QNatter mapped internal port\.'
 assert_po_translation 'Port 0 forwards to the port QNatter reports after punching.' '端口 0 会转发到 QNatter 打洞后报告的端口。'
 assert_po_translation 'QNatter Status' 'QNatter 状态'

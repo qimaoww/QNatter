@@ -102,6 +102,18 @@ config_get() {
 		wan_ct:cloudflare_api_token) value="cf-secret" ;;
 		wan_ct:cloudflare_zone_id) value="zone-selected" ;;
 		wan_ct:cloudflare_record_id) value="record-selected" ;;
+		wan_ct:completion_webhook_enabled) value="1" ;;
+		wan_ct:completion_webhook_url) value="https://hooks.example/qnatter" ;;
+		wan_ct:completion_webhook_timeout) value="3" ;;
+		wan_ct:completion_webhook_method) value="PATCH" ;;
+		wan_ct:completion_webhook_headers) value="Content-Type: application/x-www-form-urlencoded
+X-QNatter: #{instance}" ;;
+		wan_ct:completion_webhook_body) value="json={\"listen_port\":#{port}}" ;;
+		wan_ct:completion_webhook_success) value="ok" ;;
+		wan_ct:completion_webhook_disable_success_check) value="0" ;;
+		wan_ct:completion_webhook_skip_unchanged) value="1" ;;
+		wan_ct:completion_script_enabled) value="1" ;;
+		wan_ct:completion_script_inline) value="printf inline" ;;
 		wan_cm:enabled) value="1" ;;
 		wan_cm:label) value="Mobile" ;;
 		wan_cm:protocol) value="udp" ;;
@@ -291,6 +303,19 @@ grep -Fq "CLOUDFLARE_API_URL='https://api.cloudflare.com/client/v4/zones/zone/dn
 grep -Fq "CLOUDFLARE_API_TOKEN='cf-secret'" "$tmp/run/wan_ct.env" || fail "Telecom notify env missing Cloudflare API token"
 grep -Fq "CLOUDFLARE_ZONE_ID='zone-selected'" "$tmp/run/wan_ct.env" || fail "Telecom notify env missing Cloudflare zone ID"
 grep -Fq "CLOUDFLARE_RECORD_ID='record-selected'" "$tmp/run/wan_ct.env" || fail "Telecom notify env missing Cloudflare record ID"
+	grep -Fq "QNATTER_COMPLETION_WEBHOOK_ENABLED='1'" "$tmp/run/wan_ct.env" || fail "Telecom notify env missing completion webhook enabled flag"
+	grep -Fq "QNATTER_COMPLETION_WEBHOOK_URL='https://hooks.example/qnatter'" "$tmp/run/wan_ct.env" || fail "Telecom notify env missing completion webhook URL"
+	grep -Fq "QNATTER_COMPLETION_WEBHOOK_TIMEOUT='3'" "$tmp/run/wan_ct.env" || fail "Telecom notify env missing completion webhook timeout"
+	grep -Fq "QNATTER_COMPLETION_WEBHOOK_METHOD='PATCH'" "$tmp/run/wan_ct.env" || fail "Telecom notify env missing completion webhook method"
+	grep -Fq "QNATTER_COMPLETION_WEBHOOK_HEADERS='Content-Type: application/x-www-form-urlencoded" "$tmp/run/wan_ct.env" || fail "Telecom notify env missing completion webhook headers"
+	grep -Fq "X-QNatter: #{instance}'" "$tmp/run/wan_ct.env" || fail "Telecom notify env missing completion webhook header template"
+	grep -Fq "QNATTER_COMPLETION_WEBHOOK_BODY='json={\"listen_port\":#{port}}'" "$tmp/run/wan_ct.env" || fail "Telecom notify env missing completion webhook body"
+	grep -Fq "QNATTER_COMPLETION_WEBHOOK_SUCCESS='ok'" "$tmp/run/wan_ct.env" || fail "Telecom notify env missing completion webhook success string"
+	grep -Fq "QNATTER_COMPLETION_WEBHOOK_DISABLE_SUCCESS_CHECK='0'" "$tmp/run/wan_ct.env" || fail "Telecom notify env missing completion webhook success-check flag"
+	grep -Fq "QNATTER_COMPLETION_WEBHOOK_SKIP_UNCHANGED='1'" "$tmp/run/wan_ct.env" || fail "Telecom notify env missing completion webhook unchanged flag"
+	grep -Fq "QNATTER_COMPLETION_SCRIPT_ENABLED='1'" "$tmp/run/wan_ct.env" || fail "Telecom notify env missing completion script enabled flag"
+	grep -Fq "QNATTER_COMPLETION_SCRIPT_INLINE='printf inline'" "$tmp/run/wan_ct.env" || fail "Telecom notify env missing completion inline script"
+	! grep -Fq "QNATTER_COMPLETION_SCRIPT_FILE" "$tmp/run/wan_ct.env" || fail "Telecom notify env must not expose completion script file"
 grep -Fq "QNATTER_AUTO_FIREWALL='0'" "$tmp/run/wan_cm.env" || fail "Mobile notify env should disable auto firewall by default"
 grep -Fq "CLOUDFLARE_SRV_ENABLED='0'" "$tmp/run/wan_cm.env" || fail "Mobile notify env should disable Cloudflare SRV by default"
 grep -Fq "QNATTER_FIREWALL_DEST='lan'" "$tmp/run/wan_qb.env" || fail "qBittorrent notify env missing firewall destination zone"

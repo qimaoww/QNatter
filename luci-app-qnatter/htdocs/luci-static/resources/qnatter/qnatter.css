@@ -210,6 +210,185 @@
 	width: 100%;
 }
 
+.qnatter-form-page .cbi-value[data-name="_automation_panel"] {
+	display: block;
+	margin-top: 18px;
+	padding: 0;
+	width: 100%;
+}
+
+.qnatter-form-page .cbi-value[data-name="_automation_panel"] > .cbi-value-title {
+	display: none;
+}
+
+.qnatter-form-page .cbi-value[data-name="_automation_panel"] > .cbi-value-field {
+	display: block;
+	margin: 0;
+	max-width: none;
+	padding: 0;
+	width: 100%;
+}
+
+.qnatter-automation-panel {
+	border-top: 1px solid rgba(25, 35, 50, 0.12);
+	margin-top: 10px;
+	min-width: 0;
+	padding-top: 18px;
+	width: 100%;
+}
+
+.qnatter-automation-header {
+	margin: 0 0 12px;
+	min-width: 0;
+}
+
+.qnatter-automation-title {
+	color: #102033;
+	font-size: 18px;
+	font-weight: 600;
+	line-height: 1.35;
+	overflow-wrap: anywhere;
+}
+
+.qnatter-automation-section {
+	background: rgba(255, 255, 255, 0.45);
+	border: 1px solid rgba(16, 32, 51, 0.14);
+	border-radius: 8px;
+	box-sizing: border-box;
+	margin-top: 10px;
+	min-width: 0;
+	padding: 12px 14px 14px;
+}
+
+.qnatter-automation-section-head {
+	align-items: center;
+	display: flex;
+	flex-wrap: wrap;
+	gap: 10px 14px;
+	justify-content: flex-start;
+	margin-bottom: 10px;
+	min-width: 0;
+}
+
+.qnatter-automation-section-head strong {
+	color: #102033;
+	font-size: 15px;
+	font-weight: 600;
+	margin-right: auto;
+	overflow-wrap: anywhere;
+}
+
+.qnatter-automation-checkbox {
+	align-items: center;
+	display: inline-flex;
+	gap: 6px;
+	line-height: 1.35;
+	min-width: 0;
+	overflow-wrap: anywhere;
+}
+
+.qnatter-automation-row {
+	align-items: start;
+	display: grid;
+	gap: 6px 12px;
+	grid-template-columns: minmax(128px, 0.22fr) minmax(0, 1fr);
+	margin-top: 10px;
+	min-width: 0;
+}
+
+.qnatter-automation-row-stack {
+	display: block;
+	margin-top: 0;
+}
+
+.qnatter-automation-row-wide {
+	grid-template-columns: minmax(128px, 0.18fr) minmax(0, 1fr);
+}
+
+.qnatter-automation-label {
+	color: #667085;
+	font-size: 13px;
+	font-weight: 600;
+	line-height: 1.4;
+	overflow-wrap: anywhere;
+	padding-top: 7px;
+}
+
+.qnatter-automation-control {
+	min-width: 0;
+}
+
+.qnatter-automation-input,
+.qnatter-automation-textarea {
+	background: #fbfdff;
+	border: 1px solid rgba(16, 32, 51, 0.18);
+	border-radius: 8px;
+	box-sizing: border-box;
+	color: #102033;
+	max-width: 100%;
+	min-width: 0;
+	width: 100%;
+}
+
+.qnatter-automation-input {
+	min-height: 34px;
+	padding: 6px 10px;
+}
+
+.qnatter-automation-textarea {
+	min-height: 92px;
+	padding: 10px 12px;
+	resize: vertical;
+}
+
+.qnatter-automation-row-wide .qnatter-automation-textarea {
+	min-height: 120px;
+}
+
+.qnatter-automation-monospace {
+	font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+}
+
+.qnatter-automation-grid {
+	display: grid;
+	gap: 10px 12px;
+	grid-template-columns: minmax(0, 150px) minmax(0, 120px) minmax(0, 1fr);
+	margin-top: 10px;
+	min-width: 0;
+}
+
+.qnatter-automation-success-grid {
+	grid-template-columns: minmax(0, 220px) minmax(0, 1fr);
+}
+
+.qnatter-automation-webhook-fields.is-hidden,
+.qnatter-automation-row.is-hidden {
+	display: none !important;
+}
+
+.qnatter-automation-test.spinning {
+	opacity: 0.72;
+}
+
+@media (max-width: 700px) {
+	.qnatter-automation-title {
+		font-size: 17px;
+	}
+
+	.qnatter-automation-section {
+		padding: 12px;
+	}
+
+	.qnatter-automation-grid,
+	.qnatter-automation-row {
+		grid-template-columns: minmax(0, 1fr);
+	}
+
+	.qnatter-automation-label {
+		padding-top: 0;
+	}
+}
+
 /* ===== luci-theme-argon 完整适配 ===== */
 .qnatter-theme-argon {
 	--argon-primary: #5e72e4;

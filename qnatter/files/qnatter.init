@@ -275,12 +275,26 @@ qnatter_write_notify_env() {
 	local env_file="$2"
 	local status_file="$3"
 	local log_file="${4:-}"
-	local notify_script qb_enabled qb_url qb_user qb_pass qb_forward qb_target_ip qb_target_port qb_forward_method
+	local qb_enabled qb_url qb_user qb_pass qb_forward qb_target_ip qb_target_port qb_forward_method
 	local auto_firewall firewall_section firewall_name firewall_src firewall_dest
 	local cf_enabled cf_api_url cf_api_token cf_zone_id cf_record_id
+	local completion_webhook_enabled completion_webhook_url completion_webhook_timeout
+	local completion_webhook_method completion_webhook_headers completion_webhook_body
+	local completion_webhook_success completion_webhook_disable_success_check completion_webhook_skip_unchanged
+	local completion_script_enabled completion_script_inline
 	local forward_method target_ip
 
-	config_get notify_script "$section" notify_script ""
+	config_get_bool completion_webhook_enabled "$section" completion_webhook_enabled 0
+	config_get completion_webhook_url "$section" completion_webhook_url ""
+	config_get completion_webhook_timeout "$section" completion_webhook_timeout "8"
+	config_get completion_webhook_method "$section" completion_webhook_method "POST"
+	config_get completion_webhook_headers "$section" completion_webhook_headers "Content-Type: application/json"
+	config_get completion_webhook_body "$section" completion_webhook_body '{"event":"mapped","instance":"#{instance}","protocol":"#{protocol}","inner_ip":"#{inner_ip}","inner_port":#{inner_port},"outer_ip":"#{outer_ip}","outer_port":#{outer_port}}'
+	config_get completion_webhook_success "$section" completion_webhook_success ""
+	config_get_bool completion_webhook_disable_success_check "$section" completion_webhook_disable_success_check 1
+	config_get_bool completion_webhook_skip_unchanged "$section" completion_webhook_skip_unchanged 0
+	config_get_bool completion_script_enabled "$section" completion_script_enabled 0
+	config_get completion_script_inline "$section" completion_script_inline ""
 	config_get_bool auto_firewall "$section" auto_firewall 0
 	config_get forward_method "$section" forward_method "auto"
 	config_get target_ip "$section" target_ip "0.0.0.0"
@@ -306,7 +320,6 @@ qnatter_write_notify_env() {
 		QNATTER_INSTANCE "$section" \
 		QNATTER_STATUS_FILE "$status_file" \
 		QNATTER_LOG_FILE "$log_file" \
-		QNATTER_USER_NOTIFY "$notify_script" \
 		QNATTER_AUTO_FIREWALL "$auto_firewall" \
 		QNATTER_FIREWALL_SECTION "$firewall_section" \
 		QNATTER_FIREWALL_NAME "$firewall_name" \
@@ -317,6 +330,17 @@ qnatter_write_notify_env() {
 		CLOUDFLARE_API_TOKEN "$cf_api_token" \
 		CLOUDFLARE_ZONE_ID "$cf_zone_id" \
 		CLOUDFLARE_RECORD_ID "$cf_record_id" \
+		QNATTER_COMPLETION_WEBHOOK_ENABLED "$completion_webhook_enabled" \
+		QNATTER_COMPLETION_WEBHOOK_URL "$completion_webhook_url" \
+		QNATTER_COMPLETION_WEBHOOK_TIMEOUT "$completion_webhook_timeout" \
+		QNATTER_COMPLETION_WEBHOOK_METHOD "$completion_webhook_method" \
+		QNATTER_COMPLETION_WEBHOOK_HEADERS "$completion_webhook_headers" \
+		QNATTER_COMPLETION_WEBHOOK_BODY "$completion_webhook_body" \
+		QNATTER_COMPLETION_WEBHOOK_SUCCESS "$completion_webhook_success" \
+		QNATTER_COMPLETION_WEBHOOK_DISABLE_SUCCESS_CHECK "$completion_webhook_disable_success_check" \
+		QNATTER_COMPLETION_WEBHOOK_SKIP_UNCHANGED "$completion_webhook_skip_unchanged" \
+		QNATTER_COMPLETION_SCRIPT_ENABLED "$completion_script_enabled" \
+		QNATTER_COMPLETION_SCRIPT_INLINE "$completion_script_inline" \
 		QBITTORRENT_ENABLED "$qb_enabled" \
 		QBITTORRENT_URL "$qb_url" \
 		QBITTORRENT_USERNAME "$qb_user" \
@@ -428,7 +452,7 @@ qnatter_write_runtime_fingerprint() {
 qnatter_start_instance() {
 	local section="$1"
 	local enabled protocol network bind_value bind_port public_ip_mode forward_method
-	local target_ip target_port keepalive_interval keepalive_server notify_script retry_target exit_when_changed
+	local target_ip target_port keepalive_interval keepalive_server retry_target exit_when_changed
 	local upnp verbose qb_enabled qb_forward qb_target_ip qb_target_port qb_forward_method
 	local stun_servers slug log_file notify_env notify_wrapper status_file runtime_file resolved_bind route_slot
 	local fingerprint_device fingerprint_ipv4
@@ -448,7 +472,6 @@ qnatter_start_instance() {
 	config_get target_port "$section" target_port "0"
 	config_get keepalive_interval "$section" keepalive_interval "15"
 	config_get keepalive_server "$section" keepalive_server ""
-	config_get notify_script "$section" notify_script ""
 	config_get_bool retry_target "$section" retry_target 0
 	config_get_bool exit_when_changed "$section" exit_when_changed 0
 	config_get_bool upnp "$section" upnp 0

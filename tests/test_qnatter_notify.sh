@@ -75,7 +75,8 @@ cat > "$env_file" <<EOF
 QNATTER_INSTANCE='wan_ct'
 QNATTER_STATUS_FILE='$status_file'
 QNATTER_LOG_FILE='$notify_log_file'
-QNATTER_USER_NOTIFY='$user_script'
+QNATTER_COMPLETION_SCRIPT_ENABLED='1'
+QNATTER_COMPLETION_SCRIPT_INLINE='printf "%s\\n" "\$@" > "$args_file"'
 QNATTER_AUTO_FIREWALL='1'
 QNATTER_FIREWALL_SECTION='qnatter_wan_ct'
 QNATTER_FIREWALL_NAME='QNatter WAN CT'
@@ -232,7 +233,8 @@ chmod 0755 "$logger_bin"
 cat > "$cf_fail_env_file" <<EOF
 QNATTER_INSTANCE='wan_cf_fail'
 QNATTER_STATUS_FILE='$cf_fail_status_file'
-QNATTER_USER_NOTIFY='$cf_fail_user_script'
+QNATTER_COMPLETION_SCRIPT_ENABLED='1'
+QNATTER_COMPLETION_SCRIPT_INLINE='printf "%s\\n" "\$@" > "$cf_fail_args_file"'
 CLOUDFLARE_SRV_ENABLED='1'
 CLOUDFLARE_API_URL='https://api.cloudflare.com/client/v4/zones/zone/dns_records/record'
 CLOUDFLARE_API_TOKEN='test-token'
@@ -256,6 +258,201 @@ tcp
 62005
 EOF
 cmp -s "$expected_args" "$cf_fail_args_file" || fail "Cloudflare SRV failure path did not call user notify"
+
+completion_status_file="$tmp/wan_completion.json"
+completion_log_file="$tmp/completion.log"
+completion_inline_args_file="$tmp/completion-inline-args.txt"
+completion_env_file="$tmp/completion-notify.env"
+completion_curl_bin="$tmp/curl-completion"
+completion_curl_args="$tmp/curl-completion-args.txt"
+completion_curl_body="$tmp/curl-completion-body.json"
+
+cat > "$completion_curl_bin" <<EOF
+#!/bin/sh
+printf '%s\n' "\$@" > "$completion_curl_args"
+while [ "\$#" -gt 0 ]; do
+	case "\$1" in
+		--data|-d|--data-raw)
+			shift
+			printf '%s\n' "\$1" > "$completion_curl_body"
+			;;
+	esac
+	shift
+done
+exit 0
+EOF
+chmod 0755 "$completion_curl_bin"
+
+cat > "$completion_env_file" <<EOF
+QNATTER_INSTANCE='wan_completion'
+QNATTER_STATUS_FILE='$completion_status_file'
+QNATTER_LOG_FILE='$completion_log_file'
+QNATTER_COMPLETION_WEBHOOK_ENABLED='1'
+QNATTER_COMPLETION_WEBHOOK_URL='https://hooks.example/qnatter'
+QNATTER_COMPLETION_WEBHOOK_TIMEOUT='3'
+QNATTER_COMPLETION_SCRIPT_ENABLED='1'
+QNATTER_COMPLETION_SCRIPT_INLINE='printf "%s\\n" "\$@" > "$completion_inline_args_file"'
+QBITTORRENT_ENABLED='0'
+EOF
+
+QNATTER_COMMON_SH="$ROOT/qnatter/files/qnatter-common.sh" \
+QNATTER_QBITTORRENT_SH="$ROOT/qnatter/files/qnatter-qbittorrent.sh" \
+QNATTER_CURL_BIN="$completion_curl_bin" \
+QNATTER_NOTIFY_ENV="$completion_env_file" \
+	"$ROOT/qnatter/files/qnatter-notify" udp 10.10.10.40 51417 203.0.113.40 62007
+
+for want in \
+	'-fsS' \
+	'-m' \
+	'3' \
+	'-X' \
+	'POST' \
+	'Content-Type: application/json' \
+	'https://hooks.example/qnatter'
+do
+	grep -Fqx -- "$want" "$completion_curl_args" || fail "completion webhook curl call is missing: $want"
+done
+grep -Fqx '{"event":"mapped","instance":"wan_completion","protocol":"udp","inner_ip":"10.10.10.40","inner_port":51417,"outer_ip":"203.0.113.40","outer_port":62007}' "$completion_curl_body" || \
+	fail "completion webhook body must include mapped address JSON"
+
+cat > "$expected_args" <<'EOF'
+udp
+10.10.10.40
+51417
+203.0.113.40
+62007
+EOF
+cmp -s "$expected_args" "$completion_inline_args_file" || fail "completion inline script args did not match mapping"
+grep -Fq 'completion webhook sent for wan_completion' "$completion_log_file" || \
+	fail "completion webhook success was not written to instance log"
+grep -Fq 'completion inline script ran for wan_completion' "$completion_log_file" || \
+	fail "completion inline script success was not written to instance log"
+
+custom_webhook_status_file="$tmp/wan_custom_webhook.json"
+custom_webhook_log_file="$tmp/custom-webhook.log"
+custom_webhook_env_file="$tmp/custom-webhook.env"
+custom_webhook_curl_bin="$tmp/curl-custom-webhook"
+custom_webhook_args="$tmp/custom-webhook-args.txt"
+custom_webhook_body="$tmp/custom-webhook-body.txt"
+
+cat > "$custom_webhook_curl_bin" <<EOF
+#!/bin/sh
+printf '%s\n' "\$@" > "$custom_webhook_args"
+while [ "\$#" -gt 0 ]; do
+	case "\$1" in
+		--data|-d|--data-raw)
+			shift
+			printf '%s\n' "\$1" > "$custom_webhook_body"
+			;;
+	esac
+	shift
+done
+printf 'accepted port=62009\n'
+exit 0
+EOF
+chmod 0755 "$custom_webhook_curl_bin"
+
+cat > "$custom_webhook_env_file" <<EOF
+QNATTER_INSTANCE='wan_custom_webhook'
+QNATTER_STATUS_FILE='$custom_webhook_status_file'
+QNATTER_LOG_FILE='$custom_webhook_log_file'
+QNATTER_COMPLETION_WEBHOOK_ENABLED='1'
+QNATTER_COMPLETION_WEBHOOK_URL='https://hooks.example/#{instance}/#{protocol}'
+QNATTER_COMPLETION_WEBHOOK_TIMEOUT='5'
+QNATTER_COMPLETION_WEBHOOK_METHOD='PATCH'
+QNATTER_COMPLETION_WEBHOOK_HEADERS='Content-Type: application/x-www-form-urlencoded
+X-QNatter: #{instance}-#{protocol}'
+QNATTER_COMPLETION_WEBHOOK_BODY='json={"listen_port":#{port},"outer_ip":"#{outer_ip}","inner_port":#{inner_port}}'
+QNATTER_COMPLETION_WEBHOOK_SUCCESS='accepted port=#{outer_port}'
+QNATTER_COMPLETION_WEBHOOK_DISABLE_SUCCESS_CHECK='0'
+QBITTORRENT_ENABLED='0'
+EOF
+
+QNATTER_COMMON_SH="$ROOT/qnatter/files/qnatter-common.sh" \
+QNATTER_QBITTORRENT_SH="$ROOT/qnatter/files/qnatter-qbittorrent.sh" \
+QNATTER_CURL_BIN="$custom_webhook_curl_bin" \
+QNATTER_NOTIFY_ENV="$custom_webhook_env_file" \
+	"$ROOT/qnatter/files/qnatter-notify" tcp 10.10.10.42 51419 203.0.113.42 62009
+
+for want in \
+	'-m' \
+	'5' \
+	'-X' \
+	'PATCH' \
+	'Content-Type: application/x-www-form-urlencoded' \
+	'X-QNatter: wan_custom_webhook-tcp' \
+	'https://hooks.example/wan_custom_webhook/tcp'
+do
+	grep -Fqx -- "$want" "$custom_webhook_args" || fail "custom webhook curl call is missing: $want"
+done
+grep -Fqx 'json={"listen_port":62009,"outer_ip":"203.0.113.42","inner_port":51419}' "$custom_webhook_body" || \
+	fail "custom webhook body did not expand mapping template"
+grep -Fq 'completion webhook sent for wan_custom_webhook' "$custom_webhook_log_file" || \
+	fail "custom webhook success was not logged"
+
+unchanged_webhook_status_file="$tmp/wan_unchanged_webhook.json"
+unchanged_webhook_log_file="$tmp/unchanged-webhook.log"
+unchanged_webhook_env_file="$tmp/unchanged-webhook.env"
+unchanged_webhook_curl_bin="$tmp/curl-unchanged-webhook"
+unchanged_webhook_args="$tmp/unchanged-webhook-args.txt"
+
+cat > "$unchanged_webhook_status_file" <<'EOF'
+{"instance":"wan_unchanged_webhook","protocol":"udp","inner_ip":"10.10.10.43","inner_port":51420,"outer_ip":"203.0.113.43","outer_port":62010,"message":"mapped"}
+EOF
+
+cat > "$unchanged_webhook_curl_bin" <<EOF
+#!/bin/sh
+printf '%s\n' "\$@" > "$unchanged_webhook_args"
+exit 0
+EOF
+chmod 0755 "$unchanged_webhook_curl_bin"
+
+cat > "$unchanged_webhook_env_file" <<EOF
+QNATTER_INSTANCE='wan_unchanged_webhook'
+QNATTER_STATUS_FILE='$unchanged_webhook_status_file'
+QNATTER_LOG_FILE='$unchanged_webhook_log_file'
+QNATTER_COMPLETION_WEBHOOK_ENABLED='1'
+QNATTER_COMPLETION_WEBHOOK_URL='https://hooks.example/qnatter'
+QNATTER_COMPLETION_WEBHOOK_SKIP_UNCHANGED='1'
+QBITTORRENT_ENABLED='0'
+EOF
+
+QNATTER_COMMON_SH="$ROOT/qnatter/files/qnatter-common.sh" \
+QNATTER_QBITTORRENT_SH="$ROOT/qnatter/files/qnatter-qbittorrent.sh" \
+QNATTER_CURL_BIN="$unchanged_webhook_curl_bin" \
+QNATTER_NOTIFY_ENV="$unchanged_webhook_env_file" \
+	"$ROOT/qnatter/files/qnatter-notify" udp 10.10.10.43 51420 203.0.113.43 62010
+
+[ ! -e "$unchanged_webhook_args" ] || fail "unchanged mapping webhook must not call curl"
+grep -Fq 'completion webhook skipped for wan_unchanged_webhook: mapping unchanged' "$unchanged_webhook_log_file" || \
+	fail "unchanged mapping webhook skip was not logged"
+
+completion_file_status_file="$tmp/wan_completion_file.json"
+completion_file_args_file="$tmp/completion-file-args.txt"
+completion_file_script="$tmp/completion-file.sh"
+completion_file_env_file="$tmp/completion-file-notify.env"
+
+cat > "$completion_file_script" <<EOF
+#!/bin/sh
+printf '%s\n' "\$@" > "$completion_file_args_file"
+EOF
+chmod 0755 "$completion_file_script"
+
+cat > "$completion_file_env_file" <<EOF
+QNATTER_INSTANCE='wan_completion_file'
+QNATTER_STATUS_FILE='$completion_file_status_file'
+QNATTER_COMPLETION_SCRIPT_ENABLED='1'
+QNATTER_COMPLETION_SCRIPT_FILE='$completion_file_script'
+QBITTORRENT_ENABLED='0'
+EOF
+
+QNATTER_COMMON_SH="$ROOT/qnatter/files/qnatter-common.sh" \
+QNATTER_QBITTORRENT_SH="$ROOT/qnatter/files/qnatter-qbittorrent.sh" \
+QNATTER_NOTIFY_ENV="$completion_file_env_file" \
+	"$ROOT/qnatter/files/qnatter-notify" tcp 10.10.10.41 51418 203.0.113.41 62008
+
+[ ! -e "$completion_file_args_file" ] || fail "completion file script must not run"
+
 cat > "$expected_args" <<'EOF'
 tcp
 10.10.10.10
@@ -284,7 +481,8 @@ chmod 0755 "$logger_bin"
 cat > "$qb_env_file" <<EOF
 QNATTER_INSTANCE='wan_cm'
 QNATTER_STATUS_FILE='$qb_status_file'
-QNATTER_USER_NOTIFY='$qb_user_script'
+QNATTER_COMPLETION_SCRIPT_ENABLED='1'
+QNATTER_COMPLETION_SCRIPT_INLINE='printf "%s\\n" "\$@" > "$qb_args_file"'
 QBITTORRENT_ENABLED='1'
 QBITTORRENT_URL=''
 QBITTORRENT_USERNAME=''
@@ -387,7 +585,8 @@ cat > "$qb_ok_env_file" <<EOF
 QNATTER_INSTANCE='wan_ok'
 QNATTER_STATUS_FILE='$qb_ok_status_file'
 QNATTER_LOG_FILE='$qb_ok_log_file'
-QNATTER_USER_NOTIFY='$qb_ok_user_script'
+QNATTER_COMPLETION_SCRIPT_ENABLED='1'
+QNATTER_COMPLETION_SCRIPT_INLINE='printf "%s\\n" "\$@" > "$qb_ok_args_file"'
 QBITTORRENT_ENABLED='1'
 QBITTORRENT_URL='http://127.0.0.1:9/'
 QBITTORRENT_USERNAME='admin'

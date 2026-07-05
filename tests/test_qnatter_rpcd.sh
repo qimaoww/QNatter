@@ -97,6 +97,9 @@ cat > "$curl_bin" <<EOF
 #!/bin/sh
 printf '%s\n' "\$*" >> "$curl_calls"
 case "\$*" in
+	*'hooks.example/test'*)
+		printf 'manual-ok 62000\n'
+		;;
 	*'/zones/zone1/dns_records?type=SRV&per_page=100'*)
 		cat <<'JSON'
 {"result":[{"id":"record1","name":"_qb._tcp.example.com","data":{"target":"qb.example.com","port":51413}},{"id":"record2","name":"_mc._tcp.example.com","data":{"target":"mc.example.com","port":25565}}]}
@@ -126,6 +129,14 @@ while [ "$#" -gt 0 ]; do
 done
 input="$(cat)"
 case "$input:$expr" in
+	*'hooks.example/test'*':@.section') printf 'wan_ct\n' ;;
+	*'hooks.example/test'*':@.url') printf 'https://hooks.example/test\n' ;;
+	*'hooks.example/test'*':@.method') printf 'PUT\n' ;;
+	*'hooks.example/test'*':@.headers') printf 'Content-Type: text/plain\nX-Test: #{port}\n' ;;
+	*'hooks.example/test'*':@.body') printf 'port=#{port}\n' ;;
+	*'hooks.example/test'*':@.success') printf 'manual-ok #{port}\n' ;;
+	*'hooks.example/test'*':@.disable_success_check') printf '0\n' ;;
+	*'hooks.example/test'*':@.timeout') printf '4\n' ;;
 	*'example.net'*':@.result[*].id') printf 'zone1\nzone2\n' ;;
 	*'example.net'*':@.result[*].name') printf 'example.com\nexample.net\n' ;;
 	*'record2'*':@.result[*].id') printf 'record1\nrecord2\n' ;;
@@ -155,6 +166,8 @@ printf '%s' "$list_output" | grep -Fq '"rename_instance":{"old":"String","new":"
 	fail "rpc list is missing rename_instance signature: $list_output"
 printf '%s' "$list_output" | grep -Fq '"toggle_instance":{"instance":"String"}' || \
 	fail "rpc list is missing toggle_instance signature: $list_output"
+printf '%s' "$list_output" | grep -Fq '"completion_webhook_test":{"section":"String","url":"String","method":"String","headers":"String","body":"String","success":"String","disable_success_check":"String","timeout":"Integer"}' || \
+	fail "rpc list is missing completion_webhook_test signature: $list_output"
 
 status_output="$(
 	printf '{}\n' | QNATTER_STATUS_BIN="$status_bin" QNATTER_LOG_BIN="$log_bin" "$rpcd" call status
@@ -194,6 +207,18 @@ unsaved_zones_output="$(
 [ "$unsaved_zones_output" = '{"zones":[{"id":"zone1","name":"example.com"},{"id":"zone2","name":"example.net"}]}' ] || \
 	fail "Cloudflare zones output must use unsaved input token: $unsaved_zones_output"
 grep -Fq 'Authorization: Bearer input-token' "$curl_calls" || fail "Cloudflare RPC did not send unsaved input token"
+
+webhook_test_output="$(
+	printf '{"section":"wan_ct","url":"https://hooks.example/test","method":"PUT","headers":"Content-Type: text/plain\nX-Test: #{port}","body":"port=#{port}","success":"manual-ok #{port}","disable_success_check":"0","timeout":4}\n' | \
+		QNATTER_CURL_BIN="$curl_bin" \
+		QNATTER_JSONFILTER_BIN="$jsonfilter_bin" \
+		"$rpcd" call completion_webhook_test
+)"
+[ "$webhook_test_output" = '{"ok":true,"response":"manual-ok 62000"}' ] || fail "webhook test output = $webhook_test_output"
+grep -Fq -- '-X PUT' "$curl_calls" || fail "webhook test did not use requested method"
+grep -Fq -- 'Content-Type: text/plain' "$curl_calls" || fail "webhook test did not send requested header"
+grep -Fq -- 'X-Test: 62000' "$curl_calls" || fail "webhook test did not expand header template"
+grep -Fq -- '--data port=62000' "$curl_calls" || fail "webhook test did not expand request body"
 
 : > "$run_dir/wan_ct.json"
 : > "$run_dir/wan_ct.env"
