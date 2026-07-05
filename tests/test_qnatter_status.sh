@@ -29,6 +29,7 @@ config_foreach() {
 	"$callback" wan_cm
 	"$callback" dot.name
 	"$callback" dotXname
+	"$callback" disabled
 }
 
 config_get() {
@@ -61,6 +62,10 @@ config_get() {
 		dotXname:network) value="wan4" ;;
 		dotXname:bind_value) value="pppoe-wan4" ;;
 		dotXname:protocol) value="tcp" ;;
+		disabled:enabled) value="0" ;;
+		disabled:network) value="wan5" ;;
+		disabled:bind_value) value="pppoe-wan5" ;;
+		disabled:protocol) value="tcp" ;;
 	esac
 
 	eval "$__var=\$value"
@@ -128,10 +133,18 @@ case "$output" in
 	*'"name":"wan_ct"'*'"running":true'*'"network":"wan"'*) : ;;
 	*) fail "status output must detect runtime status file proc instance: $output" ;;
 esac
+case "$output" in
+	*'"name":"wan_ct"'*'"state":"running"'*) : ;;
+	*) fail "status output must mark running mapped instance as running: $output" ;;
+esac
 
 case "$output" in
 	*'"name":"wan_cm"'*'"inner_port":0'*'"outer_port":0'*) : ;;
 	*) fail "status output must use zero ports when runtime status is absent: $output" ;;
+esac
+case "$output" in
+	*'"name":"wan_cm"'*'"state":"error"'*) : ;;
+	*) fail "status output must mark enabled stopped instance as error: $output" ;;
 esac
 
 case "$output" in
@@ -142,6 +155,15 @@ esac
 case "$output" in
 	*'"name":"dotXname"'*'"running":true'*) : ;;
 	*) fail "status output must detect exact fake proc instance: $output" ;;
+esac
+case "$output" in
+	*'"name":"dotXname"'*'"state":"error"'*) : ;;
+	*) fail "status output must mark running instance without mapping as error: $output" ;;
+esac
+
+case "$output" in
+	*'"name":"disabled"'*'"enabled":false'*'"state":"stopped"'*) : ;;
+	*) fail "status output must mark disabled instance as stopped: $output" ;;
 esac
 
 printf 'qnatter status checks passed\n'

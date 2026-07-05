@@ -95,6 +95,35 @@ function itemInner(item) {
 		: (item.bind_value || item.network || '');
 }
 
+function itemState(item) {
+	if (item.state)
+		return item.state;
+
+	if (!item.enabled)
+		return 'stopped';
+
+	if (item.running && item.outer_ip && Number(item.outer_port || 0) > 0)
+		return 'running';
+
+	return 'error';
+}
+
+function itemStateClass(state) {
+	return state === 'running'
+		? 'is-running'
+		: (state === 'error' ? 'is-error' : 'is-stopped');
+}
+
+function itemStateText(state) {
+	if (state === 'running')
+		return _('RUNNING');
+
+	if (state === 'error')
+		return _('ABNORMAL');
+
+	return _('NOT RUNNING');
+}
+
 function createCard(item, fieldByName) {
 	var name = itemKey(item);
 	var fields = {};
@@ -137,6 +166,7 @@ function updateCard(item, fieldByName) {
 	var route = itemRoute(item);
 	var inner = itemInner(item);
 	var protocol = (item.protocol || 'tcp').toString().toUpperCase();
+	var state = itemState(item);
 
 	if (!fields)
 		return;
@@ -144,8 +174,8 @@ function updateCard(item, fieldByName) {
 	setText(fields.name, name || '-');
 	if (fields.running && !fields.running.disabled) {
 		fields.running.setAttribute('data-enabled', item.enabled ? '1' : '0');
-		fields.running.className = 'qnatter-pill qnatter-pill-clickable ' + (item.running ? 'is-running' : 'is-stopped');
-		setText(fields.running, item.running ? _('RUNNING') : _('NOT RUNNING'));
+		fields.running.className = 'qnatter-pill qnatter-pill-clickable ' + itemStateClass(state);
+		setText(fields.running, itemStateText(state));
 	}
 	setText(fields.route, route);
 	setText(fields.inner, inner);

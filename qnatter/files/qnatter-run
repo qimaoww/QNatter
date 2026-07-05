@@ -4,4 +4,5 @@ log_file="$1"
 shift
 
 mkdir -p "$(dirname "$log_file")"
+[ -n "${QNATTER_STATUS_FILE:-}" ] && rm -f "$QNATTER_STATUS_FILE"
 exec "${QNATTER_GO_BIN:-/usr/bin/QNatter}" "$@" >> "$log_file" 2>&1

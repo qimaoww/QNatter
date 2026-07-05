@@ -105,10 +105,39 @@ instance_running() {
 	return 1
 }
 
+mapping_valid() {
+	local outer_ip="$1"
+	local outer_port="${2:-0}"
+
+	[ -n "$outer_ip" ] || return 1
+	[ -n "$outer_port" ] || return 1
+	[ "$outer_port" != "0" ] || return 1
+	return 0
+}
+
+instance_state() {
+	local enabled="$1"
+	local running="$2"
+	local outer_ip="$3"
+	local outer_port="${4:-0}"
+
+	if ! qnatter_bool "$enabled"; then
+		printf '%s\n' "stopped"
+		return 0
+	fi
+
+	if [ "$running" = "1" ] && mapping_valid "$outer_ip" "$outer_port"; then
+		printf '%s\n' "running"
+		return 0
+	fi
+
+	printf '%s\n' "error"
+}
+
 emit_instance() {
 	local section="$1"
 	local enabled network bind_value protocol qb_enabled qb_forward slug file running
-	local inner_ip inner_port outer_ip outer_port updated_at message
+	local inner_ip inner_port outer_ip outer_port updated_at message state
 
 	config_get enabled "$section" enabled "0"
 	config_get network "$section" network "wan"
@@ -128,6 +157,7 @@ emit_instance() {
 
 	running=0
 	instance_running "$section" "$file" && running=1
+	state="$(instance_state "$enabled" "$running" "$outer_ip" "$outer_port")"
 
 	[ "$first" = "1" ] || printf ','
 	first=0
@@ -135,6 +165,7 @@ emit_instance() {
 	json_pair name "$section"; printf ','
 	json_bool_pair enabled "$enabled"; printf ','
 	json_bool_pair running "$running"; printf ','
+	json_pair state "$state"; printf ','
 	json_pair network "$network"; printf ','
 	json_pair bind_value "$bind_value"; printf ','
 	json_pair protocol "$protocol"; printf ','

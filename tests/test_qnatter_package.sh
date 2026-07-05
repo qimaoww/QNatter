@@ -146,6 +146,8 @@ assert_not_contains luci-app-qnatter/Makefile 'luci-compat'
 assert_not_contains luci-app-qnatter/Makefile 'LUCI_DEPENDS:=.*\+luci-compat'
 assert_contains luci-app-qnatter/Makefile '^PKG_VERSION:=1\.1\.0$'
 assert_contains luci-app-qnatter/Makefile '^PKG_RELEASE:=1$'
+assert_contains luci-app-qnatter/Makefile 'define Package/luci-app-qnatter/postinst'
+assert_contains luci-app-qnatter/Makefile 'chown root:root "\$\$root\$\$path"'
 assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances.js "^'require form';"
 assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances.js "^'require fs';"
 assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances.js "^'require rpc';"
@@ -231,6 +233,9 @@ assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/statu
 assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/status.js "callToggleInstance\\(name\\)"
 assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/status.js "toggleInstance\\(name, this\\)"
 assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/status.js "_\\('RUNNING'\\)"
+assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/status.js "_\\('ABNORMAL'\\)"
+assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/status.js 'itemState'
+assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/status.js 'is-error'
 assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/status.js 'cardByName'
 assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/status.js 'fieldByName'
 assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/status.js 'refreshInFlight'
@@ -267,8 +272,10 @@ assert_contains luci-app-qnatter/root/usr/share/rpcd/acl.d/luci-app-qnatter.json
 assert_contains luci-app-qnatter/root/usr/share/rpcd/acl.d/luci-app-qnatter.json '"rename_instance"'
 assert_contains luci-app-qnatter/root/usr/share/rpcd/acl.d/luci-app-qnatter.json '"toggle_instance"'
 assert_contains luci-app-qnatter/root/usr/libexec/qnatter-status 'grep -Fx'
+assert_contains luci-app-qnatter/root/usr/libexec/qnatter-status 'json_pair state'
 assert_contains luci-app-qnatter/htdocs/luci-static/resources/qnatter/qnatter.css 'theme-argon'
 assert_contains luci-app-qnatter/htdocs/luci-static/resources/qnatter/qnatter.css 'qnatter-theme-aurora'
+assert_contains luci-app-qnatter/htdocs/luci-static/resources/qnatter/qnatter.css '\.qnatter-pill\.is-error'
 assert_contains luci-app-qnatter/htdocs/luci-static/resources/qnatter/qnatter.css ':root:not\(\[data-darkmode="true"\]\) \.qnatter-theme-aurora'
 assert_contains luci-app-qnatter/htdocs/luci-static/resources/qnatter/qnatter.css '\[data-darkmode="true"\] \.qnatter-theme-aurora'
 assert_contains luci-app-qnatter/htdocs/luci-static/resources/qnatter/qnatter.css 'var\(--surface-overlay'
@@ -317,6 +324,7 @@ assert_contains qnatter/files/qnatter.init 'bind=\$\{resolved_bind:-default rout
 assert_contains qnatter/files/qnatter.init 'config_get bind_value "\$section" bind_value ""'
 assert_contains qnatter/files/qnatter.init 'qnatter_record_interface_trigger "\$network"'
 assert_not_contains qnatter/files/qnatter.init '\[ -n "\$bind_value" \] && return 0'
+assert_contains qnatter/files/qnatter-run 'rm -f "\$QNATTER_STATUS_FILE"'
 assert_contains qnatter/files/qnatter.hotplug 'config_get bind_value "\$section" bind_value'
 assert_contains qnatter/files/qnatter.hotplug 'if \[ -n "\$bind_value" \]; then'
 assert_contains qnatter/files/qnatter.hotplug '\[ "\$bind_value" = "\$DEVICE" \] && MATCHED=1'
@@ -628,6 +636,12 @@ sh -n "$ROOT/tests/test_qnatter_uci_default.sh"
 	QNATTER_GO_BIN="$tmp/qnatter-go-bin" \
 		"$ROOT/qnatter/files/qnatter-run" "$tmp/default-runtime.log" alpha beta
 	grep -qx 'go:alpha beta' "$tmp/default-runtime.log" || fail "qnatter-run default runtime must execute qnatter-go"
+
+	printf 'stale status\n' > "$tmp/stale-status.json"
+	QNATTER_STATUS_FILE="$tmp/stale-status.json" QNATTER_GO_BIN="$tmp/qnatter-go-bin" \
+		"$ROOT/qnatter/files/qnatter-run" "$tmp/stale-runtime.log" delta
+	grep -qx 'go:delta' "$tmp/stale-runtime.log" || fail "qnatter-run with status file must execute qnatter-go"
+	[ ! -e "$tmp/stale-status.json" ] || fail "qnatter-run must clear stale status before starting qnatter-go"
 
 	QNATTER_RUNTIME=python QNATTER_GO_BIN="$tmp/qnatter-go-bin" \
 		"$ROOT/qnatter/files/qnatter-run" "$tmp/python-runtime.log" gamma

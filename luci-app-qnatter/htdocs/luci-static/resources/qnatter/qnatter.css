@@ -176,6 +176,11 @@
 	color: #991b1b;
 }
 
+.qnatter-pill.is-error {
+	background: #fef3c7;
+	color: #92400e;
+}
+
 .qnatter-pill-clickable[data-enabled="0"] {
 	opacity: 0.6;
 	background: #f1f5f9;
@@ -333,6 +338,11 @@
 .qnatter-theme-argon .qnatter-pill.is-stopped {
 	background: rgba(245, 54, 92, 0.15);
 	color: #d12e50;
+}
+
+.qnatter-theme-argon .qnatter-pill.is-error {
+	background: rgba(251, 177, 60, 0.18);
+	color: #b45309;
 }
 
 /* 可点击徽章 */
@@ -615,6 +625,11 @@
 	color: #f56e8a;
 }
 
+.qnatter-theme-argon.qnatter-argon-dark .qnatter-pill.is-error {
+	background: rgba(251, 177, 60, 0.22);
+	color: #fbbf24;
+}
+
 .qnatter-theme-argon.qnatter-argon-dark .qnatter-pill-clickable[data-enabled="0"] {
 	background: rgba(136, 152, 170, 0.2);
 	color: var(--argon-muted);
@@ -635,6 +650,8 @@
 	--qnatter-pill-running-text: var(--success, #166534);
 	--qnatter-pill-stopped-bg: var(--danger-surface, #fee2e2);
 	--qnatter-pill-stopped-text: var(--danger, #991b1b);
+	--qnatter-pill-error-bg: var(--warning-surface, #fef3c7);
+	--qnatter-pill-error-text: var(--warning, #92400e);
 }
 
 :root:not([data-darkmode="true"]) .qnatter-theme-aurora {
@@ -774,6 +791,11 @@
 .qnatter-theme-aurora .qnatter-pill.is-stopped {
 	background: var(--qnatter-pill-stopped-bg);
 	color: var(--qnatter-pill-stopped-text);
+}
+
+.qnatter-theme-aurora .qnatter-pill.is-error {
+	background: var(--qnatter-pill-error-bg);
+	color: var(--qnatter-pill-error-text);
 }
 
 .qnatter-theme-aurora .qnatter-pill-clickable[data-enabled="0"] {

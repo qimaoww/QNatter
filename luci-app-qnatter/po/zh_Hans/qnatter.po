@@ -253,6 +253,9 @@ msgstr "等待映射"
 msgid "RUNNING"
 msgstr "运行中"
 
+msgid "ABNORMAL"
+msgstr "异常"
+
 msgid "NOT RUNNING"
 msgstr "未运行"
 
