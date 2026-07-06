@@ -303,6 +303,17 @@ function setAutomationVisible(nodes, visible) {
 		nodes[i].classList.toggle('is-hidden', !visible);
 }
 
+function setAutomationResult(root, name, state, text) {
+	var result = root.querySelector('[data-result="' + name + '"]');
+
+	if (!result)
+		return;
+
+	result.textContent = text || '';
+	result.className = 'qnatter-automation-result' + (state ? ' is-' + state : '');
+	result.classList.toggle('is-hidden', !text);
+}
+
 function setupAutomationPanel(section_id, root) {
 	var scriptToggle = automationNode(section_id, 'completion_script_enabled');
 	var webhookToggle = automationNode(section_id, 'completion_webhook_enabled');
@@ -328,6 +339,7 @@ function setupAutomationPanel(section_id, root) {
 			ev.preventDefault();
 			scriptTestButton.disabled = true;
 			scriptTestButton.classList.add('spinning');
+			setAutomationResult(root, 'script-test', 'running', _('Running script test...'));
 
 			callCompletionScriptTest(
 				section_id,
@@ -338,9 +350,9 @@ function setupAutomationPanel(section_id, root) {
 					? _('Script test succeeded') + (result.output ? ': ' + result.output : '')
 					: _('Script test failed') + (result && result.error ? ': ' + result.error : '');
 
-				ui.addNotification(null, E('p', [ text ]), ok ? 'info' : 'danger');
+				setAutomationResult(root, 'script-test', ok ? 'success' : 'error', text);
 			}).catch(function(err) {
-				ui.addNotification(null, E('p', [ _('Script test failed') + ': ' + err.message ]), 'danger');
+				setAutomationResult(root, 'script-test', 'error', _('Script test failed') + ': ' + err.message);
 			}).finally(function() {
 				scriptTestButton.disabled = false;
 				scriptTestButton.classList.remove('spinning');
@@ -353,6 +365,7 @@ function setupAutomationPanel(section_id, root) {
 			ev.preventDefault();
 			webhookTestButton.disabled = true;
 			webhookTestButton.classList.add('spinning');
+			setAutomationResult(root, 'webhook-test', 'running', _('Running webhook test...'));
 
 			callCompletionWebhookTest(
 				section_id,
@@ -370,9 +383,9 @@ function setupAutomationPanel(section_id, root) {
 					? _('Webhook test succeeded') + (result.response ? ': ' + result.response : '')
 					: _('Webhook test failed') + (result && result.error ? ': ' + result.error : '');
 
-				ui.addNotification(null, E('p', [ text ]), ok ? 'info' : 'danger');
+				setAutomationResult(root, 'webhook-test', ok ? 'success' : 'error', text);
 			}).catch(function(err) {
-				ui.addNotification(null, E('p', [ _('Webhook test failed') + ': ' + err.message ]), 'danger');
+				setAutomationResult(root, 'webhook-test', 'error', _('Webhook test failed') + ': ' + err.message);
 			}).finally(function() {
 				webhookTestButton.disabled = false;
 				webhookTestButton.classList.remove('spinning');
@@ -403,7 +416,11 @@ function renderAutomationPanel(section_id) {
 				automationTextarea(section_id, 'completion_script_inline', '', '', 12, true),
 				'qnatter-automation-row-wide',
 				'script'
-			)
+			),
+			E('div', {
+				'class': 'qnatter-automation-result is-hidden',
+				'data-result': 'script-test'
+			})
 		]),
 		E('div', { 'class': 'qnatter-automation-section' }, [
 			E('div', { 'class': 'qnatter-automation-section-head' }, [
@@ -441,7 +458,11 @@ function renderAutomationPanel(section_id) {
 					automationRow(section_id, 'completion_webhook_success', _('Success string'),
 						automationInput(section_id, 'completion_webhook_success', '', 'ok'), 'qnatter-automation-row-stack', 'webhook-success')
 				])
-			])
+			]),
+			E('div', {
+				'class': 'qnatter-automation-result is-hidden',
+				'data-result': 'webhook-test'
+			})
 		])
 	]);
 
@@ -873,7 +894,7 @@ return view.extend({
 			return E('div', { 'class': 'qnatter-page qnatter-form-page' + detectThemeClass() }, [
 				E('link', {
 					'rel': 'stylesheet',
-					'href': L.resource('qnatter/qnatter.css') + '?v=1.1.0-r1&layout=automation5'
+					'href': L.resource('qnatter/qnatter.css') + '?v=1.1.0-r1&layout=automation6'
 				}),
 				node
 			]);

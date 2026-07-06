@@ -239,13 +239,19 @@ assert_not_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/i
 assert_not_contains luci-app-qnatter/htdocs/luci-static/resources/qnatter/qnatter.css 'qnatter-automation-card'
 assert_line_order luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances.js "s.option(form.ListValue, 'qbittorrent_forward_method'" "s.option(form.DummyValue, '_automation_panel'"
 assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances.js "qnatter-automation-title"
-assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances.js "layout=automation5"
+assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances.js "layout=automation6"
 assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances.js "s\\.option\\(form\\.DummyValue, '_automation_panel'"
 assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances.js 'renderAutomationPanel'
 assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances.js 'writeAutomationField'
 assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances.js 'callCompletionWebhookTest'
 assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances.js 'callCompletionScriptTest'
 assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances.js 'Script manual trigger test'
+assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances.js 'setAutomationResult'
+assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances.js 'Running script test...'
+assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances.js 'Running webhook test...'
+assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances.js "data-result': 'script-test"
+assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances.js "data-result': 'webhook-test"
+assert_not_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances.js "ui\\.addNotification\\(null, E\\('p', \\[ text \\]\\), ok \\? 'info' : 'danger'\\)"
 assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances.js 'completion_webhook_success_check'
 assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances.js 'completion_webhook_method'
 assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances.js 'completion_webhook_headers'
@@ -256,9 +262,19 @@ assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/insta
 assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances.js 'completion_script_inline'
 assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances-v11.js 'callCompletionScriptTest'
 assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances-v11.js 'Script manual trigger test'
+assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances-v11.js 'setAutomationResult'
+assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances-v11.js 'Running script test...'
+assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances-v11.js 'Running webhook test...'
+assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances-v11.js "data-result': 'script-test"
+assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances-v11.js "data-result': 'webhook-test"
+assert_not_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances-v11.js "ui\\.addNotification\\(null, E\\('p', \\[ text \\]\\), ok \\? 'info' : 'danger'\\)"
 assert_contains luci-app-qnatter/htdocs/luci-static/resources/qnatter/qnatter.css 'qnatter-automation-panel'
 assert_contains luci-app-qnatter/htdocs/luci-static/resources/qnatter/qnatter.css 'qnatter-automation-section'
 assert_contains luci-app-qnatter/htdocs/luci-static/resources/qnatter/qnatter.css 'qnatter-automation-grid'
+assert_contains luci-app-qnatter/htdocs/luci-static/resources/qnatter/qnatter.css 'qnatter-automation-result'
+assert_contains luci-app-qnatter/htdocs/luci-static/resources/qnatter/qnatter.css 'qnatter-automation-result.is-running'
+assert_contains luci-app-qnatter/htdocs/luci-static/resources/qnatter/qnatter.css 'qnatter-automation-result.is-success'
+assert_contains luci-app-qnatter/htdocs/luci-static/resources/qnatter/qnatter.css 'qnatter-automation-result.is-error'
 assert_css_block_contains luci-app-qnatter/htdocs/luci-static/resources/qnatter/qnatter.css '.qnatter-automation-panel' 'width: 100%'
 assert_css_block_contains luci-app-qnatter/htdocs/luci-static/resources/qnatter/qnatter.css '.qnatter-form-page .cbi-value[data-name="_automation_panel"] > .cbi-value-title' 'display: none'
 assert_css_block_contains luci-app-qnatter/htdocs/luci-static/resources/qnatter/qnatter.css '.qnatter-form-page .cbi-value[data-name="_automation_panel"] > .cbi-value-field' 'width: 100%'

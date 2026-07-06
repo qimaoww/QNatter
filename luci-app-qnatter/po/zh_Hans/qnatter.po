@@ -175,6 +175,9 @@ msgstr "脚本内容"
 msgid "Script manual trigger test"
 msgstr "脚本手动触发测试"
 
+msgid "Running script test..."
+msgstr "正在测试脚本..."
+
 msgid "Script test succeeded"
 msgstr "脚本测试成功"
 
@@ -189,6 +192,9 @@ msgstr "Webhook 触发"
 
 msgid "Webhook manual trigger test"
 msgstr "Webhook 手动触发测试"
+
+msgid "Running webhook test..."
+msgstr "正在测试 Webhook..."
 
 msgid "Webhook test succeeded"
 msgstr "Webhook 测试成功"
