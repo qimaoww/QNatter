@@ -379,7 +379,7 @@ webhook_render_template() {
 
 completion_webhook_test() {
 	local input="$1"
-	local section url method headers body success disable_success_check timeout payload response rc header
+	local section url method headers body success disable_success_check skip_unchanged timeout payload response rc header
 
 	section="$(json_arg_text section "$input")"
 	section="${section:-manual_test}"
@@ -389,7 +389,9 @@ completion_webhook_test() {
 	body="$(json_arg_text body "$input")"
 	success="$(json_arg_text success "$input")"
 	disable_success_check="$(json_arg_text disable_success_check "$input")"
+	skip_unchanged="$(json_arg_text skip_unchanged "$input")"
 	timeout="$(json_arg_text timeout "$input")"
+	: "$skip_unchanged"
 
 	[ -n "$url" ] || {
 		emit_error "Webhook URL is empty"
@@ -453,6 +455,42 @@ EOF
 	printf '}\n'
 }
 
+completion_script_test() {
+	local input="$1"
+	local section script output rc
+
+	section="$(json_arg_text section "$input")"
+	section="${section:-manual_test}"
+	script="$(json_arg_text script "$input")"
+
+	[ -n "$script" ] || {
+		emit_error "Script content is empty"
+		return 0
+	}
+
+	output="$(printf '%s\n' "$script" | \
+		QNATTER_SCRIPT_INSTANCE="$section" \
+		QNATTER_SCRIPT_PROTOCOL="tcp" \
+		QNATTER_SCRIPT_INNER_IP="192.168.1.100" \
+		QNATTER_SCRIPT_INNER_PORT="51413" \
+		QNATTER_SCRIPT_OUTER_IP="203.0.113.10" \
+		QNATTER_SCRIPT_OUTER_PORT="62000" \
+		/bin/sh -s -- tcp 192.168.1.100 51413 203.0.113.10 62000 2>&1)"
+	rc=$?
+	if [ "$rc" -ne 0 ]; then
+		printf '{"ok":false,"error":'
+		json_string "Script exited with status $rc"
+		printf ',"output":'
+		json_string "$(webhook_one_line "$output")"
+		printf '}\n'
+		return 0
+	fi
+
+	printf '{"ok":true,"output":'
+	json_string "$(webhook_one_line "$output")"
+	printf '}\n'
+}
+
 toggle_instance() {
 	local instance="$1"
 	local current_state new_state
@@ -501,7 +539,7 @@ toggle_instance() {
 
 case "$1" in
 	list)
-		printf '{"status":{},"log":{"instance":"String","lines":"Integer"},"clear_log":{"instance":"String"},"cloudflare_zones":{"section":"String","token":"String"},"cloudflare_srv_records":{"section":"String","zone_id":"String","token":"String"},"completion_webhook_test":{"section":"String","url":"String","method":"String","headers":"String","body":"String","success":"String","disable_success_check":"String","timeout":"Integer"},"rename_instance":{"old":"String","new":"String"},"toggle_instance":{"instance":"String"}}\n'
+		printf '{"status":{},"log":{"instance":"String","lines":"Integer"},"clear_log":{"instance":"String"},"cloudflare_zones":{"section":"String","token":"String"},"cloudflare_srv_records":{"section":"String","zone_id":"String","token":"String"},"completion_webhook_test":{"section":"String","url":"String","method":"String","headers":"String","body":"String","success":"String","disable_success_check":"String","skip_unchanged":"String","timeout":"Integer"},"completion_script_test":{"section":"String","script":"String"},"rename_instance":{"old":"String","new":"String"},"toggle_instance":{"instance":"String"}}\n'
 		;;
 	call)
 		read -r input
@@ -535,6 +573,9 @@ case "$1" in
 				;;
 			completion_webhook_test)
 				completion_webhook_test "$input"
+				;;
+			completion_script_test)
+				completion_script_test "$input"
 				;;
 			rename_instance)
 				old="$(json_arg_string old "$input")"

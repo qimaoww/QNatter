@@ -291,7 +291,7 @@ QNATTER_COMPLETION_WEBHOOK_ENABLED='1'
 QNATTER_COMPLETION_WEBHOOK_URL='https://hooks.example/qnatter'
 QNATTER_COMPLETION_WEBHOOK_TIMEOUT='3'
 QNATTER_COMPLETION_SCRIPT_ENABLED='1'
-QNATTER_COMPLETION_SCRIPT_INLINE='printf "%s\\n" "\$@" > "$completion_inline_args_file"'
+QNATTER_COMPLETION_SCRIPT_INLINE='printf "%s\\n" "\$QNATTER_SCRIPT_INSTANCE" > "$completion_inline_args_file"; printf "%s\\n" "\$@" >> "$completion_inline_args_file"'
 QBITTORRENT_ENABLED='0'
 EOF
 
@@ -316,6 +316,7 @@ grep -Fqx '{"event":"mapped","instance":"wan_completion","protocol":"udp","inner
 	fail "completion webhook body must include mapped address JSON"
 
 cat > "$expected_args" <<'EOF'
+wan_completion
 udp
 10.10.10.40
 51417

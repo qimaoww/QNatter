@@ -350,7 +350,8 @@ run_completion_script() {
 
 	qnatter_bool "$enabled" || return 0
 	if [ -n "$inline" ]; then
-		if printf '%s\n' "$inline" | QNATTER_SCRIPT_PROTOCOL="$protocol" \
+		if printf '%s\n' "$inline" | QNATTER_SCRIPT_INSTANCE="${QNATTER_INSTANCE:-default}" \
+			QNATTER_SCRIPT_PROTOCOL="$protocol" \
 			QNATTER_SCRIPT_INNER_IP="$inner_ip" \
 			QNATTER_SCRIPT_INNER_PORT="$inner_port" \
 			QNATTER_SCRIPT_OUTER_IP="$outer_ip" \

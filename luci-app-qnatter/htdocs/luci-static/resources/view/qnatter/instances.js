@@ -31,7 +31,14 @@ var callRenameInstance = rpc.declare({
 var callCompletionWebhookTest = rpc.declare({
 	object: 'luci.qnatter',
 	method: 'completion_webhook_test',
-	params: [ 'section', 'url', 'method', 'headers', 'body', 'success', 'disable_success_check', 'timeout' ],
+	params: [ 'section', 'url', 'method', 'headers', 'body', 'success', 'disable_success_check', 'skip_unchanged', 'timeout' ],
+	expect: { '': {} }
+});
+
+var callCompletionScriptTest = rpc.declare({
+	object: 'luci.qnatter',
+	method: 'completion_script_test',
+	params: [ 'section', 'script' ],
 	expect: { '': {} }
 });
 
@@ -300,7 +307,8 @@ function setupAutomationPanel(section_id, root) {
 	var scriptToggle = automationNode(section_id, 'completion_script_enabled');
 	var webhookToggle = automationNode(section_id, 'completion_webhook_enabled');
 	var successCheck = automationNode(section_id, 'completion_webhook_success_check');
-	var testButton = root.querySelector('[data-action="webhook-test"]');
+	var scriptTestButton = root.querySelector('[data-action="script-test"]');
+	var webhookTestButton = root.querySelector('[data-action="webhook-test"]');
 
 	function updateVisibility() {
 		var scriptEnabled = scriptToggle && scriptToggle.checked;
@@ -315,11 +323,36 @@ function setupAutomationPanel(section_id, root) {
 	root.addEventListener('change', updateVisibility);
 	updateVisibility();
 
-	if (testButton) {
-		testButton.addEventListener('click', function(ev) {
+	if (scriptTestButton) {
+		scriptTestButton.addEventListener('click', function(ev) {
 			ev.preventDefault();
-			testButton.disabled = true;
-			testButton.classList.add('spinning');
+			scriptTestButton.disabled = true;
+			scriptTestButton.classList.add('spinning');
+
+			callCompletionScriptTest(
+				section_id,
+				automationValue(section_id, 'completion_script_inline')
+			).then(function(result) {
+				var ok = result && result.ok;
+				var text = ok
+					? _('Script test succeeded') + (result.output ? ': ' + result.output : '')
+					: _('Script test failed') + (result && result.error ? ': ' + result.error : '');
+
+				ui.addNotification(null, E('p', [ text ]), ok ? 'info' : 'danger');
+			}).catch(function(err) {
+				ui.addNotification(null, E('p', [ _('Script test failed') + ': ' + err.message ]), 'danger');
+			}).finally(function() {
+				scriptTestButton.disabled = false;
+				scriptTestButton.classList.remove('spinning');
+			});
+		});
+	}
+
+	if (webhookTestButton) {
+		webhookTestButton.addEventListener('click', function(ev) {
+			ev.preventDefault();
+			webhookTestButton.disabled = true;
+			webhookTestButton.classList.add('spinning');
 
 			callCompletionWebhookTest(
 				section_id,
@@ -329,6 +362,7 @@ function setupAutomationPanel(section_id, root) {
 				automationValue(section_id, 'completion_webhook_body'),
 				automationValue(section_id, 'completion_webhook_success'),
 				automationValue(section_id, 'completion_webhook_success_check') === '1' ? '0' : '1',
+				automationValue(section_id, 'completion_webhook_skip_unchanged'),
 				automationValue(section_id, 'completion_webhook_timeout')
 			).then(function(result) {
 				var ok = result && result.ok;
@@ -340,8 +374,8 @@ function setupAutomationPanel(section_id, root) {
 			}).catch(function(err) {
 				ui.addNotification(null, E('p', [ _('Webhook test failed') + ': ' + err.message ]), 'danger');
 			}).finally(function() {
-				testButton.disabled = false;
-				testButton.classList.remove('spinning');
+				webhookTestButton.disabled = false;
+				webhookTestButton.classList.remove('spinning');
 			});
 		});
 	}
@@ -356,7 +390,11 @@ function renderAutomationPanel(section_id) {
 		E('div', { 'class': 'qnatter-automation-section' }, [
 			E('div', { 'class': 'qnatter-automation-section-head' }, [
 				E('strong', {}, [ _('Custom script') ]),
-				automationCheckbox(section_id, 'completion_script_enabled', _('Enable'), automationChecked(section_id, 'completion_script_enabled', '0'))
+				automationCheckbox(section_id, 'completion_script_enabled', _('Enable'), automationChecked(section_id, 'completion_script_enabled', '0')),
+				E('button', {
+					'class': 'cbi-button cbi-button-neutral qnatter-automation-test',
+					'data-action': 'script-test'
+				}, [ _('Script manual trigger test') ])
 			]),
 			automationRow(
 				section_id,
@@ -835,7 +873,7 @@ return view.extend({
 			return E('div', { 'class': 'qnatter-page qnatter-form-page' + detectThemeClass() }, [
 				E('link', {
 					'rel': 'stylesheet',
-					'href': L.resource('qnatter/qnatter.css') + '?v=1.1.0-r1&layout=automation4'
+					'href': L.resource('qnatter/qnatter.css') + '?v=1.1.0-r1&layout=automation5'
 				}),
 				node
 			]);

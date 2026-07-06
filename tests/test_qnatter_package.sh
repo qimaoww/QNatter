@@ -231,6 +231,7 @@ assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/stun.
 assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/stun.js "uniqueServerValues"
 assert_contains luci-app-qnatter/root/usr/share/luci/menu.d/luci-app-qnatter.json '"path": "qnatter/stun"'
 assert_contains luci-app-qnatter/root/usr/share/rpcd/acl.d/luci-app-qnatter.json '"completion_webhook_test"'
+assert_contains luci-app-qnatter/root/usr/share/rpcd/acl.d/luci-app-qnatter.json '"completion_script_test"'
 assert_not_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances.js "form\\.Value, 'notify_script'"
 assert_not_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances.js 'addOptionClass'
 assert_not_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances.js 'qnatter-automation-card-start'
@@ -238,11 +239,13 @@ assert_not_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/i
 assert_not_contains luci-app-qnatter/htdocs/luci-static/resources/qnatter/qnatter.css 'qnatter-automation-card'
 assert_line_order luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances.js "s.option(form.ListValue, 'qbittorrent_forward_method'" "s.option(form.DummyValue, '_automation_panel'"
 assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances.js "qnatter-automation-title"
-assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances.js "layout=automation4"
+assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances.js "layout=automation5"
 assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances.js "s\\.option\\(form\\.DummyValue, '_automation_panel'"
 assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances.js 'renderAutomationPanel'
 assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances.js 'writeAutomationField'
 assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances.js 'callCompletionWebhookTest'
+assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances.js 'callCompletionScriptTest'
+assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances.js 'Script manual trigger test'
 assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances.js 'completion_webhook_success_check'
 assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances.js 'completion_webhook_method'
 assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances.js 'completion_webhook_headers'
@@ -251,6 +254,8 @@ assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/insta
 assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances.js 'completion_webhook_disable_success_check'
 assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances.js 'completion_webhook_skip_unchanged'
 assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances.js 'completion_script_inline'
+assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances-v11.js 'callCompletionScriptTest'
+assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances-v11.js 'Script manual trigger test'
 assert_contains luci-app-qnatter/htdocs/luci-static/resources/qnatter/qnatter.css 'qnatter-automation-panel'
 assert_contains luci-app-qnatter/htdocs/luci-static/resources/qnatter/qnatter.css 'qnatter-automation-section'
 assert_contains luci-app-qnatter/htdocs/luci-static/resources/qnatter/qnatter.css 'qnatter-automation-grid'
@@ -442,6 +447,7 @@ assert_contains qnatter/files/qnatter-notify 'Cloudflare SRV port changed'
 assert_contains qnatter/files/qnatter-notify 'Cloudflare SRV updated'
 assert_contains qnatter/files/qnatter-notify 'run_completion_webhook'
 assert_contains qnatter/files/qnatter-notify 'run_completion_script'
+assert_contains qnatter/files/qnatter-notify 'QNATTER_SCRIPT_INSTANCE'
 assert_not_contains qnatter/files/qnatter-notify 'QNATTER_USER_NOTIFY'
 assert_not_contains qnatter/files/qnatter-notify 'QNATTER_COMPLETION_SCRIPT_FILE'
 assert_contains qnatter/files/qnatter-notify 'QNATTER_COMPLETION_WEBHOOK_ENABLED'

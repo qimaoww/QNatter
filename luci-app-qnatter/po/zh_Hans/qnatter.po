@@ -172,6 +172,15 @@ msgstr "自定义触发"
 msgid "Script content"
 msgstr "脚本内容"
 
+msgid "Script manual trigger test"
+msgstr "脚本手动触发测试"
+
+msgid "Script test succeeded"
+msgstr "脚本测试成功"
+
+msgid "Script test failed"
+msgstr "脚本测试失败"
+
 msgid "Webhook"
 msgstr "Webhook"
 
