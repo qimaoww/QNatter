@@ -17,6 +17,7 @@ LOG_DIR="${QNATTER_LOG_DIR:-/var/log/qnatter}"
 : "${QNATTER_NFT_BIN:=nft}"
 : "${QNATTER_IP_BIN:=ip}"
 : "${QNATTER_UCI_BIN:=uci}"
+: "${QNATTER_UBUS_BIN:=ubus}"
 
 . "$QNATTER_FUNCTIONS_SH"
 . "$QNATTER_NETWORK_SH"
@@ -147,6 +148,22 @@ qnatter_flush_route_rules() {
 		"$QNATTER_IP_BIN" rule del priority "$priority" >/dev/null 2>&1 || true
 		"$QNATTER_IP_BIN" route flush table "$table" >/dev/null 2>&1 || true
 	done
+}
+
+# A plain `start` can be issued while procd still has the existing QNatter
+# instances running (for example after a duplicate interface event).  Flushing
+# the shared QNatter table in that case removes live mappings while the
+# unchanged processes keep running and never recreate them.  Only perform the
+# stale-rule cleanup when no backend instance is alive; an explicit reload or
+# restart still handles changed instances through procd.
+qnatter_backend_running() {
+	if command -v "$QNATTER_UBUS_BIN" >/dev/null 2>&1 &&
+		"$QNATTER_UBUS_BIN" call service list '{"name":"qnatter"}' 2>/dev/null |
+		grep -q '"running"[[:space:]]*:[[:space:]]*true'; then
+		return 0
+	fi
+
+	command -v pidof >/dev/null 2>&1 && pidof QNatter >/dev/null 2>&1
 }
 
 qnatter_route_slot_valid() {
@@ -567,7 +584,7 @@ start_service() {
 	qnatter_load_global_stun_servers
 	qnatter_prepare_route_slots || return 1
 	mkdir -p "$RUN_DIR"
-	if [ "${QNATTER_RELOADING:-0}" != "1" ]; then
+	if [ "${QNATTER_RELOADING:-0}" != "1" ] && ! qnatter_backend_running; then
 		qnatter_flush_runtime_rules
 		qnatter_flush_route_rules
 	fi

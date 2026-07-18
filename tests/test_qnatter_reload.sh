@@ -158,6 +158,16 @@ esac
 EOF
 chmod +x "$tmp/ip"
 
+cat > "$tmp/ubus" <<'EOF'
+#!/bin/sh
+if [ "${UBUS_RUNNING:-0}" = "1" ]; then
+	printf '{"qnatter":{"instances":{"wan_ct":{"running":true}}}}\n'
+else
+	printf '{}\n'
+fi
+EOF
+chmod +x "$tmp/ubus"
+
 QNATTER_FUNCTIONS_SH="$tmp/functions.sh"
 QNATTER_NETWORK_SH="$tmp/network.sh"
 QNATTER_COMMON_SH="$ROOT/qnatter/files/qnatter-common.sh"
@@ -166,9 +176,10 @@ QNATTER_RUN_DIR="$tmp/run"
 QNATTER_LOG_DIR="$tmp/log"
 QNATTER_NFT_BIN="$tmp/nft"
 QNATTER_IP_BIN="$tmp/ip"
+QNATTER_UBUS_BIN="$tmp/ubus"
 QNATTER_TEST_NFT_LOG="$nft_log"
 QNATTER_TEST_IP_LOG="$ip_log"
-export QNATTER_FUNCTIONS_SH QNATTER_NETWORK_SH QNATTER_COMMON_SH QNATTER_QBITTORRENT_SH QNATTER_RUN_DIR QNATTER_LOG_DIR QNATTER_NFT_BIN QNATTER_IP_BIN QNATTER_TEST_NFT_LOG QNATTER_TEST_IP_LOG
+export QNATTER_FUNCTIONS_SH QNATTER_NETWORK_SH QNATTER_COMMON_SH QNATTER_QBITTORRENT_SH QNATTER_RUN_DIR QNATTER_LOG_DIR QNATTER_NFT_BIN QNATTER_IP_BIN QNATTER_UBUS_BIN QNATTER_TEST_NFT_LOG QNATTER_TEST_IP_LOG
 INSTANCES="wan_ct"
 export GLOBAL_ENABLED HOT_RELOAD BIND_VALUE CF_TOKEN INSTANCES WAN_ADDR
 
@@ -181,6 +192,20 @@ grep -Fq "CLOUDFLARE_API_TOKEN='token-one'" "$tmp/run/wan_ct.env" || fail "initi
 grep -Fqx 'flush chain ip qnatter qnatter_dnat' "$nft_log" || fail "initial start did not flush stale DNAT rules"
 grep -Fqx 'flush chain ip qnatter qnatter_snat' "$nft_log" || fail "initial start did not flush stale SNAT rules"
 grep -Fqx 'flush chain ip qnatter qnatter_mark' "$nft_log" || fail "initial start did not flush stale mark rules"
+
+# Test: a duplicate start while procd still has a live backend must preserve
+# the active mapping and policy-routing rules.
+: > "$nft_log"
+: > "$ip_log"
+UBUS_RUNNING=1
+export UBUS_RUNNING
+start_service
+[ ! -s "$nft_log" ] || fail "duplicate start flushed live nft runtime rules"
+if grep -Eq '^(rule del|route flush)' "$ip_log"; then
+	fail "duplicate start flushed live policy-routing rules"
+fi
+UBUS_RUNNING=0
+export UBUS_RUNNING
 
 # Test: same config but different interface address must produce a different
 # runtime fingerprint so WAN redial reloads the instance.
