@@ -21,7 +21,7 @@ import (
 	"qnatter-openwrt/go-qnatter/internal/socketopts"
 )
 
-const Version = "2.2.1-go"
+const Version = "2.2.2-go"
 
 const (
 	stunBindingRequest       uint16 = 0x0001

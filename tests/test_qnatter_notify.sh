@@ -135,7 +135,9 @@ for want in \
 do
 	grep -Fqx -- "$want" "$uci_calls" || fail "auto firewall did not run uci command: $want"
 done
-grep -Fqx 'reload' "$firewall_calls" || fail "auto firewall did not reload firewall"
+[ ! -s "$firewall_calls" ] || fail "auto firewall must not reload firewall from a mapping callback"
+grep -Fq 'auto firewall UCI rule updated for wan_ct; firewall reload deferred' "$notify_log_file" || \
+	fail "auto firewall reload deferral was not logged"
 
 for want in \
 	'-X' \

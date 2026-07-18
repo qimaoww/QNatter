@@ -7,7 +7,6 @@ set -u
 : "${QNATTER_LOGGER_BIN:=logger}"
 : "${QNATTER_CURL_BIN:=curl}"
 : "${QNATTER_UCI_BIN:=uci}"
-: "${QNATTER_FIREWALL_INIT:=/etc/init.d/firewall}"
 
 . "$QNATTER_QBITTORRENT_SH"
 . "$QNATTER_COMMON_SH"
@@ -184,9 +183,10 @@ update_auto_firewall() {
 		return 0
 	fi
 
-	if [ -x "$QNATTER_FIREWALL_INIT" ]; then
-		"$QNATTER_FIREWALL_INIT" reload >/dev/null 2>&1 || log "firewall reload failed for ${QNATTER_INSTANCE:-default}"
-	fi
+	# Keep the UCI rule available for the next normal fw4 reload, but never
+	# reload the whole firewall from a mapping callback.  OpenClash owns the
+	# generated fw4 ruleset and a full reload here destroys its rule ordering.
+	log "auto firewall UCI rule updated for ${QNATTER_INSTANCE:-default}; firewall reload deferred"
 }
 
 update_cloudflare_srv() {

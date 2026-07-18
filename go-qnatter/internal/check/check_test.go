@@ -37,7 +37,7 @@ func TestRunPrintsQNatterCheckReport(t *testing.T) {
 
 	out := stdout.String()
 	for _, want := range []string{
-		"> QNatterCheck v2.2.1-go\n\n",
+		"> QNatterCheck v2.2.2-go\n\n",
 		"Checking TCP NAT...",
 		"[   OK   ] ... NAT Type: Full Cone",
 		"Checking UDP NAT...",

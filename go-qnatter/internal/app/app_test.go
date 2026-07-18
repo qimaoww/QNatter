@@ -119,7 +119,7 @@ func TestRunCheckPrintsReportWithoutFakeSuccess(t *testing.T) {
 			return nil
 		},
 		func(_ context.Context, _ config.Config, out io.Writer, _ io.Writer) error {
-			fmt.Fprintln(out, "> QNatterCheck v2.2.1-go")
+			fmt.Fprintln(out, "> QNatterCheck v2.2.2-go")
 			fmt.Fprintln(out, "Checking TCP NAT...                  [   OK   ] ... NAT Type: 1")
 			return nil
 		})
@@ -130,7 +130,7 @@ func TestRunCheckPrintsReportWithoutFakeSuccess(t *testing.T) {
 	if strings.Contains(stdout.String(), "check: ok") {
 		t.Fatalf("stdout = %q, must not report fake check success", stdout.String())
 	}
-	if !strings.Contains(stdout.String(), "> QNatterCheck v2.2.1-go") {
+	if !strings.Contains(stdout.String(), "> QNatterCheck v2.2.2-go") {
 		t.Fatalf("stdout = %q, want QNatterCheck report", stdout.String())
 	}
 	if !strings.Contains(stdout.String(), "[   OK   ] ... NAT Type: 1") {
@@ -197,7 +197,7 @@ func TestRunWithStartsEngineForMapping(t *testing.T) {
 	if got.BindValue != "pppoe-wan_cmcc" || got.ForwardMethod != "none" {
 		t.Fatalf("runner config = %+v", got)
 	}
-	if !strings.Contains(stderr.String(), "QNatter v2.2.1-go") {
+	if !strings.Contains(stderr.String(), "QNatter v2.2.2-go") {
 		t.Fatalf("stderr = %q, want startup banner", stderr.String())
 	}
 }
