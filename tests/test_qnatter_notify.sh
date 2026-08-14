@@ -577,7 +577,7 @@ cat > "$curl_bin" <<EOF
 #!/bin/sh
 printf '%s\n' "\$*" >> "$curl_calls"
 case "\$*" in
-	*/api/v2/auth/login*) printf 'Ok.' ;;
+	*/api/v2/auth/login*) : ;; # qBittorrent 5.x returns HTTP 204 with no body
 	*/api/v2/app/preferences*) printf '{"listen_port":51413}' ;;
 esac
 exit 0

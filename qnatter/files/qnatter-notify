@@ -421,7 +421,10 @@ login_response="$("$QNATTER_CURL_BIN" -fsS -m "${QBITTORRENT_TIMEOUT:-8}" -c "$c
 	--data-urlencode "password=$password" \
 	"$url/api/v2/auth/login" 2>&1)"
 login_rc=$?
-if [ "$login_rc" -ne 0 ] || [ "$login_response" != "Ok." ]; then
+# qBittorrent 5.x may return HTTP 204 with an empty body on success, while
+# older releases return HTTP 200 with "Ok.". curl -f still rejects 4xx login
+# failures, and a non-empty body other than "Ok." remains a rejected login.
+if [ "$login_rc" -ne 0 ] || { [ -n "$login_response" ] && [ "$login_response" != "Ok." ]; }; then
 	log "qBittorrent login failed for ${QNATTER_INSTANCE:-default} at $url: response=$(qnatter_one_line "$login_response")"
 	qnatter_write_status_json "$status_file" "${QNATTER_INSTANCE:-default}" "$protocol" "$inner_ip" "$inner_port" "$outer_ip" "$outer_port" "qBittorrent login failed"
 	rm -f "$cookie"
