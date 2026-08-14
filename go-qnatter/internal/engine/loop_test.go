@@ -3,6 +3,7 @@ package engine
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/netip"
 	"os"
 	"reflect"
@@ -69,6 +70,162 @@ func TestRunLoopKeepsAliveOnTicksAndClosesOnCancel(t *testing.T) {
 	}
 	if !reflect.DeepEqual(events, wantEvents) {
 		t.Fatalf("events = %#v, want %#v", events, wantEvents)
+	}
+}
+
+func TestRunLoopPreservesMappingAcrossTransientKeepAliveFailures(t *testing.T) {
+	ticks := make(chan time.Time)
+	ctx, cancel := context.WithCancel(context.Background())
+	transientErr := errors.New("i/o timeout")
+	attempts := []int{}
+
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- RunLoop(ctx, config.Config{ForwardMethod: "none"}, Dependencies{
+			STUN: &fakeSTUN{mappings: []stun.Mapping{
+				{Inner: netip.MustParseAddrPort("10.10.10.3:41000"), Outer: netip.MustParseAddrPort("203.0.113.11:62010")},
+				{Inner: netip.MustParseAddrPort("10.10.10.3:41000"), Outer: netip.MustParseAddrPort("203.0.113.11:62010")},
+			}},
+			KeepAlive: &fakeKeepAlive{errs: []error{nil, transientErr, nil, transientErr, nil}},
+			NewForwarder: func(string) (forward.Forwarder, error) {
+				return &fakeForwarder{}, nil
+			},
+			OnTransientFailure: func(operation string, err error, attempt int, limit int) {
+				if operation != "keep-alive" || !errors.Is(err, transientErr) || limit != 3 {
+					t.Errorf("transient callback = %q, %v, %d/%d", operation, err, attempt, limit)
+				}
+				attempts = append(attempts, attempt)
+			},
+		}, LoopOptions{Ticks: ticks})
+	}()
+
+	for range 4 {
+		ticks <- time.Now()
+	}
+	cancel()
+
+	if err := <-errCh; err != nil {
+		t.Fatalf("RunLoop returned error: %v", err)
+	}
+	if !reflect.DeepEqual(attempts, []int{1, 1}) {
+		t.Fatalf("transient attempts = %#v, want counters reset after success", attempts)
+	}
+}
+
+func TestRunLoopRebuildsAfterThreeConsecutiveKeepAliveFailures(t *testing.T) {
+	ticks := make(chan time.Time)
+	transientErr := errors.New("i/o timeout")
+	attempts := []int{}
+
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- RunLoop(context.Background(), config.Config{ForwardMethod: "none"}, Dependencies{
+			STUN: &fakeSTUN{mappings: []stun.Mapping{
+				{Inner: netip.MustParseAddrPort("10.10.10.3:41000"), Outer: netip.MustParseAddrPort("203.0.113.11:62010")},
+				{Inner: netip.MustParseAddrPort("10.10.10.3:41000"), Outer: netip.MustParseAddrPort("203.0.113.11:62010")},
+			}},
+			KeepAlive: &fakeKeepAlive{errs: []error{nil, transientErr, transientErr, transientErr}},
+			NewForwarder: func(string) (forward.Forwarder, error) {
+				return &fakeForwarder{}, nil
+			},
+			OnTransientFailure: func(_ string, _ error, attempt int, _ int) {
+				attempts = append(attempts, attempt)
+			},
+		}, LoopOptions{Ticks: ticks})
+	}()
+
+	for range 3 {
+		ticks <- time.Now()
+	}
+
+	err := <-errCh
+	if !errors.Is(err, ErrKeepAliveFailed) || !errors.Is(err, transientErr) {
+		t.Fatalf("RunLoop error = %v, want ErrKeepAliveFailed wrapping timeout", err)
+	}
+	if !reflect.DeepEqual(attempts, []int{1, 2}) {
+		t.Fatalf("transient attempts = %#v, want warnings before third failure", attempts)
+	}
+}
+
+func TestRunLoopPreservesMappingAcrossTransientSTUNFailures(t *testing.T) {
+	ticks := make(chan time.Time)
+	ctx, cancel := context.WithCancel(context.Background())
+	transientErr := fmt.Errorf("%w: all servers timeout", stun.ErrNoServerAvailable)
+	attempts := []int{}
+	mapping := stun.Mapping{
+		Inner: netip.MustParseAddrPort("10.10.10.3:41000"),
+		Outer: netip.MustParseAddrPort("203.0.113.11:62010"),
+	}
+
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- RunLoop(ctx, config.Config{ForwardMethod: "none"}, Dependencies{
+			STUN: &fakeSTUN{
+				mappings: []stun.Mapping{mapping, mapping, mapping, mapping},
+				errs:     []error{nil, nil, transientErr, nil, transientErr, nil},
+			},
+			KeepAlive: &fakeKeepAlive{},
+			NewForwarder: func(string) (forward.Forwarder, error) {
+				return &fakeForwarder{}, nil
+			},
+			OnTransientFailure: func(operation string, err error, attempt int, limit int) {
+				if operation != "STUN recheck" || !errors.Is(err, stun.ErrNoServerAvailable) || limit != 3 {
+					t.Errorf("transient callback = %q, %v, %d/%d", operation, err, attempt, limit)
+				}
+				attempts = append(attempts, attempt)
+			},
+		}, LoopOptions{Ticks: ticks, RecheckEvery: 1})
+	}()
+
+	for range 4 {
+		ticks <- time.Now()
+	}
+	cancel()
+
+	if err := <-errCh; err != nil {
+		t.Fatalf("RunLoop returned error: %v", err)
+	}
+	if !reflect.DeepEqual(attempts, []int{1, 1}) {
+		t.Fatalf("transient attempts = %#v, want counters reset after success", attempts)
+	}
+}
+
+func TestRunLoopRebuildsAfterThreeConsecutiveSTUNFailures(t *testing.T) {
+	ticks := make(chan time.Time)
+	transientErr := fmt.Errorf("%w: all servers timeout", stun.ErrNoServerAvailable)
+	attempts := []int{}
+	mapping := stun.Mapping{
+		Inner: netip.MustParseAddrPort("10.10.10.3:41000"),
+		Outer: netip.MustParseAddrPort("203.0.113.11:62010"),
+	}
+
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- RunLoop(context.Background(), config.Config{ForwardMethod: "none"}, Dependencies{
+			STUN: &fakeSTUN{
+				mappings: []stun.Mapping{mapping, mapping},
+				errs:     []error{nil, nil, transientErr, transientErr, transientErr},
+			},
+			KeepAlive: &fakeKeepAlive{},
+			NewForwarder: func(string) (forward.Forwarder, error) {
+				return &fakeForwarder{}, nil
+			},
+			OnTransientFailure: func(_ string, _ error, attempt int, _ int) {
+				attempts = append(attempts, attempt)
+			},
+		}, LoopOptions{Ticks: ticks, RecheckEvery: 1})
+	}()
+
+	for range 3 {
+		ticks <- time.Now()
+	}
+
+	err := <-errCh
+	if !errors.Is(err, stun.ErrNoServerAvailable) {
+		t.Fatalf("RunLoop error = %v, want ErrNoServerAvailable", err)
+	}
+	if !reflect.DeepEqual(attempts, []int{1, 2}) {
+		t.Fatalf("transient attempts = %#v, want warnings before third failure", attempts)
 	}
 }
 

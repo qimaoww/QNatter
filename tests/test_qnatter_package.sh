@@ -511,8 +511,8 @@ assert_contains qnatter/Makefile 'GOARM="\$\(QNATTER_GOARM\)"'
 assert_contains qnatter/Makefile 'go build .* -o \$\(PKG_BUILD_DIR\)/qnatter-go ./cmd/qnatter'
 assert_contains qnatter/Makefile '\$\(INSTALL_BIN\) \$\(PKG_BUILD_DIR\)/qnatter-go \$\(1\)/usr/bin/qnatter-go'
 assert_contains qnatter/Makefile '\$\(LN\) qnatter-go \$\(1\)/usr/bin/QNatter'
-qnatter_release="$(sed -n 's/^PKG_RELEASE:=//p' "$ROOT/qnatter/Makefile")"
-[ "$qnatter_release" -ge 29 ] || fail "qnatter package release must increase when package files change"
+assert_contains qnatter/Makefile '^PKG_VERSION:=2\.2\.2$'
+assert_contains qnatter/Makefile '^PKG_RELEASE:=1$'
 assert_contains qnatter/Makefile '\$\(INSTALL_CONF\) ./files/qnatter.config \$\(1\)/etc/config/qnatter.default'
 assert_contains qnatter/Makefile '\$\(INSTALL_DIR\) \$\(1\)/etc/uci-defaults'
 assert_contains qnatter/Makefile '\$\(INSTALL_BIN\) ./files/qnatter.uci-default \$\(1\)/etc/uci-defaults/99-qnatter'

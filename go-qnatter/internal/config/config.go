@@ -106,7 +106,7 @@ func ParseArgs(args []string) (Config, error) {
 		if cfg.UDP {
 			cfg.KeepAliveServer = "119.29.29.29"
 		} else {
-			cfg.KeepAliveServer = "www.baidu.com"
+			cfg.KeepAliveServer = "www.qq.com"
 		}
 	} else if _, _, err := parseHostPortDefault(cfg.KeepAliveServer, 0); err != nil {
 		return Config{}, err

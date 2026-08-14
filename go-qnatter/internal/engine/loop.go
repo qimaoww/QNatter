@@ -11,9 +11,13 @@ import (
 )
 
 type LoopOptions struct {
-	Ticks        <-chan time.Time
-	RecheckEvery int
+	Ticks                 <-chan time.Time
+	RecheckEvery          int
+	KeepAliveFailureLimit int
+	STUNFailureLimit      int
 }
+
+const defaultTransientFailureLimit = 3
 
 var (
 	ErrMappingChanged      = errors.New("mapped address changed")
@@ -45,18 +49,28 @@ func RunLoop(ctx context.Context, cfg config.Config, deps Dependencies, options 
 	if recheckEvery <= 0 {
 		recheckEvery = 20
 	}
+	keepAliveFailureLimit := transientFailureLimit(options.KeepAliveFailureLimit)
+	stunFailureLimit := transientFailureLimit(options.STUNFailureLimit)
 	count := 0
+	keepAliveFailures := 0
+	stunFailures := 0
 	for {
 		select {
 		case <-ctx.Done():
 			return nil
 		case <-ticks:
 			if err := session.KeepAlive.KeepAlive(); err != nil {
-				if errors.Is(err, syscall.EADDRNOTAVAIL) {
-					return fmt.Errorf("%w: %v", ErrLocalAddressChanged, err)
+				if localAddressUnavailable(err) {
+					return fmt.Errorf("%w: %w", ErrLocalAddressChanged, err)
 				}
-				return fmt.Errorf("%w: %v", ErrKeepAliveFailed, err)
+				keepAliveFailures++
+				if keepAliveFailures >= keepAliveFailureLimit {
+					return fmt.Errorf("%w after %d consecutive attempts: %w", ErrKeepAliveFailed, keepAliveFailures, err)
+				}
+				reportTransientFailure(deps, "keep-alive", err, keepAliveFailures, keepAliveFailureLimit)
+				continue
 			}
+			keepAliveFailures = 0
 			if session.UPnP != nil {
 				if err := session.UPnP.Renew(ctx); err != nil && deps.OnUPnPError != nil {
 					deps.OnUPnPError("renew upnp", err)
@@ -67,15 +81,38 @@ func RunLoop(ctx context.Context, cfg config.Config, deps Dependencies, options 
 				count = 0
 				mapping, err := deps.STUN.GetMapping(ctx)
 				if err != nil {
-					if errors.Is(err, syscall.EADDRNOTAVAIL) {
-						return fmt.Errorf("%w: %v", ErrLocalAddressChanged, err)
+					if localAddressUnavailable(err) {
+						return fmt.Errorf("%w: %w", ErrLocalAddressChanged, err)
 					}
-					return err
+					stunFailures++
+					if stunFailures >= stunFailureLimit {
+						return err
+					}
+					reportTransientFailure(deps, "STUN recheck", err, stunFailures, stunFailureLimit)
+					continue
 				}
+				stunFailures = 0
 				if mapping.Outer != session.Result.Mapping.Outer {
 					return ErrMappingChanged
 				}
 			}
 		}
+	}
+}
+
+func transientFailureLimit(limit int) int {
+	if limit > 0 {
+		return limit
+	}
+	return defaultTransientFailureLimit
+}
+
+func localAddressUnavailable(err error) bool {
+	return errors.Is(err, syscall.EADDRNOTAVAIL) || errors.Is(err, syscall.ENODEV)
+}
+
+func reportTransientFailure(deps Dependencies, operation string, err error, attempt int, limit int) {
+	if deps.OnTransientFailure != nil {
+		deps.OnTransientFailure(operation, err, attempt, limit)
 	}
 }

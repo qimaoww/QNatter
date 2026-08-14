@@ -52,16 +52,17 @@ type PortChecker interface {
 }
 
 type Dependencies struct {
-	STUN         STUNClient
-	KeepAlive    KeepAlive
-	NewKeepAlive func(stun.Mapping) (KeepAlive, error)
-	NewForwarder func(string) (forward.Forwarder, error)
-	PortCheck    LANPortChecker
-	InitialCheck PortChecker
-	Notify       func(status.Mapping) error
-	OnMapped     func(Result)
-	OnUPnPError  func(string, error)
-	UPnP         UPnPMapper
+	STUN               STUNClient
+	KeepAlive          KeepAlive
+	NewKeepAlive       func(stun.Mapping) (KeepAlive, error)
+	NewForwarder       func(string) (forward.Forwarder, error)
+	PortCheck          LANPortChecker
+	InitialCheck       PortChecker
+	Notify             func(status.Mapping) error
+	OnMapped           func(Result)
+	OnTransientFailure func(string, error, int, int)
+	OnUPnPError        func(string, error)
+	UPnP               UPnPMapper
 }
 
 type Result struct {
@@ -73,11 +74,11 @@ type Result struct {
 }
 
 type PortReport struct {
-	Checked   bool
-	TargetLAN PortResult
+	Checked    bool
+	TargetLAN  PortResult
 	QNatterLAN PortResult
-	OuterLAN  PortResult
-	OuterWAN  PortResult
+	OuterLAN   PortResult
+	OuterWAN   PortResult
 }
 
 type Session struct {
@@ -245,11 +246,11 @@ func checkInitialPorts(ctx context.Context, cfg config.Config, deps Dependencies
 	checker := deps.InitialCheck
 	source := mapping.Inner.Addr()
 	return PortReport{
-		Checked:   true,
-		TargetLAN: checker.TestLAN(ctx, target, source),
+		Checked:    true,
+		TargetLAN:  checker.TestLAN(ctx, target, source),
 		QNatterLAN: checker.TestLAN(ctx, mapping.Inner, source),
-		OuterLAN:  checker.TestLAN(ctx, mapping.Outer, source),
-		OuterWAN:  checker.TestWAN(ctx, int(mapping.Outer.Port()), source),
+		OuterLAN:   checker.TestLAN(ctx, mapping.Outer, source),
+		OuterWAN:   checker.TestWAN(ctx, int(mapping.Outer.Port()), source),
 	}
 }
 

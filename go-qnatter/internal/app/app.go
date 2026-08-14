@@ -180,6 +180,9 @@ func runEngineWithLog(ctx context.Context, cfg config.Config, log io.Writer) err
 			OnMapped: func(result engine.Result) {
 				logMapping(log, cfg, result)
 			},
+			OnTransientFailure: func(operation string, err error, attempt int, limit int) {
+				logTransientFailure(log, operation, err, attempt, limit)
+			},
 			OnUPnPError: func(operation string, err error) {
 				logUPnPError(log, operation, err)
 			},
@@ -216,6 +219,14 @@ func logRetry(w io.Writer, err error, delay time.Duration) {
 	default:
 		logLine(w, "W", "%v; retrying in %s", err, delay)
 	}
+}
+
+func logTransientFailure(w io.Writer, operation string, err error, attempt int, limit int) {
+	if errors.Is(err, stun.ErrNoServerAvailable) {
+		logLine(w, "W", "%s failed (%d/%d); preserving current mapping", operation, attempt, limit)
+		return
+	}
+	logLine(w, "W", "%s failed (%d/%d); preserving current mapping: %v", operation, attempt, limit, err)
 }
 
 func logNotifyScript(w io.Writer, path string) {

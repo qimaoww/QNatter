@@ -89,11 +89,12 @@ func (c *Client) GetMapping(ctx context.Context) (Mapping, error) {
 	if len(failures) == 0 {
 		return Mapping{}, ErrNoServerAvailable
 	}
-	c.Source = c.initialSource
 	if localAddressUnavailable {
+		c.Source = c.initialSource
 		return Mapping{}, fmt.Errorf("%w: %w: %s", ErrNoServerAvailable, syscall.EADDRNOTAVAIL, strings.Join(failures, "; "))
 	}
 	if localDeviceUnavailable {
+		c.Source = c.initialSource
 		return Mapping{}, fmt.Errorf("%w: %w: %s", ErrNoServerAvailable, syscall.ENODEV, strings.Join(failures, "; "))
 	}
 	return Mapping{}, fmt.Errorf("%w: %s", ErrNoServerAvailable, strings.Join(failures, "; "))

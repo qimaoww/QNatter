@@ -782,7 +782,7 @@ return view.extend({
 		o.placeholder = '15';
 
 		o = hideInGrid(s.option(form.Value, 'keepalive_server', _('Keep-alive server')));
-		o.placeholder = 'www.baidu.com';
+		o.placeholder = 'www.qq.com';
 
 		o = hideInGrid(s.option(form.Flag, 'cloudflare_enabled', _('Cloudflare SRV')));
 		o.default = '0';

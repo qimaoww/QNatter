@@ -71,6 +71,9 @@ func TestParseArgsDefaults(t *testing.T) {
 	if cfg.TargetIP != "0.0.0.0" {
 		t.Fatalf("default target IP = %q, want 0.0.0.0", cfg.TargetIP)
 	}
+	if cfg.KeepAliveServer != "www.qq.com" {
+		t.Fatalf("default TCP keepalive server = %q, want www.qq.com", cfg.KeepAliveServer)
+	}
 	if len(cfg.STUNServers) != 11 {
 		t.Fatalf("default TCP STUN server count = %d, want 11", len(cfg.STUNServers))
 	}

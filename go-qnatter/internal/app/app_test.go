@@ -341,6 +341,27 @@ func TestLogRetrySummarizesMissingBindDevice(t *testing.T) {
 	}
 }
 
+func TestLogTransientFailurePreservesMappingAndSummarizesSTUNDetails(t *testing.T) {
+	var stderr bytes.Buffer
+	logTransientFailure(&stderr, "STUN recheck", fmt.Errorf("%w: full server timeout detail", stun.ErrNoServerAvailable), 1, 3)
+
+	if !strings.Contains(stderr.String(), "[W] STUN recheck failed (1/3); preserving current mapping") {
+		t.Fatalf("stderr = %q, missing transient failure warning", stderr.String())
+	}
+	if strings.Contains(stderr.String(), "full server timeout detail") {
+		t.Fatalf("stderr = %q, should not include full STUN failure detail", stderr.String())
+	}
+}
+
+func TestLogTransientKeepAliveFailureIncludesCause(t *testing.T) {
+	var stderr bytes.Buffer
+	logTransientFailure(&stderr, "keep-alive", errors.New("i/o timeout"), 2, 3)
+
+	if !strings.Contains(stderr.String(), "[W] keep-alive failed (2/3); preserving current mapping: i/o timeout") {
+		t.Fatalf("stderr = %q, missing keep-alive failure detail", stderr.String())
+	}
+}
+
 func TestLogNotifyResultWarnsOnUserNotifyError(t *testing.T) {
 	var stderr bytes.Buffer
 	logNotifyResult(&stderr, notify.Result{UserNotifyError: "notify script failed: exit status 1"})

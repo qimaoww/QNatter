@@ -121,7 +121,7 @@ func TestClientGetMappingReturnsTypedErrorWhenAllServersUnavailable(t *testing.T
 	}
 }
 
-func TestClientResetsSourceWhenAllServersFailAfterCachedMapping(t *testing.T) {
+func TestClientPreservesSourceWhenAllServersTimeOutAfterCachedMapping(t *testing.T) {
 	txid := [12]byte{'N', 'A', 'T', 'R', 6, 6, 6, 6, 6, 6, 6, 6}
 	initial := netip.MustParseAddrPort("0.0.0.0:0")
 	cached := netip.MustParseAddrPort("100.64.107.104:36787")
@@ -155,8 +155,8 @@ func TestClientResetsSourceWhenAllServersFailAfterCachedMapping(t *testing.T) {
 	if !errors.Is(err, ErrNoServerAvailable) {
 		t.Fatalf("GetMapping error = %v, want ErrNoServerAvailable", err)
 	}
-	if client.Source != initial {
-		t.Fatalf("client source after failed retry = %s, want reset source %s", client.Source, initial)
+	if client.Source != cached {
+		t.Fatalf("client source after failed retry = %s, want cached source %s", client.Source, cached)
 	}
 	if transport.sources[0] != initial || transport.sources[1] != cached || transport.sources[2] != cached {
 		t.Fatalf("sources = %#v, want initial then cached cached", transport.sources)
