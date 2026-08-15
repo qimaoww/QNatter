@@ -257,8 +257,8 @@ function createCard(item, fieldByName) {
 			fields.running
 		]),
 		E('dl', {}, [
-			E('dt', { 'class': 'qnatter-address-label' }, [ _('Public address') ]), fields.route,
-			E('dt', { 'class': 'qnatter-address-label' }, [ _('Internal address') ]), fields.inner,
+			E('dt', {}, [ _('Public address') ]), fields.route,
+			E('dt', {}, [ _('Internal address') ]), fields.inner,
 			E('dt', {}, [ _('Network protocol') ]), fields.protocol,
 			E('dt', {}, [ _('WAN network') ]), fields.network,
 			E('dt', {}, [ _('qBittorrent') ]), fields.qbittorrent,
