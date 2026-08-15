@@ -79,6 +79,105 @@ function setText(node, text) {
 		node.textContent = text;
 }
 
+function legacyCopyText(text) {
+	return new Promise(function(resolve, reject) {
+		var textarea = document.createElement('textarea');
+		var copied = false;
+
+		textarea.value = text;
+		textarea.setAttribute('readonly', '');
+		textarea.setAttribute('aria-hidden', 'true');
+		textarea.style.position = 'fixed';
+		textarea.style.left = '-9999px';
+		document.body.appendChild(textarea);
+		textarea.select();
+
+		try {
+			copied = document.execCommand('copy');
+		} catch (e) {
+			copied = false;
+		}
+
+		textarea.remove();
+		if (copied)
+			resolve();
+		else
+			reject(new Error(_('Copy failed')));
+	});
+}
+
+function copyText(text) {
+	if (typeof navigator !== 'undefined' && navigator.clipboard && navigator.clipboard.writeText) {
+		return navigator.clipboard.writeText(text).catch(function() {
+			return legacyCopyText(text);
+		});
+	}
+
+	return legacyCopyText(text);
+}
+
+function resetCopyButton(btn) {
+	window.clearTimeout(btn._qnatterCopyTimer);
+	btn.classList.remove('is-copied', 'is-error');
+	btn.disabled = !btn.getAttribute('data-copy-value');
+	setText(btn, _('Copy'));
+}
+
+function showCopyResult(btn, ok) {
+	window.clearTimeout(btn._qnatterCopyTimer);
+	btn.classList.toggle('is-copied', ok);
+	btn.classList.toggle('is-error', !ok);
+	btn.disabled = false;
+	setText(btn, ok ? _('Copied') : _('Copy failed'));
+	btn._qnatterCopyTimer = window.setTimeout(function() {
+		resetCopyButton(btn);
+	}, 1600);
+}
+
+function copyAddress(btn) {
+	var value = btn.getAttribute('data-copy-value') || '';
+	if (!value || btn.disabled)
+		return;
+
+	btn.disabled = true;
+	copyText(value).then(function() {
+		showCopyResult(btn, true);
+	}).catch(function() {
+		showCopyResult(btn, false);
+	});
+}
+
+function createAddressField(copyLabel) {
+	var value = E('span', { 'class': 'qnatter-address-value' }, []);
+	var copy = E('button', {
+		'class': 'qnatter-copy-button',
+		'type': 'button',
+		'title': copyLabel,
+		'aria-label': copyLabel,
+		'aria-live': 'polite',
+		'data-copy-value': '',
+		'disabled': true,
+		'click': function() { copyAddress(this); }
+	}, [ _('Copy') ]);
+
+	return {
+		node: E('dd', { 'class': 'qnatter-address-cell' }, [
+			E('div', { 'class': 'qnatter-address-field' }, [ value, copy ])
+		]),
+		value: value,
+		copy: copy
+	};
+}
+
+function updateAddressField(field, displayValue, copyValue) {
+	copyValue = copyValue || '';
+	setText(field.value, displayValue);
+	if (field.copy.getAttribute('data-copy-value') !== copyValue)
+		resetCopyButton(field.copy);
+	field.copy.setAttribute('data-copy-value', copyValue);
+	field.copy.disabled = !copyValue;
+}
+
 function itemKey(item) {
 	return item.name || item.instance || 'default';
 }
@@ -127,6 +226,8 @@ function itemStateText(state) {
 function createCard(item, fieldByName) {
 	var name = itemKey(item);
 	var fields = {};
+	var route = createAddressField(_('Copy public address'));
+	var inner = createAddressField(_('Copy internal address'));
 
 	fields.name = E('span', {}, [ name || '-' ]);
 	fields.running = E('button', {
@@ -134,8 +235,12 @@ function createCard(item, fieldByName) {
 		'data-enabled': item.enabled ? '1' : '0',
 		'click': function(ev) { toggleInstance(name, this); }
 	}, []);
-	fields.route = E('dd', {}, []);
-	fields.inner = E('dd', {}, []);
+	fields.route = route.node;
+	fields.routeValue = route.value;
+	fields.routeCopy = route.copy;
+	fields.inner = inner.node;
+	fields.innerValue = inner.value;
+	fields.innerCopy = inner.copy;
 	fields.protocol = E('dd', {}, []);
 	fields.network = E('dd', {}, []);
 	fields.qbittorrent = E('dd', {}, []);
@@ -177,8 +282,8 @@ function updateCard(item, fieldByName) {
 		fields.running.className = 'qnatter-pill qnatter-pill-clickable ' + itemStateClass(state);
 		setText(fields.running, itemStateText(state));
 	}
-	setText(fields.route, route);
-	setText(fields.inner, inner);
+	updateAddressField({ value: fields.routeValue, copy: fields.routeCopy }, route, item.outer_ip ? route : '');
+	updateAddressField({ value: fields.innerValue, copy: fields.innerCopy }, inner, item.inner_ip ? inner : '');
 	setText(fields.protocol, protocol);
 	setText(fields.network, item.network || 'wan');
 	setText(fields.qbittorrent, item.qbittorrent_enabled ? _('Enabled') : _('Disabled'));
@@ -198,7 +303,7 @@ return view.extend({
 		var root = E('div', { 'class': 'qnatter-page' + detectThemeClass() }, [
 			E('link', {
 				'rel': 'stylesheet',
-				'href': L.resource('qnatter/qnatter.css') + '?v=1.1.0-r1'
+				'href': L.resource('qnatter/qnatter.css') + '?v=1.1.0-r1&layout=address-copy1'
 			}),
 			E('div', { 'class': 'qnatter-toolbar' }, [
 				E('h2', {}, [ _('QNatter Status') ])

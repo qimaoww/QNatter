@@ -135,6 +135,87 @@
 	overflow-wrap: anywhere;
 }
 
+.qnatter-address-cell {
+	overflow: hidden;
+}
+
+.qnatter-address-field {
+	align-items: stretch;
+	background: rgba(248, 250, 252, 0.92);
+	border: 1px solid rgba(25, 35, 50, 0.14);
+	border-radius: 8px;
+	display: flex;
+	min-height: 32px;
+	min-width: 0;
+	overflow: hidden;
+	transition: border-color 0.18s ease, box-shadow 0.18s ease;
+	width: 100%;
+}
+
+.qnatter-address-field:focus-within {
+	border-color: var(--primary-color, #5e72e4);
+	box-shadow: 0 0 0 2px rgba(94, 114, 228, 0.14);
+}
+
+.qnatter-address-value {
+	color: inherit;
+	display: block;
+	flex: 1 1 auto;
+	font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+	font-size: 12px;
+	font-variant-numeric: tabular-nums;
+	line-height: 18px;
+	min-width: 0;
+	overflow: hidden;
+	padding: 6px 9px;
+	text-overflow: ellipsis;
+	user-select: all;
+	white-space: nowrap;
+}
+
+.qnatter-copy-button {
+	align-items: center;
+	background: rgba(255, 255, 255, 0.78);
+	border: 0;
+	border-left: 1px solid rgba(25, 35, 50, 0.12);
+	color: #526176;
+	cursor: pointer;
+	display: inline-flex;
+	font-size: 12px;
+	font-weight: 700;
+	justify-content: center;
+	line-height: 1;
+	min-width: 52px;
+	padding: 6px 9px;
+	transition: background-color 0.18s ease, color 0.18s ease;
+	white-space: nowrap;
+}
+
+.qnatter-copy-button:hover:not(:disabled) {
+	background: rgba(94, 114, 228, 0.10);
+	color: var(--primary-color, #485bc7);
+}
+
+.qnatter-copy-button:focus-visible {
+	box-shadow: inset 0 0 0 2px var(--primary-color, #5e72e4);
+	outline: none;
+}
+
+.qnatter-copy-button:disabled {
+	cursor: default;
+	opacity: 0.48;
+}
+
+.qnatter-copy-button.is-copied {
+	background: #dcfce7;
+	color: #166534;
+}
+
+.qnatter-copy-button.is-error {
+	background: #fee2e2;
+	color: #991b1b;
+}
+
 .qnatter-pill {
 	border-radius: 999px;
 	font-size: 12px;
@@ -538,6 +619,38 @@
 	line-height: 1.45;
 }
 
+.qnatter-theme-argon .qnatter-card .qnatter-address-field {
+	background: #f7f9fc !important;
+	border-color: var(--argon-border) !important;
+	border-radius: var(--argon-radius) !important;
+}
+
+.qnatter-theme-argon .qnatter-card .qnatter-address-field:focus-within {
+	border-color: var(--argon-primary) !important;
+	box-shadow: 0 0 0 2px rgba(94, 114, 228, 0.16) !important;
+}
+
+.qnatter-theme-argon .qnatter-card .qnatter-copy-button {
+	background: rgba(94, 114, 228, 0.06) !important;
+	border-left-color: var(--argon-border);
+	color: var(--argon-muted);
+}
+
+.qnatter-theme-argon .qnatter-card .qnatter-copy-button:hover:not(:disabled) {
+	background: rgba(94, 114, 228, 0.13) !important;
+	color: var(--argon-primary);
+}
+
+.qnatter-theme-argon .qnatter-card .qnatter-copy-button.is-copied {
+	background: rgba(45, 206, 137, 0.16) !important;
+	color: #1f9d63;
+}
+
+.qnatter-theme-argon .qnatter-card .qnatter-copy-button.is-error {
+	background: rgba(245, 54, 92, 0.14) !important;
+	color: #d12e50;
+}
+
 /* 状态徽章 */
 .qnatter-theme-argon .qnatter-pill {
 	border-radius: 999px;
@@ -829,6 +942,22 @@
 	color: var(--argon-muted);
 }
 
+.qnatter-theme-argon.qnatter-argon-dark .qnatter-card .qnatter-address-field {
+	background: #252525 !important;
+	border-color: var(--argon-border) !important;
+}
+
+.qnatter-theme-argon.qnatter-argon-dark .qnatter-card .qnatter-copy-button {
+	background: rgba(255, 255, 255, 0.05) !important;
+	border-left-color: var(--argon-border);
+	color: var(--argon-muted);
+}
+
+.qnatter-theme-argon.qnatter-argon-dark .qnatter-card .qnatter-copy-button:hover:not(:disabled) {
+	background: rgba(94, 114, 228, 0.22) !important;
+	color: #b7c0ff;
+}
+
 .qnatter-theme-argon.qnatter-argon-dark .qnatter-pill.is-running {
 	background: rgba(45, 206, 137, 0.2);
 	color: #4ed99a;
@@ -860,6 +989,8 @@
 	--qnatter-input-bg: var(--surface-overlay, rgba(248, 250, 253, 0.96));
 	--qnatter-input-border: var(--hairline, rgba(25, 35, 50, 0.12));
 	--qnatter-input-text: var(--text, var(--text-color, #1f2933));
+	--qnatter-address-bg: var(--surface-sunken, rgba(248, 250, 253, 0.96));
+	--qnatter-copy-bg: var(--surface-overlay, rgba(255, 255, 255, 0.72));
 	--qnatter-pill-running-bg: var(--success-surface, #dcfce7);
 	--qnatter-pill-running-text: var(--success, #166534);
 	--qnatter-pill-stopped-bg: var(--danger-surface, #fee2e2);
@@ -948,6 +1079,28 @@
 
 .qnatter-theme-aurora .qnatter-card dt {
 	color: var(--qnatter-card-dt);
+}
+
+.qnatter-theme-aurora .qnatter-address-field {
+	background: var(--qnatter-address-bg);
+	border-color: var(--qnatter-input-border);
+	border-radius: 10px;
+}
+
+.qnatter-theme-aurora .qnatter-address-field:focus-within {
+	border-color: var(--brand, #5e72e4);
+	box-shadow: 0 0 0 2px rgba(94, 114, 228, 0.16);
+}
+
+.qnatter-theme-aurora .qnatter-copy-button {
+	background: var(--qnatter-copy-bg);
+	border-left-color: var(--qnatter-input-border);
+	color: var(--text-muted, #667085);
+}
+
+.qnatter-theme-aurora .qnatter-copy-button:hover:not(:disabled) {
+	background: var(--hover-faint, rgba(255, 255, 255, 0.82));
+	color: var(--brand, #485bc7);
 }
 
 .qnatter-theme-aurora .qnatter-log,

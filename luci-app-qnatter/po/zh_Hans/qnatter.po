@@ -361,6 +361,21 @@ msgstr "公网地址"
 msgid "Internal address"
 msgstr "内部地址"
 
+msgid "Copy"
+msgstr "复制"
+
+msgid "Copied"
+msgstr "已复制"
+
+msgid "Copy failed"
+msgstr "复制失败"
+
+msgid "Copy public address"
+msgstr "复制公网地址"
+
+msgid "Copy internal address"
+msgstr "复制内部地址"
+
 msgid "Network protocol"
 msgstr "网络协议"
 
