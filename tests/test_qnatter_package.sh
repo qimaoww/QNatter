@@ -123,6 +123,18 @@ assert_no_path() {
 	[ ! -e "$ROOT/$1" ] || fail "unexpected path exists: $1"
 }
 
+assert_file LICENSE
+assert_contains LICENSE 'GNU GENERAL PUBLIC LICENSE'
+assert_contains LICENSE 'Version 3, 29 June 2007'
+assert_contains qnatter/Makefile '^# SPDX-License-Identifier: GPL-3\.0-only$'
+assert_contains qnatter/Makefile '^PKG_LICENSE:=GPL-3\.0-only$'
+assert_contains qnatter/Makefile '^PKG_LICENSE_FILES:=LICENSE$'
+assert_contains luci-app-qnatter/Makefile '^# SPDX-License-Identifier: GPL-3\.0-only$'
+assert_contains luci-app-qnatter/Makefile '^PKG_LICENSE:=GPL-3\.0-only$'
+assert_contains luci-app-qnatter/Makefile '^PKG_LICENSE_FILES:=LICENSE$'
+assert_contains README.md '^## 许可证$'
+assert_contains README.md 'GPL-3\.0-only'
+
 assert_file qnatter/Makefile
 assert_file qnatter/files/qnatter.init
 assert_file qnatter/files/qnatter-common.sh

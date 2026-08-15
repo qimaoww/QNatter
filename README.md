@@ -1,8 +1,10 @@
 # QNatter
 
+[![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
+
 QNatter 是一个面向 OpenWrt/ImmortalWrt 的端口打洞集成包，基于 [MikeWang000000/Natter](https://github.com/MikeWang000000/Natter) 构建。
 
-本仓库所有代码及文档（包括本 README）均由 AI 生成。
+本仓库的 OpenWrt/ImmortalWrt 集成、Go 实现、LuCI 界面和文档由 AI 辅助开发；源自上游 Natter 的部分保留其原始许可与归属。
 
 本仓库主要提供：
 
@@ -74,6 +76,14 @@ node --check luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instance
 node --check luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/status.js
 node --check luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/log.js
 ```
+
+## 许可证
+
+本项目采用 [GNU General Public License v3.0](LICENSE) 发布，SPDX 标识为 `GPL-3.0-only`。
+
+你可以依照 GPLv3 使用、研究、修改和分发本项目。分发源代码或构建产物时，应保留适用的版权与许可证声明，并按 GPLv3 提供相应源代码。完整条款以仓库根目录的 [LICENSE](LICENSE) 为准。
+
+上游 [MikeWang000000/Natter](https://github.com/MikeWang000000/Natter) 同样采用 GNU GPL v3.0；本仓库保留并遵循其许可证要求。
 
 ## 致谢
 

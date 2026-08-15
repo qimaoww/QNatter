@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-License-Identifier: GPL-3.0-only
 
 include $(TOPDIR)/rules.mk
 
@@ -12,7 +12,7 @@ PKG_SOURCE_URL:=https://github.com/MikeWang000000/Natter.git
 PKG_SOURCE_VERSION:=ce1427650178167d2330c490d2e5cd979223e9a4
 PKG_MIRROR_HASH:=skip
 
-PKG_LICENSE:=GPL-3.0-or-later
+PKG_LICENSE:=GPL-3.0-only
 PKG_LICENSE_FILES:=LICENSE
 PKG_MAINTAINER:=qimaoww
 PKG_BUILD_DEPENDS:=golang/host
