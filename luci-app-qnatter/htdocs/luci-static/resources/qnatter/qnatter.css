@@ -141,15 +141,20 @@
 
 .qnatter-address-field {
 	align-items: stretch;
-	background: rgba(248, 250, 252, 0.92);
-	border: 1px solid rgba(25, 35, 50, 0.14);
-	border-radius: 8px;
+	background: rgba(246, 248, 251, 0.84);
+	border: 1px solid rgba(25, 35, 50, 0.13);
+	border-radius: 10px;
 	display: flex;
-	min-height: 32px;
+	min-height: 34px;
 	min-width: 0;
 	overflow: hidden;
-	transition: border-color 0.18s ease, box-shadow 0.18s ease;
+	transition: background-color 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
 	width: 100%;
+}
+
+.qnatter-address-field:hover {
+	background: rgba(250, 251, 253, 0.96);
+	border-color: rgba(25, 35, 50, 0.22);
 }
 
 .qnatter-address-field:focus-within {
@@ -164,10 +169,11 @@
 	font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
 	font-size: 12px;
 	font-variant-numeric: tabular-nums;
-	line-height: 18px;
+	letter-spacing: 0.01em;
+	line-height: 20px;
 	min-width: 0;
 	overflow: hidden;
-	padding: 6px 9px;
+	padding: 6px 10px;
 	text-overflow: ellipsis;
 	user-select: all;
 	white-space: nowrap;
@@ -175,9 +181,9 @@
 
 .qnatter-copy-button {
 	align-items: center;
-	background: rgba(255, 255, 255, 0.78);
+	background: transparent;
 	border: 0;
-	border-left: 1px solid rgba(25, 35, 50, 0.12);
+	border-left: 1px solid rgba(25, 35, 50, 0.10);
 	color: #526176;
 	cursor: pointer;
 	display: inline-flex;
@@ -185,8 +191,8 @@
 	font-weight: 700;
 	justify-content: center;
 	line-height: 1;
-	min-width: 52px;
-	padding: 6px 9px;
+	min-width: 48px;
+	padding: 6px 10px;
 	transition: background-color 0.18s ease, color 0.18s ease;
 	white-space: nowrap;
 }
@@ -203,16 +209,16 @@
 
 .qnatter-copy-button:disabled {
 	cursor: default;
-	opacity: 0.48;
+	opacity: 0.45;
 }
 
 .qnatter-copy-button.is-copied {
-	background: #dcfce7;
+	background: rgba(45, 206, 137, 0.14);
 	color: #166534;
 }
 
 .qnatter-copy-button.is-error {
-	background: #fee2e2;
+	background: rgba(245, 54, 92, 0.12);
 	color: #991b1b;
 }
 
@@ -625,13 +631,18 @@
 	border-radius: var(--argon-radius) !important;
 }
 
+.qnatter-theme-argon .qnatter-card .qnatter-address-field:hover {
+	background: #fbfcfe !important;
+	border-color: rgba(94, 114, 228, 0.28) !important;
+}
+
 .qnatter-theme-argon .qnatter-card .qnatter-address-field:focus-within {
 	border-color: var(--argon-primary) !important;
 	box-shadow: 0 0 0 2px rgba(94, 114, 228, 0.16) !important;
 }
 
 .qnatter-theme-argon .qnatter-card .qnatter-copy-button {
-	background: rgba(94, 114, 228, 0.06) !important;
+	background: transparent !important;
 	border-left-color: var(--argon-border);
 	color: var(--argon-muted);
 }
@@ -948,7 +959,7 @@
 }
 
 .qnatter-theme-argon.qnatter-argon-dark .qnatter-card .qnatter-copy-button {
-	background: rgba(255, 255, 255, 0.05) !important;
+	background: transparent !important;
 	border-left-color: var(--argon-border);
 	color: var(--argon-muted);
 }
@@ -1093,7 +1104,7 @@
 }
 
 .qnatter-theme-aurora .qnatter-copy-button {
-	background: var(--qnatter-copy-bg);
+	background: transparent;
 	border-left-color: var(--qnatter-input-border);
 	color: var(--text-muted, #667085);
 }
