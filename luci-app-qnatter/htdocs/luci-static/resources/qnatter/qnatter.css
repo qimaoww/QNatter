@@ -1156,9 +1156,17 @@
 }
 
 .qnatter-theme-aurora .qnatter-address-field {
-	background: var(--qnatter-address-bg);
+	background: var(--qnatter-input-bg);
 	border-color: var(--qnatter-input-border);
-	border-radius: 8px;
+	border-radius: 14px;
+	box-shadow: var(--app-shadow-sm);
+	color: var(--qnatter-input-text);
+	min-height: 34px;
+}
+
+.qnatter-theme-aurora .qnatter-address-field:hover {
+	background: var(--hover-faint, rgba(255, 255, 255, 0.82));
+	border-color: var(--brand, #5e72e4);
 }
 
 .qnatter-theme-aurora .qnatter-address-field:focus-within {
@@ -1170,6 +1178,16 @@
 	background: transparent;
 	border-left-color: var(--qnatter-input-border);
 	color: var(--text-muted, #667085);
+}
+
+.qnatter-theme-aurora .qnatter-copy-button.is-copied {
+	background: var(--success-surface, rgba(45, 206, 137, 0.14));
+	color: var(--success, #166534);
+}
+
+.qnatter-theme-aurora .qnatter-copy-button.is-error {
+	background: var(--danger-surface, rgba(245, 54, 92, 0.12));
+	color: var(--danger, #991b1b);
 }
 
 .qnatter-theme-aurora .qnatter-copy-button:hover:not(:disabled) {
