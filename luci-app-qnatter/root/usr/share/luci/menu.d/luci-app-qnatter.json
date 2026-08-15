@@ -15,7 +15,7 @@
 		"order": 1,
 		"action": {
 			"type": "view",
-			"path": "qnatter/status"
+			"path": "qnatter/status-v12"
 		}
 	},
 	"admin/services/qnatter/instances": {

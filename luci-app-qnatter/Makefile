@@ -26,6 +26,7 @@ for path in \
 	/www/luci-static/resources/view/qnatter/instances-v11.js \
 	/www/luci-static/resources/view/qnatter/log.js \
 	/www/luci-static/resources/view/qnatter/status.js \
+	/www/luci-static/resources/view/qnatter/status-v12.js \
 	/www/luci-static/resources/view/qnatter/stun.js
 do
 	[ -e "$$root$$path" ] || continue
