@@ -143,12 +143,12 @@
 
 .qnatter-address-field {
 	align-items: stretch;
-	background: rgba(255, 255, 255, 0.62);
+	background: rgba(255, 255, 255, 0.82);
 	border: 1px solid rgba(25, 35, 50, 0.15);
-	border-radius: 8px;
+	border-radius: 10px;
 	box-shadow: inset 0 1px 1px rgba(25, 35, 50, 0.025);
 	display: flex;
-	min-height: 30px;
+	min-height: 36px;
 	min-width: 0;
 	overflow: hidden;
 	transition: background-color 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
@@ -173,10 +173,10 @@
 	font-size: 12.5px;
 	font-variant-numeric: tabular-nums;
 	letter-spacing: 0.01em;
-	line-height: 20px;
+	line-height: 21px;
 	min-width: 0;
 	overflow: hidden;
-	padding: 2px 10px;
+	padding: 6px 10px;
 	text-overflow: ellipsis;
 	user-select: all;
 	white-space: nowrap;
@@ -190,37 +190,37 @@
 	color: #526176;
 	cursor: pointer;
 	display: inline-flex;
-	flex: 0 0 34px;
+	flex: 0 0 32px;
 	font-size: 12px;
 	font-weight: 600;
 	justify-content: center;
 	line-height: 1;
-	min-width: 34px;
+	min-width: 32px;
 	padding: 0;
 	transition: background-color 0.18s ease, color 0.18s ease;
-	width: 34px;
+	width: 32px;
 	white-space: nowrap;
 }
 
 .qnatter-copy-icon {
 	border: 1.5px solid currentColor;
-	border-radius: 2px;
+	border-radius: 3px;
 	display: inline-block;
 	flex: 0 0 auto;
-	height: 12px;
+	height: 15px;
 	position: relative;
-	width: 12px;
+	width: 15px;
 }
 
 .qnatter-copy-icon::before {
 	border: 1.5px solid currentColor;
-	border-radius: 2px;
+	border-radius: 3px;
 	content: "";
-	height: 9px;
+	height: 10px;
 	left: -4px;
 	top: -4px;
 	position: absolute;
-	width: 9px;
+	width: 10px;
 }
 
 .qnatter-copy-label {
@@ -1156,16 +1156,16 @@
 }
 
 .qnatter-theme-aurora .qnatter-address-field {
-	background: var(--qnatter-address-bg);
+	background: var(--control-bg, var(--surface-overlay, #ffffff));
 	border-color: var(--qnatter-input-border);
-	border-radius: 14px;
+	border-radius: 10px;
 	box-shadow: var(--app-shadow-sm);
 	color: var(--qnatter-input-text);
-	min-height: 34px;
+	min-height: 36px;
 }
 
 .qnatter-theme-aurora .qnatter-address-field:hover {
-	background: var(--hover-faint, rgba(255, 255, 255, 0.82));
+	background: var(--surface-overlay, #ffffff);
 	border-color: var(--qnatter-input-border);
 }
 
@@ -1176,13 +1176,34 @@
 
 .qnatter-theme-aurora .qnatter-copy-button {
 	background: transparent;
-	border-left-color: transparent;
-	border-radius: 9px;
-	color: var(--text-muted, #667085);
-	flex-basis: 28px;
-	margin: 3px;
-	min-width: 28px;
-	width: 28px;
+	border-left-color: var(--qnatter-input-border);
+	border-radius: 0;
+	color: var(--text-subtle, var(--text-muted, #667085));
+	flex-basis: 46px;
+	font-size: 12px;
+	font-weight: 600;
+	margin: 0;
+	min-width: 46px;
+	width: 46px;
+}
+
+.qnatter-theme-aurora .qnatter-address-value {
+	font-size: 12.5px;
+	line-height: 21px;
+	padding: 6px 10px;
+}
+
+.qnatter-theme-aurora .qnatter-copy-icon {
+	display: none;
+}
+
+.qnatter-theme-aurora .qnatter-copy-label {
+	clip: auto;
+	clip-path: none;
+	height: auto;
+	overflow: visible;
+	position: static;
+	width: auto;
 }
 
 .qnatter-theme-aurora .qnatter-copy-button.is-copied {
@@ -1274,11 +1295,11 @@
 
 .qnatter-theme-aurora .qnatter-card dl {
 	gap: 8px 14px;
-	grid-template-columns: 124px minmax(0, 1fr);
+	grid-template-columns: 96px minmax(0, 1fr);
 }
 
 .qnatter-theme-aurora .qnatter-card dt {
-	font-size: 12px;
+	font-size: 13px;
 	font-weight: 700;
 	letter-spacing: 0.02em;
 	text-transform: none;
