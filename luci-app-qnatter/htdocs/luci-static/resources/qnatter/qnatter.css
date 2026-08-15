@@ -142,11 +142,12 @@
 
 .qnatter-address-field {
 	align-items: stretch;
-	background: rgba(246, 248, 251, 0.84);
-	border: 1px solid rgba(25, 35, 50, 0.13);
-	border-radius: 10px;
+	background: rgba(255, 255, 255, 0.62);
+	border: 1px solid rgba(25, 35, 50, 0.15);
+	border-radius: 8px;
+	box-shadow: inset 0 1px 1px rgba(25, 35, 50, 0.025);
 	display: flex;
-	min-height: 34px;
+	min-height: 36px;
 	min-width: 0;
 	overflow: hidden;
 	transition: background-color 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
@@ -154,8 +155,8 @@
 }
 
 .qnatter-address-field:hover {
-	background: rgba(250, 251, 253, 0.96);
-	border-color: rgba(25, 35, 50, 0.22);
+	background: rgba(255, 255, 255, 0.90);
+	border-color: rgba(25, 35, 50, 0.24);
 }
 
 .qnatter-address-field:focus-within {
@@ -168,13 +169,13 @@
 	display: block;
 	flex: 1 1 auto;
 	font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
-	font-size: 12px;
+	font-size: 13px;
 	font-variant-numeric: tabular-nums;
 	letter-spacing: 0.01em;
-	line-height: 20px;
+	line-height: 22px;
 	min-width: 0;
 	overflow: hidden;
-	padding: 6px 10px;
+	padding: 6px 11px;
 	text-overflow: ellipsis;
 	user-select: all;
 	white-space: nowrap;
@@ -188,14 +189,47 @@
 	color: #526176;
 	cursor: pointer;
 	display: inline-flex;
+	flex: 0 0 38px;
 	font-size: 12px;
-	font-weight: 700;
+	font-weight: 600;
 	justify-content: center;
 	line-height: 1;
-	min-width: 48px;
-	padding: 6px 10px;
+	min-width: 38px;
+	padding: 0;
 	transition: background-color 0.18s ease, color 0.18s ease;
+	width: 38px;
 	white-space: nowrap;
+}
+
+.qnatter-copy-icon {
+	border: 1.5px solid currentColor;
+	border-radius: 2px;
+	display: inline-block;
+	flex: 0 0 auto;
+	height: 12px;
+	position: relative;
+	width: 12px;
+}
+
+.qnatter-copy-icon::before {
+	border: 1.5px solid currentColor;
+	border-radius: 2px;
+	content: "";
+	height: 9px;
+	left: -4px;
+	top: -4px;
+	position: absolute;
+	width: 9px;
+}
+
+.qnatter-copy-label {
+	clip: rect(0 0 0 0);
+	clip-path: inset(50%);
+	height: 1px;
+	overflow: hidden;
+	position: absolute;
+	white-space: nowrap;
+	width: 1px;
 }
 
 .qnatter-copy-button:hover:not(:disabled) {
@@ -210,7 +244,7 @@
 
 .qnatter-copy-button:disabled {
 	cursor: default;
-	opacity: 0.45;
+	opacity: 0.36;
 }
 
 .qnatter-copy-button.is-copied {
@@ -221,6 +255,33 @@
 .qnatter-copy-button.is-error {
 	background: rgba(245, 54, 92, 0.12);
 	color: #991b1b;
+}
+
+.qnatter-copy-button.is-copied .qnatter-copy-icon,
+.qnatter-copy-button.is-error .qnatter-copy-icon {
+	border-color: transparent;
+}
+
+.qnatter-copy-button.is-copied .qnatter-copy-icon::before,
+.qnatter-copy-button.is-error .qnatter-copy-icon::before {
+	border: 0;
+	font-size: 14px;
+	font-weight: 800;
+	height: auto;
+	left: 50%;
+	line-height: 1;
+	position: absolute;
+	top: 50%;
+	transform: translate(-50%, -50%);
+	width: auto;
+}
+
+.qnatter-copy-button.is-copied .qnatter-copy-icon::before {
+	content: "✓";
+}
+
+.qnatter-copy-button.is-error .qnatter-copy-icon::before {
+	content: "!";
 }
 
 .qnatter-pill {
@@ -629,7 +690,7 @@
 .qnatter-theme-argon .qnatter-card .qnatter-address-field {
 	background: #f7f9fc !important;
 	border-color: var(--argon-border) !important;
-	border-radius: var(--argon-radius) !important;
+	border-radius: 0.5rem !important;
 }
 
 .qnatter-theme-argon .qnatter-card .qnatter-address-field:hover {
@@ -1096,7 +1157,7 @@
 .qnatter-theme-aurora .qnatter-address-field {
 	background: var(--qnatter-address-bg);
 	border-color: var(--qnatter-input-border);
-	border-radius: 10px;
+	border-radius: 8px;
 }
 
 .qnatter-theme-aurora .qnatter-address-field:focus-within {

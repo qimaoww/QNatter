@@ -120,7 +120,7 @@ function resetCopyButton(btn) {
 	window.clearTimeout(btn._qnatterCopyTimer);
 	btn.classList.remove('is-copied', 'is-error');
 	btn.disabled = !btn.getAttribute('data-copy-value');
-	setText(btn, _('Copy'));
+	setText(btn.querySelector('.qnatter-copy-label'), _('Copy'));
 }
 
 function showCopyResult(btn, ok) {
@@ -128,7 +128,7 @@ function showCopyResult(btn, ok) {
 	btn.classList.toggle('is-copied', ok);
 	btn.classList.toggle('is-error', !ok);
 	btn.disabled = false;
-	setText(btn, ok ? _('Copied') : _('Copy failed'));
+	setText(btn.querySelector('.qnatter-copy-label'), ok ? _('Copied') : _('Copy failed'));
 	btn._qnatterCopyTimer = window.setTimeout(function() {
 		resetCopyButton(btn);
 	}, 1600);
@@ -158,7 +158,10 @@ function createAddressField(copyLabel) {
 		'data-copy-value': '',
 		'disabled': true,
 		'click': function() { copyAddress(this); }
-	}, [ _('Copy') ]);
+	}, [
+		E('span', { 'class': 'qnatter-copy-icon', 'aria-hidden': 'true' }),
+		E('span', { 'class': 'qnatter-copy-label' }, [ _('Copy') ])
+	]);
 
 	return {
 		node: E('dd', { 'class': 'qnatter-address-cell' }, [
