@@ -140,6 +140,11 @@
 	overflow: hidden;
 }
 
+.qnatter-address-label {
+	align-self: center;
+	line-height: 22px;
+}
+
 .qnatter-address-field {
 	align-items: stretch;
 	background: rgba(255, 255, 255, 0.62);
