@@ -493,7 +493,7 @@ completion_script_test() {
 
 toggle_instance() {
 	local instance="$1"
-	local current_state new_state
+	local current_state new_state global_state service_enabled
 
 	valid_section_name "$instance" || {
 		log_error "$instance" "toggle failed: invalid instance name"
@@ -517,6 +517,21 @@ toggle_instance() {
 			;;
 	esac
 
+	# reload_service stops the whole service while the global switch is off, so
+	# enabling an instance from the status page has to bring the service up too.
+	service_enabled=0
+	if [ "$new_state" = "1" ]; then
+		global_state="$("$QNATTER_UCI_BIN" -q get "qnatter.global.enabled" 2>/dev/null || echo "0")"
+		if [ "$global_state" != "1" ]; then
+			if ! "$QNATTER_UCI_BIN" set "qnatter.global.enabled=1"; then
+				log_error "$instance" "toggle failed: cannot enable global service"
+				emit_error "Failed to enable QNatter service"
+				return 0
+			fi
+			service_enabled=1
+		fi
+	fi
+
 	if ! "$QNATTER_UCI_BIN" set "qnatter.${instance}.enabled=${new_state}" ||
 		! "$QNATTER_UCI_BIN" commit qnatter; then
 		log_error "$instance" "toggle failed: UCI commit error (target state: ${new_state})"
@@ -524,6 +539,9 @@ toggle_instance() {
 		return 0
 	fi
 
+	if [ "$service_enabled" = "1" ]; then
+		log_info "$instance" "service enabled (was: disabled)"
+	fi
 	if [ "$new_state" = "1" ]; then
 		log_info "$instance" "instance enabled (was: disabled)"
 	else

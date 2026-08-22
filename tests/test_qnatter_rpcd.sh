@@ -16,6 +16,8 @@ status_bin="$tmp/qnatter-status"
 log_bin="$tmp/qnatter-log"
 log_calls="$tmp/log-calls.txt"
 uci_bin="$tmp/uci"
+uci_wan_enabled="$tmp/uci-wan-enabled"
+uci_global_enabled="$tmp/uci-global-enabled"
 mv_bin="$tmp/mv"
 init_bin="$tmp/qnatter-init"
 curl_bin="$tmp/curl-cloudflare"
@@ -61,7 +63,8 @@ case "\$1" in
 	get)
 		case "\$2" in
 			qnatter.wan_ct) printf 'instance\n' ;;
-			qnatter.wan_ct.enabled) printf '0\n' ;;
+			qnatter.wan_ct.enabled) [ -f "$uci_wan_enabled" ] && printf '1\n' || printf '0\n' ;;
+			qnatter.global.enabled) [ -f "$uci_global_enabled" ] && printf '1\n' || printf '0\n' ;;
 			qnatter.wan_new) exit 1 ;;
 			qnatter.bad-name) exit 1 ;;
 			qnatter.wan_ct.cloudflare_api_token) printf 'cf-token\n' ;;
@@ -69,7 +72,16 @@ case "\$1" in
 			*) exit 1 ;;
 		esac
 		;;
-	rename|delete|commit|set)
+	rename|delete|commit)
+		exit 0
+		;;
+	set)
+		case "\$2" in
+			qnatter.wan_ct.enabled=1) : > "$uci_wan_enabled" ;;
+			qnatter.wan_ct.enabled=0) rm -f "$uci_wan_enabled" ;;
+			qnatter.global.enabled=1) : > "$uci_global_enabled" ;;
+			qnatter.global.enabled=0) rm -f "$uci_global_enabled" ;;
+		esac
 		exit 0
 		;;
 	*)
@@ -260,11 +272,41 @@ toggle_output="$(
 	printf '{"instance":"wan_ct"}\n' | \
 		QNATTER_UCI_BIN="$uci_bin" \
 		QNATTER_INIT_BIN="$init_bin" \
+		QNATTER_LOG_DIR="$log_dir" \
 		"$rpcd" call toggle_instance
 )"
 [ "$toggle_output" = '{"ok":true,"enabled":1}' ] || fail "toggle_instance output = $toggle_output"
 grep -Fqx 'set qnatter.wan_ct.enabled=1' "$uci_calls" || fail "toggle_instance did not enable the instance"
+grep -Fqx 'set qnatter.global.enabled=1' "$uci_calls" || fail "toggle_instance did not enable the global service"
 grep -Fqx 'reload' "$init_calls" || fail "toggle_instance did not reload QNatter"
+grep -Fq 'service enabled (was: disabled)' "$log_dir/wan_ct.log" || fail "toggle_instance did not log the global enable"
+
+: > "$uci_calls"
+toggle_disable_output="$(
+	printf '{"instance":"wan_ct"}\n' | \
+		QNATTER_UCI_BIN="$uci_bin" \
+		QNATTER_INIT_BIN="$init_bin" \
+		QNATTER_LOG_DIR="$log_dir" \
+		"$rpcd" call toggle_instance
+)"
+[ "$toggle_disable_output" = '{"ok":true,"enabled":0}' ] || fail "toggle_instance disable output = $toggle_disable_output"
+grep -Fqx 'set qnatter.wan_ct.enabled=0' "$uci_calls" || fail "toggle_instance did not disable the instance"
+if grep -Fq 'set qnatter.global.enabled' "$uci_calls"; then
+	fail "toggle_instance must not touch the global switch when disabling"
+fi
+
+: > "$uci_calls"
+toggle_reenable_output="$(
+	printf '{"instance":"wan_ct"}\n' | \
+		QNATTER_UCI_BIN="$uci_bin" \
+		QNATTER_INIT_BIN="$init_bin" \
+		QNATTER_LOG_DIR="$log_dir" \
+		"$rpcd" call toggle_instance
+)"
+[ "$toggle_reenable_output" = '{"ok":true,"enabled":1}' ] || fail "toggle_instance re-enable output = $toggle_reenable_output"
+if grep -Fq 'set qnatter.global.enabled' "$uci_calls"; then
+	fail "toggle_instance must not re-set an already enabled global switch"
+fi
 
 invalid_rename_output="$(
 	printf '{"old":"wan_ct","new":"bad-name"}\n' | QNATTER_UCI_BIN="$uci_bin" "$rpcd" call rename_instance
