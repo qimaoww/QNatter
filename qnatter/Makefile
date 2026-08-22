@@ -4,7 +4,7 @@ include $(TOPDIR)/rules.mk
 
 PKG_NAME:=qnatter
 PKG_VERSION:=2.2.2
-PKG_RELEASE:=1
+PKG_RELEASE:=2
 
 PKG_SOURCE:=$(PKG_NAME)-$(PKG_VERSION).tar.gz
 PKG_SOURCE_PROTO:=git
@@ -16,10 +16,16 @@ PKG_LICENSE:=GPL-3.0-only
 PKG_LICENSE_FILES:=LICENSE
 PKG_MAINTAINER:=qimaoww
 PKG_BUILD_DEPENDS:=golang/host
+
+# GO_ARCH is only defined by the golang feed build framework; map the SDK
+# target architecture the same way lang/golang/golang-values.mk does so a
+# missing GO_ARCH never makes go build silently target the build host.
 QNATTER_GOOS?=linux
-QNATTER_GOARCH?=$(GO_ARCH)
-QNATTER_GOMIPS?=
-QNATTER_GOARM?=
+QNATTER_GOARCH?=$(subst aarch64,arm64,$(subst i386,386,$(subst loongarch64,loong64,$(subst mipsel,mipsle,$(subst mips64el,mips64le,$(subst powerpc64,ppc64,$(subst x86_64,amd64,$(ARCH))))))))
+QNATTER_TARGET_FPU=$(word 2,$(subst +,$(space),$(call qstrip,$(CONFIG_CPU_TYPE))))
+QNATTER_GOARM?=$(if $(filter arm,$(QNATTER_GOARCH)),$(if $(QNATTER_TARGET_FPU),$(if $(filter vfp vfpv2,$(QNATTER_TARGET_FPU)),6,7),5))
+QNATTER_GOMIPS?=$(if $(filter mips mipsle,$(QNATTER_GOARCH)),$(if $(filter y,$(CONFIG_HAS_FPU)),hardfloat,softfloat))
+QNATTER_GOMIPS64?=$(if $(filter mips64 mips64le,$(QNATTER_GOARCH)),$(if $(filter y,$(CONFIG_HAS_FPU)),hardfloat,softfloat))
 
 include $(INCLUDE_DIR)/package.mk
 
@@ -42,7 +48,8 @@ define Package/qnatter/conffiles
 endef
 
 define Build/Compile
-	cd $(CURDIR)/../go-qnatter && CGO_ENABLED=0 GOOS="$(QNATTER_GOOS)" GOARCH="$(QNATTER_GOARCH)" GOMIPS="$(QNATTER_GOMIPS)" GOARM="$(QNATTER_GOARM)" go build -trimpath -ldflags="-s -w" -o $(PKG_BUILD_DIR)/qnatter-go ./cmd/qnatter
+	[ -n "$(QNATTER_GOARCH)" ] || { echo "qnatter: cannot map target architecture '$(ARCH)' to GOARCH" >&2; exit 1; }
+	cd $(CURDIR)/../go-qnatter && CGO_ENABLED=0 GOOS="$(QNATTER_GOOS)" GOARCH="$(QNATTER_GOARCH)" GOMIPS="$(QNATTER_GOMIPS)" GOMIPS64="$(QNATTER_GOMIPS64)" GOARM="$(QNATTER_GOARM)" go build -trimpath -ldflags="-s -w" -o $(PKG_BUILD_DIR)/qnatter-go ./cmd/qnatter
 endef
 
 define Package/qnatter/install
