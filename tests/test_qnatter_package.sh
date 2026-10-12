@@ -530,12 +530,20 @@ assert_contains qnatter/Makefile 'GO386="\$\(QNATTER_GO386\)"'
 assert_contains qnatter/Makefile 'QNATTER_SUPPORTED_GOARCH:='
 assert_contains qnatter/Makefile 'unsupported GOARCH'
 assert_contains qnatter/Makefile 'build -buildvcs=false'
-assert_contains qnatter/Makefile 'GOARCH=\$\$built, expected'
-assert_contains qnatter/Makefile 'expected \$\(QNATTER_EXPECTED_GOARCH\)'
-# 自校验必须用不依赖字段位置的解析，并且解析失败时打印原始输出（否则会像
-# 早期实现那样在真实构建环境里静默误判）。
-assert_contains qnatter/Makefile 'cannot determine the GOARCH'
-assert_not_contains qnatter/Makefile 'grep -o .GOARCH='
+# 自校验必须放在独立脚本里：define 里的 `$$` 要经过两轮 make 展开才到达 shell，
+# 内联的 $$bin 会被吃成 `in`、$$(go version -m ...) 变成空串，于是完全正确的
+# 构建反而报出 "GOARCH=uilt"。
+assert_file qnatter/scripts/check-goarch.sh
+assert_contains qnatter/Makefile 'sh \$\(CURDIR\)/scripts/check-goarch\.sh "\$\(PKG_BUILD_DIR\)/qnatter-go"'
+assert_contains qnatter/Makefile '"\$\(QNATTER_EXPECTED_GOARCH\)" "\$\(ARCH\)"'
+assert_not_contains qnatter/Makefile '\$\$bin'
+assert_not_contains qnatter/Makefile '\$\$built'
+assert_not_contains qnatter/Makefile '\$\$out'
+assert_contains qnatter/scripts/check-goarch.sh 'GOARCH=\$built, expected \$expected'
+assert_contains qnatter/scripts/check-goarch.sh 'cannot determine the GOARCH'
+assert_contains qnatter/scripts/check-goarch.sh 'go version -m "\$binary"'
+assert_not_contains qnatter/scripts/check-goarch.sh 'grep -o .GOARCH='
+assert_not_contains qnatter/scripts/check-goarch.sh '\$\$'
 assert_contains qnatter/Makefile 'DEPENDS:=.*@\(aarch64||arm||'
 assert_contains qnatter/Makefile 'go build .* -o \$\(PKG_BUILD_DIR\)/qnatter-go ./cmd/qnatter'
 # XB-07: sub-architecture baselines are pinned explicitly.
@@ -605,6 +613,41 @@ if command -v make >/dev/null 2>&1; then
 else
 	echo 'SKIP: make not available; Build/Prepare layout simulation skipped' >&2
 fi
+
+# scripts/check-goarch.sh 是构建期唯一判断 GOARCH 的地方。用桩 `go` 直接跑它，
+# 命中、不匹配、输出里没有 GOARCH 记录、期望值为空这四种情况都要有确定结果。
+ga_tmp="$(mktemp -d)"
+mkdir -p "$ga_tmp/bin"
+: >"$ga_tmp/fake-binary"
+ga_stub() {
+	cat >"$ga_tmp/bin/go" <<STUB
+#!/bin/sh
+printf '$1\n'
+STUB
+	chmod +x "$ga_tmp/bin/go"
+}
+ga_run() {
+	PATH="$ga_tmp/bin:$PATH" sh "$ROOT/qnatter/scripts/check-goarch.sh" \
+		"$ga_tmp/fake-binary" "$2" "$3" >/dev/null 2>&1
+}
+
+ga_stub 'build\tGOARCH=amd64'
+ga_run matching amd64 x86_64 || fail 'check-goarch.sh rejected a matching GOARCH'
+if ga_run mismatched arm64 aarch64; then
+	fail 'check-goarch.sh accepted a mismatched GOARCH'
+fi
+
+ga_stub 'build\tGOOS=linux'
+if ga_run missing amd64 x86_64; then
+	fail 'check-goarch.sh accepted output with no GOARCH record'
+fi
+
+ga_stub 'build\tGOARCH=amd64'
+if ga_run emptyexpect '' x86_64; then
+	fail 'check-goarch.sh accepted an empty expected GOARCH'
+fi
+rm -rf "$ga_tmp"
+
 assert_contains qnatter/Makefile '\$\(INSTALL_BIN\) \$\(PKG_BUILD_DIR\)/qnatter-go \$\(1\)/usr/bin/qnatter-go'
 assert_contains qnatter/Makefile '\$\(LN\) qnatter-go \$\(1\)/usr/bin/QNatter'
 assert_contains qnatter/Makefile '^PKG_VERSION:=2\.2\.2$'
