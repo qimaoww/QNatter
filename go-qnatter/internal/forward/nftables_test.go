@@ -11,7 +11,7 @@ func TestNftablesInitialRulesContainQNatterChains(t *testing.T) {
 		"chain qnatter_snat",
 		"chain qnatter_mark",
 		"type nat hook prerouting priority -105",
-		"type filter hook prerouting priority -150",
+		"type filter hook prerouting priority -149",
 		"type nat hook postrouting priority 95",
 	} {
 		if !contains(rules, want) {

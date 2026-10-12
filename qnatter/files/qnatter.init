@@ -18,11 +18,52 @@ LOG_DIR="${QNATTER_LOG_DIR:-/var/log/qnatter}"
 : "${QNATTER_IP_BIN:=ip}"
 : "${QNATTER_UCI_BIN:=uci}"
 : "${QNATTER_UBUS_BIN:=ubus}"
+: "${QNATTER_INIT_BIN:=/etc/init.d/qnatter}"
+: "${QNATTER_LOCK_FILE:=/var/lock/qnatter.lock}"
+# procd respawn 额度（threshold:timeout:retry）：连续 retry 次在 threshold 秒内
+# 退出后 procd 永久放弃重启。qnatter-run 会读取同名参数做失败计数与告警，
+# 两边必须保持一致（qnatter-run 的默认值也是 3600/5）。
+: "${QNATTER_RESPAWN_THRESHOLD:=3600}"
+: "${QNATTER_RESPAWN_TIMEOUT:=5}"
+: "${QNATTER_RESPAWN_RETRY:=5}"
 
 . "$QNATTER_FUNCTIONS_SH"
 . "$QNATTER_NETWORK_SH"
 . "$QNATTER_COMMON_SH"
 . "$QNATTER_QBITTORRENT_SH"
+
+# config_foreach 的返回值只反映"最后一次回调"：/lib/functions.sh 内部是
+# `[ "$type" = "$cfgtype" ] && "$callback" "$section"`，前面几次回调的返回值被
+# 丢弃。因此 `config_foreach cb instance || return 1` 只能捕获最后一个实例段的
+# 失败，前面实例的失败会被静默吞掉（SH-P2-1）。统一改走 qnatter_foreach_instance：
+# 逐实例累计失败标记，任一实例失败即置位，同时为每个失败实例单独写一条 syslog。
+QNATTER_FOREACH_FAILED=0
+QNATTER_FOREACH_CALLBACK=""
+
+qnatter_foreach_instance_dispatch() {
+	local section="$1"
+
+	"$QNATTER_FOREACH_CALLBACK" "$section" || {
+		QNATTER_FOREACH_FAILED=1
+		qnatter_warn "qnatter: instance ${section} failed in ${QNATTER_FOREACH_CALLBACK}"
+	}
+	return 0
+}
+
+qnatter_foreach_instance() {
+	local callback="$1"
+	local type="${2:-instance}"
+
+	QNATTER_FOREACH_FAILED=0
+	QNATTER_FOREACH_CALLBACK="$callback"
+	config_foreach qnatter_foreach_instance_dispatch "$type"
+	return 0
+}
+
+# 任一实例失败即非 0；调用方（start_service / reload 各阶段）据此中止或回退。
+qnatter_instances_failed() {
+	[ "${QNATTER_FOREACH_FAILED:-0}" = "1" ]
+}
 
 service_triggers() {
 	procd_add_reload_trigger "$CONF"
@@ -48,10 +89,10 @@ qnatter_add_interface_trigger() {
 	local section="$1"
 	local enabled network bind_value
 
-	config_get_bool enabled "$section" enabled 0
+	qnatter_config_get_bool enabled "$section" enabled 0
 	[ "$enabled" = "1" ] || return 0
-	config_get bind_value "$section" bind_value ""
-	config_get network "$section" network "wan"
+	qnatter_config_get bind_value "$section" bind_value ""
+	qnatter_config_get network "$section" network "wan"
 	[ -n "$network" ] || network="wan"
 	qnatter_record_interface_trigger "$network"
 }
@@ -145,7 +186,10 @@ qnatter_flush_route_rules() {
 			*) continue ;;
 		esac
 
-		"$QNATTER_IP_BIN" rule del priority "$priority" >/dev/null 2>&1 || true
+		# 尽量带上 fwmark/lookup 选择器，只删 QNatter 自己装的那条规则，避免误删
+		# 恰好同 priority 的第三方策略路由；busybox 的 ip 若不支持选择器再退回旧写法。
+		"$QNATTER_IP_BIN" rule del priority "$priority" fwmark "$mark" lookup "$table" >/dev/null 2>&1 ||
+			"$QNATTER_IP_BIN" rule del priority "$priority" >/dev/null 2>&1 || true
 		"$QNATTER_IP_BIN" route flush table "$table" >/dev/null 2>&1 || true
 	done
 }
@@ -163,7 +207,11 @@ qnatter_backend_running() {
 		return 0
 	fi
 
-	command -v pidof >/dev/null 2>&1 && pidof QNatter >/dev/null 2>&1
+	# procd 执行的是 qnatter-run -> /usr/bin/qnatter-go，进程名是 qnatter-go；
+	# 旧代码只检查 pidof QNatter（仅 Makefile 里的符号链接名），永远判"未运行"。
+	command -v pidof >/dev/null 2>&1 && {
+		pidof qnatter-go >/dev/null 2>&1 || pidof QNatter >/dev/null 2>&1
+	}
 }
 
 qnatter_route_slot_valid() {
@@ -208,6 +256,11 @@ qnatter_set_config_route_slot() {
 	local section="$1"
 	local slot="$2"
 
+	# 框架 config_set 用 section 名拼变量名，含 '-'（UCI 合法）时会打印
+	# "bad variable name" 且不生效；uci 的写入已经完成，这里跳过即可。
+	case "$section" in
+		''|*[!A-Za-z0-9_]*) return 0 ;;
+	esac
 	if command -v config_set >/dev/null 2>&1; then
 		config_set "$section" route_slot "$slot"
 	fi
@@ -217,7 +270,7 @@ qnatter_prepare_route_slot() {
 	local section="$1"
 	local slot new_slot
 
-	config_get slot "$section" route_slot ""
+	qnatter_config_get slot "$section" route_slot ""
 	if qnatter_route_slot_valid "$slot" && ! qnatter_route_slot_used "$slot"; then
 		qnatter_record_route_slot "$slot"
 		return 0
@@ -235,10 +288,11 @@ qnatter_prepare_route_slots() {
 
 	QNATTER_ROUTE_USED_SLOTS=""
 	QNATTER_ROUTE_SLOTS_CHANGED=0
-	config_foreach qnatter_prepare_route_slot instance || {
+	qnatter_foreach_instance qnatter_prepare_route_slot
+	if qnatter_instances_failed; then
 		unset QNATTER_ROUTE_USED_SLOTS QNATTER_ROUTE_SLOTS_CHANGED
 		return 1
-	}
+	fi
 
 	if [ "$QNATTER_ROUTE_SLOTS_CHANGED" = "1" ]; then
 		"$QNATTER_UCI_BIN" commit "$CONF" >/dev/null 2>&1 || {
@@ -301,33 +355,33 @@ qnatter_write_notify_env() {
 	local completion_script_enabled completion_script_inline
 	local forward_method target_ip
 
-	config_get_bool completion_webhook_enabled "$section" completion_webhook_enabled 0
-	config_get completion_webhook_url "$section" completion_webhook_url ""
-	config_get completion_webhook_timeout "$section" completion_webhook_timeout "8"
-	config_get completion_webhook_method "$section" completion_webhook_method "POST"
-	config_get completion_webhook_headers "$section" completion_webhook_headers "Content-Type: application/json"
-	config_get completion_webhook_body "$section" completion_webhook_body '{"event":"mapped","instance":"#{instance}","protocol":"#{protocol}","inner_ip":"#{inner_ip}","inner_port":#{inner_port},"outer_ip":"#{outer_ip}","outer_port":#{outer_port}}'
-	config_get completion_webhook_success "$section" completion_webhook_success ""
-	config_get_bool completion_webhook_disable_success_check "$section" completion_webhook_disable_success_check 1
-	config_get_bool completion_webhook_skip_unchanged "$section" completion_webhook_skip_unchanged 0
-	config_get_bool completion_script_enabled "$section" completion_script_enabled 0
-	config_get completion_script_inline "$section" completion_script_inline ""
-	config_get_bool auto_firewall "$section" auto_firewall 0
-	config_get forward_method "$section" forward_method "auto"
-	config_get target_ip "$section" target_ip "0.0.0.0"
-	config_get_bool cf_enabled "$section" cloudflare_enabled 0
-	config_get cf_api_url "$section" cloudflare_api_url ""
-	config_get cf_api_token "$section" cloudflare_api_token ""
-	config_get cf_zone_id "$section" cloudflare_zone_id ""
-	config_get cf_record_id "$section" cloudflare_record_id ""
-	config_get_bool qb_enabled "$section" qbittorrent_enabled 0
-	config_get qb_url "$section" qbittorrent_url ""
-	config_get qb_user "$section" qbittorrent_username ""
-	config_get qb_pass "$section" qbittorrent_password ""
-	config_get_bool qb_forward "$section" qbittorrent_forward 0
-	config_get qb_target_ip "$section" qbittorrent_target_ip ""
-	config_get qb_target_port "$section" qbittorrent_target_port "0"
-	config_get qb_forward_method "$section" qbittorrent_forward_method "nftables"
+	qnatter_config_get_bool completion_webhook_enabled "$section" completion_webhook_enabled 0
+	qnatter_config_get completion_webhook_url "$section" completion_webhook_url ""
+	qnatter_config_get completion_webhook_timeout "$section" completion_webhook_timeout "8"
+	qnatter_config_get completion_webhook_method "$section" completion_webhook_method "POST"
+	qnatter_config_get completion_webhook_headers "$section" completion_webhook_headers "Content-Type: application/json"
+	qnatter_config_get completion_webhook_body "$section" completion_webhook_body '{"event":"mapped","instance":"#{instance}","protocol":"#{protocol}","inner_ip":"#{inner_ip}","inner_port":#{inner_port},"outer_ip":"#{outer_ip}","outer_port":#{outer_port}}'
+	qnatter_config_get completion_webhook_success "$section" completion_webhook_success ""
+	qnatter_config_get_bool completion_webhook_disable_success_check "$section" completion_webhook_disable_success_check 1
+	qnatter_config_get_bool completion_webhook_skip_unchanged "$section" completion_webhook_skip_unchanged 0
+	qnatter_config_get_bool completion_script_enabled "$section" completion_script_enabled 0
+	qnatter_config_get completion_script_inline "$section" completion_script_inline ""
+	qnatter_config_get_bool auto_firewall "$section" auto_firewall 0
+	qnatter_config_get forward_method "$section" forward_method "auto"
+	qnatter_config_get target_ip "$section" target_ip "0.0.0.0"
+	qnatter_config_get_bool cf_enabled "$section" cloudflare_enabled 0
+	qnatter_config_get cf_api_url "$section" cloudflare_api_url ""
+	qnatter_config_get cf_api_token "$section" cloudflare_api_token ""
+	qnatter_config_get cf_zone_id "$section" cloudflare_zone_id ""
+	qnatter_config_get cf_record_id "$section" cloudflare_record_id ""
+	qnatter_config_get_bool qb_enabled "$section" qbittorrent_enabled 0
+	qnatter_config_get qb_url "$section" qbittorrent_url ""
+	qnatter_config_get qb_user "$section" qbittorrent_username ""
+	qnatter_config_get qb_pass "$section" qbittorrent_password ""
+	qnatter_config_get_bool qb_forward "$section" qbittorrent_forward 0
+	qnatter_config_get qb_target_ip "$section" qbittorrent_target_ip ""
+	qnatter_config_get qb_target_port "$section" qbittorrent_target_port "0"
+	qnatter_config_get qb_forward_method "$section" qbittorrent_forward_method "nftables"
 	firewall_section="qnatter_$(qnatter_runtime_slug "$section")"
 	firewall_name="QNatter ${section}"
 	firewall_src="wan"
@@ -387,10 +441,21 @@ qnatter_append_stun_value() {
 	local existing
 
 	[ -n "$item" ] || return 0
+	# UCI 列表值先过字符集白名单：'*'/'?'/空白/引号/以 '-' 开头的值都不能
+	# 进入 qnatter-go 的参数列表（glob 展开与选项注入）。
+	if ! qnatter_stun_value_allowed "$item"; then
+		qnatter_warn "qnatter: ignoring unsupported STUN server value"
+		return 0
+	fi
 	eval "current=\"\${${var}:-}\""
+	qnatter_glob_disable
 	for existing in $current; do
-		[ "$existing" = "$item" ] && return 0
+		if [ "$existing" = "$item" ]; then
+			qnatter_glob_restore
+			return 0
+		fi
 	done
+	qnatter_glob_restore
 	if [ -n "$current" ]; then
 		current="${current} ${item}"
 	else
@@ -406,25 +471,24 @@ qnatter_load_global_stun_servers() {
 	config_list_foreach stun udp_server qnatter_add_global_udp_stun_server
 }
 
+qnatter_add_selected_stun_server() {
+	qnatter_append_stun_value selected "$1"
+}
+
 qnatter_select_stun_servers() {
 	local protocol="$1"
 	local instance_servers="$2"
 	local selected=""
-	local server
 
+	# 逐项切分（qnatter_split_list 内部关闭 glob），避免列表值里的 '*'/'?'
+	# 被展开成本地文件名。
 	if [ -n "$instance_servers" ]; then
-		for server in $instance_servers; do
-			qnatter_append_stun_value selected "$server"
-		done
+		qnatter_split_list qnatter_add_selected_stun_server "$instance_servers"
 	fi
 	if [ "$protocol" = "udp" ]; then
-		for server in ${QNATTER_GLOBAL_UDP_STUN_SERVERS:-}; do
-			qnatter_append_stun_value selected "$server"
-		done
+		qnatter_split_list qnatter_add_selected_stun_server "${QNATTER_GLOBAL_UDP_STUN_SERVERS:-}"
 	else
-		for server in ${QNATTER_GLOBAL_TCP_STUN_SERVERS:-}; do
-			qnatter_append_stun_value selected "$server"
-		done
+		qnatter_split_list qnatter_add_selected_stun_server "${QNATTER_GLOBAL_TCP_STUN_SERVERS:-}"
 	fi
 	printf '%s\n' "$selected"
 }
@@ -447,6 +511,7 @@ qnatter_write_runtime_fingerprint() {
 		printf 'bind_device=%s\n' "$bind_device"
 		printf 'bind_ipv4=%s\n' "$bind_ipv4"
 		printf 'log_file=%s\n' "$log_file"
+		printf 'respawn=%s:%s:%s\n' "$QNATTER_RESPAWN_THRESHOLD" "$QNATTER_RESPAWN_TIMEOUT" "$QNATTER_RESPAWN_RETRY"
 		printf 'route_mark=%s\n' "${QNATTER_ROUTE_MARK:-}"
 		printf 'route_table=%s\n' "${QNATTER_ROUTE_TABLE:-}"
 		printf 'route_priority=%s\n' "${QNATTER_ROUTE_PRIORITY:-}"
@@ -474,35 +539,37 @@ qnatter_start_instance() {
 	local stun_servers slug log_file notify_env notify_wrapper status_file runtime_file resolved_bind route_slot
 	local fingerprint_device fingerprint_ipv4
 
-	config_get_bool enabled "$section" enabled 0
+	qnatter_config_get_bool enabled "$section" enabled 0
 	[ "$enabled" = "1" ] || return 0
-	config_get route_slot "$section" route_slot ""
+	qnatter_config_get route_slot "$section" route_slot ""
 	qnatter_assign_route_policy "$route_slot" || return 1
 
-	config_get protocol "$section" protocol "tcp"
-	config_get network "$section" network "wan"
-	config_get bind_value "$section" bind_value ""
-	config_get bind_port "$section" bind_port "0"
-	config_get public_ip_mode "$section" public_ip_mode "detected"
-	config_get forward_method "$section" forward_method "auto"
-	config_get target_ip "$section" target_ip "0.0.0.0"
-	config_get target_port "$section" target_port "0"
-	config_get keepalive_interval "$section" keepalive_interval "15"
-	config_get keepalive_server "$section" keepalive_server ""
-	config_get_bool retry_target "$section" retry_target 0
-	config_get_bool exit_when_changed "$section" exit_when_changed 0
-	config_get_bool upnp "$section" upnp 0
-	config_get_bool verbose "$section" verbose 0
-	config_get_bool qb_enabled "$section" qbittorrent_enabled 0
-	config_get_bool qb_forward "$section" qbittorrent_forward 0
-	config_get qb_target_ip "$section" qbittorrent_target_ip ""
-	config_get qb_target_port "$section" qbittorrent_target_port "0"
-	config_get qb_forward_method "$section" qbittorrent_forward_method "nftables"
+	qnatter_config_get protocol "$section" protocol "tcp"
+	qnatter_config_get network "$section" network "wan"
+	qnatter_config_get bind_value "$section" bind_value ""
+	qnatter_config_get bind_port "$section" bind_port "0"
+	qnatter_config_get public_ip_mode "$section" public_ip_mode "detected"
+	qnatter_config_get forward_method "$section" forward_method "auto"
+	qnatter_config_get target_ip "$section" target_ip "0.0.0.0"
+	qnatter_config_get target_port "$section" target_port "0"
+	qnatter_config_get keepalive_interval "$section" keepalive_interval "15"
+	qnatter_config_get keepalive_server "$section" keepalive_server ""
+	qnatter_config_get_bool retry_target "$section" retry_target 0
+	qnatter_config_get_bool exit_when_changed "$section" exit_when_changed 0
+	qnatter_config_get_bool upnp "$section" upnp 0
+	qnatter_config_get_bool verbose "$section" verbose 0
+	qnatter_config_get_bool qb_enabled "$section" qbittorrent_enabled 0
+	qnatter_config_get_bool qb_forward "$section" qbittorrent_forward 0
+	qnatter_config_get qb_target_ip "$section" qbittorrent_target_ip ""
+	qnatter_config_get qb_target_port "$section" qbittorrent_target_port "0"
+	qnatter_config_get qb_forward_method "$section" qbittorrent_forward_method "nftables"
 	stun_servers=""
 	config_list_foreach "$section" stun_server qnatter_add_stun_server
 	stun_servers="$(qnatter_select_stun_servers "$protocol" "$stun_servers")"
 
-	slug="$(qnatter_runtime_slug "$section")"
+	# 超长 section 名会让 "<slug>.env" 之类的文件名超过 NAME_MAX 而写入失败，
+	# 这里限长后再落盘，并由 qnatter_write_notify_env 的返回值兜底。
+	slug="$(qnatter_runtime_slug "$section" | cut -c 1-180)"
 	mkdir -p "$RUN_DIR" "$LOG_DIR"
 	log_file="${LOG_DIR}/${slug}.log"
 	notify_env="${RUN_DIR}/${slug}.env"
@@ -526,13 +593,23 @@ qnatter_start_instance() {
 	QNATTER_TARGET_IP="$target_ip"
 	QNATTER_TARGET_PORT="$target_port"
 	QNATTER_RETRY_TARGET="$retry_target"
-	qnatter_write_notify_env "$section" "$notify_env" "$status_file" "$log_file"
-	cat > "$notify_wrapper" <<-EOF
+	qnatter_write_notify_env "$section" "$notify_env" "$status_file" "$log_file" || {
+		qnatter_warn "qnatter: cannot write notify env file for ${section}"
+		return 1
+	}
+	if ! { cat > "$notify_wrapper" <<-EOF
 		#!/bin/sh
 		export QNATTER_NOTIFY_ENV='$notify_env'
 		exec /usr/share/qnatter/qnatter-notify "\$@"
 	EOF
-	chmod 0700 "$notify_wrapper"
+	}; then
+		qnatter_warn "qnatter: cannot write notify wrapper for ${section}"
+		return 1
+	fi
+	if ! chmod 0700 "$notify_wrapper"; then
+		qnatter_warn "qnatter: cannot secure notify wrapper for ${section}"
+		return 1
+	fi
 	QNATTER_NOTIFY_PATH="$notify_wrapper"
 
 	# Optional qBittorrent forwarding reuses QNatter's native forwarding: target
@@ -557,7 +634,7 @@ qnatter_start_instance() {
 	done <<-EOF
 		$QNATTER_ARGS
 	EOF
-	procd_set_param respawn 3600 5 5
+	procd_set_param respawn "$QNATTER_RESPAWN_THRESHOLD" "$QNATTER_RESPAWN_TIMEOUT" "$QNATTER_RESPAWN_RETRY"
 	procd_set_param env \
 		QNATTER_INSTANCE="$section" \
 		QNATTER_STATUS_FILE="$status_file" \
@@ -575,11 +652,39 @@ qnatter_start_instance() {
 	fi
 }
 
+# reload 的"读-改-写"序列（mktemp -> config_foreach -> ubus delete -> start ->
+# cp）之间没有任何互斥：hotplug 与 procd 的 interface.*.up 触发器会对同一次
+# ifup 各触发一次 reload，两个进程交错会出现"刚启动又被删除"的实例抖动。
+# 抢不到锁时直接跳过本次 reload（另一次正在做同样的事）。预检可写是必需的：
+# exec 的重定向失败会让 dash / busybox ash 直接退出 shell。
+qnatter_lock_acquire() {
+	[ "${QNATTER_LOCK_HELD:-0}" = "1" ] && return 0
+	command -v flock >/dev/null 2>&1 || return 0
+	if ! (umask 022; : >> "$QNATTER_LOCK_FILE") 2>/dev/null; then
+		return 0
+	fi
+	exec 9>"$QNATTER_LOCK_FILE" 2>/dev/null
+	if ! flock -n 9 2>/dev/null; then
+		exec 9>&-
+		return 1
+	fi
+	QNATTER_LOCK_HELD=1
+	return 0
+}
+
+stop_service() {
+	# procd 只负责终止进程：QNatter 注入的 nft 规则（ip qnatter 表）与策略路由
+	# （fwmark 0x4e000xxx / table 2000x）必须显式回收，否则 stop 或进程被
+	# SIGKILL 之后 DNAT 仍会把流量送到已经关闭的端口。
+	qnatter_flush_runtime_rules
+	qnatter_flush_route_rules
+}
+
 start_service() {
 	local enabled
 
 	config_load "$CONF"
-	config_get_bool enabled global enabled 0
+	qnatter_config_get_bool enabled global enabled 0
 	[ "$enabled" = "1" ] || return 0
 	qnatter_load_global_stun_servers
 	qnatter_prepare_route_slots || return 1
@@ -592,7 +697,7 @@ start_service() {
 }
 
 qnatter_start_instances() {
-	local runtime_list_tmp
+	local runtime_list_tmp failed
 
 	runtime_list_tmp="${RUN_DIR}/.runtime-instances.$$"
 	: > "$runtime_list_tmp"
@@ -600,13 +705,19 @@ qnatter_start_instances() {
 	QNATTER_RUNTIME_DIR="$RUN_DIR"
 	QNATTER_RUNTIME_LIST="$runtime_list_tmp"
 	QNATTER_ROUTE_SLOT=0
-	config_foreach qnatter_start_instance instance
+	qnatter_foreach_instance qnatter_start_instance
+	failed="$QNATTER_FOREACH_FAILED"
 	mv "$runtime_list_tmp" "${RUN_DIR}/.runtime-instances"
 	unset QNATTER_PREPARE_ONLY QNATTER_RUNTIME_DIR QNATTER_RUNTIME_LIST QNATTER_ROUTE_SLOT QNATTER_ROUTE_MARK QNATTER_ROUTE_TABLE QNATTER_ROUTE_PRIORITY
+	if [ "$failed" = "1" ]; then
+		qnatter_warn "qnatter: one or more instances failed to start; see the per-instance log for details"
+		return 1
+	fi
+	return 0
 }
 
 qnatter_hot_reload_service() {
-	local tmp runtime_list old_list slug
+	local tmp runtime_list old_list old_sorted new_sorted slug
 
 	config_load "$CONF"
 	qnatter_load_global_stun_servers
@@ -619,11 +730,12 @@ qnatter_hot_reload_service() {
 	QNATTER_RUNTIME_DIR="$tmp"
 	QNATTER_RUNTIME_LIST="$runtime_list"
 	QNATTER_ROUTE_SLOT=0
-	config_foreach qnatter_start_instance instance || {
+	qnatter_foreach_instance qnatter_start_instance
+	if qnatter_instances_failed; then
 		rm -rf "$tmp"
 		unset QNATTER_PREPARE_ONLY QNATTER_RUNTIME_DIR QNATTER_RUNTIME_LIST QNATTER_ROUTE_SLOT QNATTER_ROUTE_MARK QNATTER_ROUTE_TABLE QNATTER_ROUTE_PRIORITY
 		return 1
-	}
+	fi
 	unset QNATTER_PREPARE_ONLY QNATTER_RUNTIME_DIR QNATTER_RUNTIME_LIST QNATTER_ROUTE_SLOT QNATTER_ROUTE_MARK QNATTER_ROUTE_TABLE QNATTER_ROUTE_PRIORITY
 
 	old_list="${RUN_DIR}/.runtime-instances"
@@ -650,14 +762,33 @@ qnatter_hot_reload_service() {
 }
 
 reload_service() {
-	local enabled tmp old_list new_list slug section
+	local enabled hot_reload tmp old_list new_list slug section
 
 	config_load "$CONF"
-	config_get_bool enabled global enabled 0
+	# global 段缺失/被改名时 config_get_bool 只能返回默认值：旧代码会直接
+	# stop，把正在运行的实例全部停掉。这里只在显式 enabled=0 时停止。
+	qnatter_config_get_bool enabled global enabled ""
+	if [ -z "$enabled" ]; then
+		qnatter_warn "qnatter: global section missing, keeping current instances"
+		enabled=1
+	fi
 	if [ "$enabled" != "1" ]; then
 		stop
 		return 0
 	fi
+
+	if ! qnatter_lock_acquire; then
+		qnatter_warn "qnatter: another reload is already running, skipping"
+		return 0
+	fi
+
+	# global.hot_reload=1：实例集合与运行时指纹都没变时不触碰 procd；
+	# hot_reload=0：始终走完整的 Phase 1-4 重新声明（强制重启语义）。
+	qnatter_config_get_bool hot_reload global hot_reload 1
+	if qnatter_bool "$hot_reload" && qnatter_hot_reload_service; then
+		return 0
+	fi
+
 	qnatter_load_global_stun_servers
 	qnatter_prepare_route_slots || return 1
 	mkdir -p "$RUN_DIR"
@@ -671,21 +802,25 @@ reload_service() {
 	QNATTER_RUNTIME_DIR="$tmp"
 	QNATTER_RUNTIME_LIST="${tmp}/.runtime-instances"
 	QNATTER_ROUTE_SLOT=0
-	config_foreach qnatter_start_instance instance || {
+	qnatter_foreach_instance qnatter_start_instance
+	if qnatter_instances_failed; then
 		rm -rf "$tmp"
 		unset QNATTER_PREPARE_ONLY QNATTER_RUNTIME_DIR QNATTER_RUNTIME_LIST QNATTER_ROUTE_SLOT QNATTER_ROUTE_MARK QNATTER_ROUTE_TABLE QNATTER_ROUTE_PRIORITY
 		return 1
-	}
+	fi
 	unset QNATTER_PREPARE_ONLY QNATTER_RUNTIME_DIR QNATTER_RUNTIME_LIST QNATTER_ROUTE_SLOT QNATTER_ROUTE_MARK QNATTER_ROUTE_TABLE QNATTER_ROUTE_PRIORITY
 	new_list="${tmp}/.runtime-instances"
+	# 一个实例都没有（全部被删除/禁用）时上面的 loop 不会创建列表文件，
+	# Phase 2/3 的 `done < "$new_list"` 会因文件不存在而报错。
+	[ -f "$new_list" ] || : > "$new_list"
 
 	# Phase 2: stop removed instances (in old_list but not new_list)
 	while IFS= read -r slug; do
 		[ -n "$slug" ] || continue
 		grep -Fqx "$slug" "$new_list" 2>/dev/null && continue
 		section="$(grep '^section=' "${RUN_DIR}/${slug}.runtime" 2>/dev/null | cut -d= -f2)"
-		[ -n "$section" ] && command -v ubus >/dev/null 2>&1 && \
-			ubus call service delete "{ \"name\": \"qnatter\", \"instance\": \"${section}\" }" >/dev/null 2>&1 || true
+		[ -n "$section" ] && command -v "$QNATTER_UBUS_BIN" >/dev/null 2>&1 && \
+			"$QNATTER_UBUS_BIN" call service delete "{ \"name\": \"qnatter\", \"instance\": \"${section}\" }" >/dev/null 2>&1 || true
 	done < "$old_list"
 
 	# Phase 3: stop changed instances (different fingerprint)
@@ -694,14 +829,26 @@ reload_service() {
 		[ -f "${RUN_DIR}/${slug}.runtime" ] || continue
 		cmp -s "${RUN_DIR}/${slug}.runtime" "${tmp}/${slug}.runtime" 2>/dev/null && continue
 		section="$(grep '^section=' "${tmp}/${slug}.runtime" 2>/dev/null | cut -d= -f2)"
-		[ -n "$section" ] && command -v ubus >/dev/null 2>&1 && \
-			ubus call service delete "{ \"name\": \"qnatter\", \"instance\": \"${section}\" }" >/dev/null 2>&1 || true
+		[ -n "$section" ] && command -v "$QNATTER_UBUS_BIN" >/dev/null 2>&1 && \
+			"$QNATTER_UBUS_BIN" call service delete "{ \"name\": \"qnatter\", \"instance\": \"${section}\" }" >/dev/null 2>&1 || true
 	done < "$new_list"
+
+	# 被删除实例的 nft 规则与策略路由不会由 procd 回收：新列表为空（实例全部
+	# 被删除或禁用）时直接清理本包的规则，避免残留 DNAT 黑洞与 ip rule。
+	if [ ! -s "$new_list" ]; then
+		qnatter_flush_runtime_rules
+		qnatter_flush_route_rules
+	fi
 
 	# Phase 4: start procd instances via a fresh init script invocation
 	# procd captures stdout from the external command and diffs declarations
-	QNATTER_RELOADING=1 /etc/init.d/qnatter start >/dev/null 2>&1 || true
+	if ! QNATTER_RELOADING=1 "$QNATTER_INIT_BIN" start >/dev/null 2>&1; then
+		qnatter_warn "qnatter: reload failed to restart instances, keeping previous state"
+		rm -rf "$tmp"
+		return 1
+	fi
 
 	cp "$new_list" "$old_list" 2>/dev/null || true
 	rm -rf "$tmp"
+	return 0
 }

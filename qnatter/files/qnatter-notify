@@ -11,6 +11,43 @@ set -u
 . "$QNATTER_QBITTORRENT_SH"
 . "$QNATTER_COMMON_SH"
 
+# 私有临时目录（0700）存放 cookie / 凭据文件：目录名不可预测、不会落到 /tmp
+# 的公共命名空间，退出时统一清理（EXIT/HUP/INT/TERM）。
+QNATTER_TMPDIR="$(qnatter_private_tmpdir "${QNATTER_TMP_DIR:-/var/run/qnatter}")" || QNATTER_TMPDIR=""
+
+# 内联脚本的进程组（setsid 之后 = 脚本自身 pid）：notify 退出（EXIT/HUP/INT/TERM）
+# 时按进程组回收脚本及其 fork 出来的子孙；timeout -k 只能约束超时，管不了
+# "父进程被杀后脚本变孤儿"。
+QNATTER_INLINE_PGID=""
+
+qnatter_inline_kill_group() {
+	[ -n "$QNATTER_INLINE_PGID" ] || return 0
+	kill -TERM "-$QNATTER_INLINE_PGID" 2>/dev/null || true
+	QNATTER_INLINE_PGID=""
+	return 0
+}
+
+# 脚本自己已经退出、但进程组里还有成员（脚本 fork 出来、被留在后台的子孙）时，
+# 继续保留注册，交给退出 trap 按进程组回收；整组都已经退出就立刻注销，避免
+# 进程组号被内核回收后再复用成别的进程号。
+qnatter_inline_release_group() {
+	[ -n "$QNATTER_INLINE_PGID" ] || return 0
+	if ! kill -0 "-$QNATTER_INLINE_PGID" 2>/dev/null; then
+		QNATTER_INLINE_PGID=""
+	fi
+	return 0
+}
+
+qnatter_notify_cleanup() {
+	qnatter_inline_kill_group
+	if [ -n "$QNATTER_TMPDIR" ] && [ -d "$QNATTER_TMPDIR" ]; then
+		rm -rf "$QNATTER_TMPDIR"
+	fi
+	QNATTER_TMPDIR=""
+	return 0
+}
+trap qnatter_notify_cleanup EXIT HUP INT TERM
+
 protocol="${1:-}"
 inner_ip="${2:-}"
 inner_port="${3:-}"
@@ -132,6 +169,121 @@ status_file="${QNATTER_STATUS_FILE:-/var/run/qnatter/${runtime_slug}.json}"
 previous_status="$(cat "$status_file" 2>/dev/null || true)"
 qnatter_write_status_json "$status_file" "${QNATTER_INSTANCE:-default}" "$protocol" "$inner_ip" "$inner_port" "$outer_ip" "$outer_port" "mapped"
 
+# 单项比较：读不到（section/option 不存在）或值不同 → 返回 1。
+qnatter_firewall_value_matches() {
+	local section="$1"
+	local option="$2"
+	local want="$3"
+	local current
+
+	current="$("$QNATTER_UCI_BIN" -q get "firewall.${section}.${option}" 2>/dev/null || true)"
+	[ "$current" = "$want" ]
+}
+
+# 期望规则与已有规则是否不同（一致 → 0，不一致/读不到 → 1）。
+qnatter_firewall_rule_changed() {
+	local section="$1"
+	local name="$2"
+	local src="$3"
+	local proto="$4"
+	local port="$5"
+	local dest="$6"
+	local inner_ip="$7"
+
+	qnatter_firewall_value_matches "$section" name "$name" || return 0
+	qnatter_firewall_value_matches "$section" src "$src" || return 0
+	qnatter_firewall_value_matches "$section" proto "$proto" || return 0
+	qnatter_firewall_value_matches "$section" dest_port "$port" || return 0
+	qnatter_firewall_value_matches "$section" target "ACCEPT" || return 0
+	if [ -n "$dest" ]; then
+		qnatter_firewall_value_matches "$section" dest "$dest" || return 0
+		qnatter_firewall_value_matches "$section" dest_ip "$inner_ip" || return 0
+	fi
+	return 1
+}
+
+# OpenClash 会把自己的链与规则动态注入 inet fw4 表（watchdog 负责重建，间隔可达
+# 两分钟），整表 reload 会把它们全部清空并造成转发中断；而 OpenClash 只清理自己的
+# 规则、不会动 QNatter 的 ip qnatter 表。所以只要 OpenClash 在跑，默认就跳过整表
+# reload，仅记录明确告警。QNATTER_OPENCLASH_INIT_BIN 是测试注入点。
+qnatter_openclash_active() {
+	local init_bin="${QNATTER_OPENCLASH_INIT_BIN:-/etc/init.d/openclash}"
+
+	[ -x "$init_bin" ] || return 1
+	"$init_bin" running >/dev/null 2>&1 && return 0
+	return 1
+}
+
+# qnatter.global.auto_firewall_reload: auto（默认，OpenClash 在跑就跳过）|
+# always（始终整表 reload）| never（从不 reload，规则等下一次防火墙 reload 生效）。
+# QNATTER_FIREWALL_RELOAD_MODE 是测试注入点。
+qnatter_firewall_reload_mode() {
+	local mode="${QNATTER_FIREWALL_RELOAD_MODE:-}"
+
+	if [ -z "$mode" ]; then
+		mode="$("$QNATTER_UCI_BIN" -q get qnatter.global.auto_firewall_reload 2>/dev/null || true)"
+	fi
+	case "$mode" in
+		always | never) printf '%s' "$mode" ;;
+		*) printf 'auto' ;;
+	esac
+}
+
+# 用 timeout（QNATTER_TIMEOUT_BIN 是注入点）限制外部命令的时长；系统没有 timeout
+# 时退化为直接执行。专用于 fw4 reload：它会同步执行 include 脚本（OpenClash 的
+# include 先 sleep 5、上限 30 s），而 notify 处在映射回调里，不能无限等待。
+qnatter_reload_run() {
+	local limit="$1"
+	local timeout_bin="${QNATTER_TIMEOUT_BIN:-timeout}"
+
+	shift
+	if command -v "$timeout_bin" >/dev/null 2>&1; then
+		"$timeout_bin" "$limit" "$@"
+		return $?
+	fi
+	"$@"
+}
+
+# UCI 规则写完后必须让 fw4 重建规则表，否则新放行规则要等到下一次防火墙 reload
+# 才生效（映射回调本身不触发防火墙 reload）。默认 fw4，其次 /etc/init.d/firewall；
+# 两者都不可用时明确写 "deferred" 告警而不是静默假装成功。
+# QNATTER_FW4_BIN / QNATTER_FIREWALL_INIT_BIN 是测试注入点。
+qnatter_firewall_reload() {
+	local fw4_bin="${QNATTER_FW4_BIN:-fw4}"
+	local init_bin="${QNATTER_FIREWALL_INIT_BIN:-/etc/init.d/firewall}"
+	local timeout_sec="${QNATTER_FIREWALL_RELOAD_TIMEOUT:-10}"
+	local mode
+
+	mode="$(qnatter_firewall_reload_mode)"
+	if [ "$mode" = "never" ]; then
+		log "auto firewall UCI rule updated for ${QNATTER_INSTANCE:-default}; firewall reload disabled by qnatter.global.auto_firewall_reload='never'"
+		return 0
+	fi
+	if [ "$mode" = "auto" ] && qnatter_openclash_active; then
+		log "auto firewall UCI rule updated for ${QNATTER_INSTANCE:-default}; firewall reload skipped while OpenClash is running (a full fw4 reload would wipe the rules OpenClash injects into inet fw4 until its watchdog restores them); set qnatter.global.auto_firewall_reload='always' to force the reload"
+		return 0
+	fi
+
+	if command -v "$fw4_bin" >/dev/null 2>&1; then
+		if qnatter_reload_run "$timeout_sec" "$fw4_bin" reload >/dev/null 2>&1; then
+			log "auto firewall reloaded for ${QNATTER_INSTANCE:-default}: ${fw4_bin} reload"
+		else
+			log "auto firewall UCI rule updated for ${QNATTER_INSTANCE:-default}; ${fw4_bin} reload failed or exceeded ${timeout_sec}s - keeping the rule in UCI (it takes effect at the next firewall reload)"
+		fi
+		return 0
+	fi
+	if [ -x "$init_bin" ]; then
+		if qnatter_reload_run "$timeout_sec" "$init_bin" reload >/dev/null 2>&1; then
+			log "auto firewall reloaded for ${QNATTER_INSTANCE:-default}: ${init_bin} reload"
+		else
+			log "auto firewall UCI rule updated for ${QNATTER_INSTANCE:-default}; ${init_bin} reload failed or exceeded ${timeout_sec}s - keeping the rule in UCI (it takes effect at the next firewall reload)"
+		fi
+		return 0
+	fi
+	log "auto firewall UCI rule updated for ${QNATTER_INSTANCE:-default}; firewall reload deferred (${fw4_bin} / ${init_bin} not available)"
+	return 0
+}
+
 update_auto_firewall() {
 	local enabled="${QNATTER_AUTO_FIREWALL:-0}"
 	local section="${QNATTER_FIREWALL_SECTION:-qnatter_${runtime_slug}}"
@@ -161,6 +313,13 @@ update_auto_firewall() {
 		return 0
 	fi
 
+	# 幂等：期望值与已有规则完全一致时不写 UCI、也不 reload——映射回调每次
+	# 都会执行，重复 reload 会把整张 fw4 规则表反复重建。
+	if ! qnatter_firewall_rule_changed "$section" "$name" "$src" "$proto" "$port" "$dest" "$inner_ip"; then
+		log "auto firewall rule unchanged for ${QNATTER_INSTANCE:-default}: section=${section} port=${port} proto=${proto}"
+		return 0
+	fi
+
 	"$QNATTER_UCI_BIN" -q delete "firewall.${section}" >/dev/null 2>&1 || true
 	if ! "$QNATTER_UCI_BIN" set "firewall.${section}=rule" ||
 		! "$QNATTER_UCI_BIN" set "firewall.${section}.name=${name}" ||
@@ -183,10 +342,11 @@ update_auto_firewall() {
 		return 0
 	fi
 
-	# Keep the UCI rule available for the next normal fw4 reload, but never
-	# reload the whole firewall from a mapping callback.  OpenClash owns the
-	# generated fw4 ruleset and a full reload here destroys its rule ordering.
-	log "auto firewall UCI rule updated for ${QNATTER_INSTANCE:-default}; firewall reload deferred"
+	# 规则已提交：立刻 reload fw4，否则新放行规则要等到下一次防火墙 reload 才生效
+	# （映射回调不会触发防火墙 reload）。不需要该行为的实例可以关闭 auto_firewall
+	# （例如 OpenClash 自己管理规则表时）。
+	qnatter_firewall_reload
+	log "auto firewall rule updated for ${QNATTER_INSTANCE:-default}: section=${section} port=${port} proto=${proto}"
 }
 
 update_cloudflare_srv() {
@@ -197,7 +357,7 @@ update_cloudflare_srv() {
 	local record_id="${CLOUDFLARE_RECORD_ID:-}"
 	local base="${CLOUDFLARE_API_BASE:-https://api.cloudflare.com/client/v4}"
 	local port timeout json response rc current_response current_port current_name current_target
-	local patched_port patched_name patched_target
+	local patched_port patched_name patched_target allow_private pin_args pin
 
 	qnatter_bool "$enabled" || return 0
 
@@ -216,19 +376,68 @@ update_cloudflare_srv() {
 		return 0
 	fi
 
+	# URL 必须是 http(s) 且不能以 '-' 开头，否则会被 curl 当成选项解析。
+	if ! qnatter_url_allowed "$url"; then
+		log "Cloudflare SRV skipped for ${QNATTER_INSTANCE:-default}: unsupported API URL"
+		return 0
+	fi
+
 	if ! command -v "$QNATTER_CURL_BIN" >/dev/null 2>&1; then
 		log "Cloudflare SRV skipped for ${QNATTER_INSTANCE:-default}: curl not found"
 		return 0
 	fi
 
+	# 复用 completion webhook 的私网判定：CLOUDFLARE_API_URL 来自 UCI，只做 scheme
+	# 白名单挡不住 SSRF（写 UCI 的受限用户能让 root 的 curl 去打回环/内网）。
+	# 默认拒绝私网/回环/链路本地；自建 CF 端点用
+	# qnatter.global.allow_private_webhook=1（QNATTER_ALLOW_PRIVATE_WEBHOOK 可覆盖）放行。
+	allow_private=0
+	qnatter_allow_private_webhook && allow_private=1
+	if ! qnatter_webhook_target_allowed "$url" "$allow_private"; then
+		log "Cloudflare SRV skipped for ${QNATTER_INSTANCE:-default}: URL targets a loopback/private/link-local address"
+		return 0
+	fi
+	# 校验时解析、使用时再解析存在时间差（DNS rebinding）：把校验阶段解析出的
+	# 地址用 --resolve 固定给 curl，并禁止走代理（代理会重新解析域名）。
+	pin_args=""
+	if ! pin_args="$(qnatter_webhook_resolve_pins "$url" "$allow_private")"; then
+		pin_args=""
+		log "Cloudflare SRV for ${QNATTER_INSTANCE:-default}: host could not be pinned to a verified address; curl will resolve the name again"
+	fi
+
+	# API Token 不进入 curl 的 argv（同机任何进程都能读 /proc/<pid>/cmdline），
+	# 改写进 0600 的 header 文件，由 curl -H @file 读取。
+	header_file=""
+	if [ -n "$QNATTER_TMPDIR" ]; then
+		header_file="${QNATTER_TMPDIR}/cloudflare-header"
+		if ! (umask 077; printf 'Authorization: Bearer %s\n' "$token" > "$header_file") 2>/dev/null; then
+			header_file=""
+		fi
+	fi
+	if [ -z "$header_file" ]; then
+		log "Cloudflare SRV skipped for ${QNATTER_INSTANCE:-default}: cannot store API token securely"
+		return 0
+	fi
+	chmod 0600 "$header_file" 2>/dev/null || true
+
 	timeout="${CLOUDFLARE_TIMEOUT:-8}"
 	json='{"type":"SRV","data":{"port":'"$port"'}}'
-	log "Cloudflare SRV update started for ${QNATTER_INSTANCE:-default}: port=$port endpoint=$url"
+	log "Cloudflare SRV update started for ${QNATTER_INSTANCE:-default}: port=$port endpoint=$(qnatter_sanitize_url "$url")"
 
-	current_response="$("$QNATTER_CURL_BIN" -fsS -m "$timeout" \
-		-H "Authorization: Bearer $token" \
+	# -g 关闭 curl 的 URL 通配展开，--noproxy '*' 避免请求被代理接管（代理会自己
+	# 重新解析域名），--resolve 固定校验阶段解析出的地址。
+	set -- -fsS -m "$timeout" -g --noproxy '*'
+	while IFS= read -r pin; do
+		[ -n "$pin" ] || continue
+		set -- "$@" --resolve "$pin"
+	done <<EOF
+$pin_args
+EOF
+
+	current_response="$("$QNATTER_CURL_BIN" "$@" \
+		-H "@$header_file" \
 		-H "Accept: application/json" \
-		"$url" 2>&1)"
+		-- "$url" 2>&1)"
 	rc=$?
 	if [ "$rc" -eq 0 ]; then
 		current_port="$(qnatter_json_port "$current_response")"
@@ -241,12 +450,12 @@ update_cloudflare_srv() {
 		log "Cloudflare SRV current record read failed for ${QNATTER_INSTANCE:-default}: response=$(qnatter_one_line "$current_response")"
 	fi
 
-	response="$("$QNATTER_CURL_BIN" -fsS -m "$timeout" -X PATCH \
-		-H "Authorization: Bearer $token" \
+	response="$("$QNATTER_CURL_BIN" "$@" -X PATCH \
+		-H "@$header_file" \
 		-H "Accept: application/json" \
 		-H "Content-Type: application/json" \
 		--data "$json" \
-		"$url" 2>&1)"
+		-- "$url" 2>&1)"
 	rc=$?
 	if [ "$rc" -ne 0 ]; then
 		log "Cloudflare SRV update failed for ${QNATTER_INSTANCE:-default}: port=$port response=$(qnatter_one_line "$response")"
@@ -269,6 +478,490 @@ update_cloudflare_srv() {
 	log "Cloudflare SRV updated for ${QNATTER_INSTANCE:-default}: port=$patched_port name=${patched_name:-unknown} target=${patched_target:-unknown}"
 }
 
+# ---------------------------------------------------------------------------
+# completion webhook 目标地址判定
+#
+# webhook URL 来自 UCI，最终由 root 的 qnatter-notify 交给 curl；而 ACL 主 write
+# 组保留 uci.qnatter 写权限，受限用户因此能把 root 当成访问回环/内网的代理。
+# 这里默认拒绝私网/回环/链路本地目标，只有 root 侧显式打开
+# qnatter.global.allow_private_webhook=1（测试可用 QNATTER_ALLOW_PRIVATE_WEBHOOK
+# 覆盖）才放行，语义与 LuCI 侧 rpcd 的既有检查一致。
+# ---------------------------------------------------------------------------
+qnatter_timeout_bin() {
+	printf '%s\n' "${QNATTER_TIMEOUT_BIN:-timeout}"
+}
+
+# 带超时运行命令；timeout 缺失时退化为直接运行（调用方自行记录告警）。
+qnatter_run_bounded() {
+	local seconds="$1"
+	local timeout_bin
+
+	timeout_bin="$(qnatter_timeout_bin)"
+	shift
+	if command -v "$timeout_bin" >/dev/null 2>&1; then
+		"$timeout_bin" "$seconds" "$@"
+	else
+		"$@"
+	fi
+}
+
+# setsid 的路径（QNATTER_SETSID_BIN 可覆盖，测试用）；不可用返回非 0。
+# 用途：让内联脚本成为独立会话/进程组组长，notify 退出时能按进程组回收整棵子树。
+# 显式设置了 QNATTER_SETSID_BIN 就以它为准（不做 PATH 回落），便于测试注入
+# "没有 setsid" 的降级场景。
+qnatter_setsid_bin() {
+	local candidate
+
+	if [ -n "${QNATTER_SETSID_BIN:-}" ]; then
+		if command -v "$QNATTER_SETSID_BIN" >/dev/null 2>&1; then
+			printf '%s\n' "$QNATTER_SETSID_BIN"
+			return 0
+		fi
+		return 1
+	fi
+	for candidate in setsid /usr/bin/setsid /bin/setsid; do
+		if command -v "$candidate" >/dev/null 2>&1; then
+			printf '%s\n' "$candidate"
+			return 0
+		fi
+	done
+	return 1
+}
+
+# 主机字面量分类：private（回环/私网/链路本地/保留/组播）、public、
+# ambiguous（十进制/十六进制等 curl 仍可能解析为 IP 的写法）、name（需 DNS）。
+# 判据与 luci.qnatter 的 host_address_class 保持一致。
+qnatter_host_class() {
+	awk -v host="${1:-}" '
+	function hexval(text,   i, char, digit, value) {
+		value = 0
+		for (i = 1; i <= length(text); i++) {
+			char = tolower(substr(text, i, 1))
+			digit = index("0123456789abcdef", char) - 1
+			if (digit < 0)
+				return -1
+			value = value * 16 + digit
+		}
+		return value
+	}
+	function v4_private(a, b, c) {
+		if (a == 0 || a == 10 || a == 127)
+			return 1
+		if (a == 100 && b >= 64 && b <= 127)
+			return 1
+		if (a == 169 && b == 254)
+			return 1
+		if (a == 172 && b >= 16 && b <= 31)
+			return 1
+		if (a == 192 && b == 168)
+			return 1
+		if (a == 192 && b == 0 && (c == 0 || c == 2))
+			return 1
+		if (a == 198 && (b == 18 || b == 19))
+			return 1
+		if (a == 198 && b == 51 && c == 100)
+			return 1
+		if (a == 203 && b == 0 && c == 113)
+			return 1
+		if (a >= 224)
+			return 1
+		return 0
+	}
+	function classify_v4(text,   n, part, i, val, addr, bytes, limit) {
+		# curl 用 inet_aton 语义解析 IPv4 字面量，比"四段十进制"宽得多：
+		#   012.0.0.1 -> 10.0.0.1（前导零=八进制）、10.0.0.0x1 / 0x0a.0.0.1 -> 10.0.0.1、
+		#   2130706433 / 0x7f000001 / 017700000001 / 10.1 -> 127.0.0.1 / 10.0.0.1。
+		# 直接按十进制比较会被 "012" 这种写法绕过（判定为 12.x，curl 实际连 10.x），
+		# 所以这里按 curl 的规则真实算出 32 位地址，再按私网判定。
+		n = split(text, part, ".")
+		if (n < 1 || n > 4)
+			return ""
+		addr = 0
+		for (i = 1; i <= n; i++) {
+			val = v4_part_value(part[i])
+			if (val < 0)
+				return ""
+			if (i < n) {
+				if (val > 255)
+					return ""
+				addr = addr * 256 + val
+			} else {
+				bytes = 5 - n
+				limit = v4_pow256(bytes)
+				if (val >= limit)
+					return ""
+				addr = addr * limit + val
+			}
+		}
+		if (addr < 0 || addr > 4294967295)
+			return ""
+		if (v4_private(int(addr / 16777216) % 256, int(addr / 65536) % 256, int(addr / 256) % 256))
+			return "private"
+		return "public"
+	}
+	function v4_pow256(bytes,   value, i) {
+		# 不用 ^：部分 busybox awk 未编译 LIBM，指数运算会直接报错
+		value = 1
+		for (i = 1; i <= bytes; i++)
+			value = value * 256
+		return value
+	}
+	function v4_part_value(text,   value, i, char, digit) {
+		if (text == "")
+			return -1
+		if (text ~ /^0[xX][0-9A-Fa-f]+$/) {
+			value = 0
+			for (i = 3; i <= length(text); i++) {
+				char = tolower(substr(text, i, 1))
+				digit = index("0123456789abcdef", char) - 1
+				if (digit < 0)
+					return -1
+				value = value * 16 + digit
+			}
+			return value
+		}
+		if (text == "0")
+			return 0
+		if (text ~ /^0[0-7]+$/) {   # 前导零 = 八进制
+			value = 0
+			for (i = 1; i <= length(text); i++)
+				value = value * 8 + (substr(text, i, 1) + 0)
+			return value
+		}
+		if (text ~ /^[1-9][0-9]*$/)
+			return text + 0
+		return -1
+	}
+	function classify_v6(text,   lower, idx, tail4, count, part, i, gap, head, tail, head_n, tail_n, zeros, groups, values, group) {
+		lower = tolower(text)
+		sub(/%[^%]*$/, "", lower)
+		if (index(lower, ".") > 0) {
+			idx = 0
+			for (i = length(lower); i >= 1; i--) {
+				if (substr(lower, i, 1) == ":") {
+					idx = i
+					break
+				}
+			}
+			if (idx < 2)
+				return "ambiguous"
+			tail4 = substr(lower, idx + 1)
+			count = split(tail4, part, ".")
+			if (count != 4)
+				return "ambiguous"
+			for (i = 1; i <= 4; i++) {
+				if (part[i] !~ /^[0-9]+$/ || part[i] + 0 > 255)
+					return "ambiguous"
+				# 内嵌 IPv4 里的前导零（inet_aton 语境是八进制，inet_pton 语境非法）
+				if (length(part[i]) > 1 && substr(part[i], 1, 1) == "0")
+					return "ambiguous"
+			}
+			lower = substr(lower, 1, idx) sprintf("%x:%x", part[1] * 256 + part[2], part[3] * 256 + part[4])
+		}
+		gap = index(lower, "::")
+		if (gap > 0) {
+			head = substr(lower, 1, gap - 1)
+			tail = substr(lower, gap + 2)
+		} else {
+			head = lower
+			tail = ""
+		}
+		head_n = (head == "") ? 0 : split(head, part, ":")
+		if (head != "") {
+			for (i = 1; i <= head_n; i++)
+				groups[i] = part[i]
+		}
+		tail_n = (tail == "") ? 0 : split(tail, part, ":")
+		if (gap > 0) {
+			if (head_n + tail_n > 7)
+				return "ambiguous"
+			zeros = 8 - head_n - tail_n
+		} else {
+			if (head_n != 8)
+				return "ambiguous"
+			zeros = 0
+		}
+		for (i = 1; i <= zeros; i++)
+			groups[head_n + i] = "0"
+		for (i = 1; i <= tail_n; i++)
+			groups[head_n + zeros + i] = part[i]
+		for (i = 1; i <= 8; i++) {
+			if (groups[i] == "")
+				return "ambiguous"
+			group = hexval(groups[i])
+			if (group < 0 || group > 65535)
+				return "ambiguous"
+			values[i] = group
+		}
+		if (values[1] == 0 && values[2] == 0 && values[3] == 0 && values[4] == 0 &&
+			values[5] == 0 && values[6] == 0 && values[7] == 0)
+			return "private"
+		if (values[1] == 0 && values[2] == 0 && values[3] == 0 && values[4] == 0 &&
+			values[5] == 0 && values[6] == 65535)
+			return v4_private(int(values[7] / 256), values[7] % 256, int(values[8] / 256)) ? "private" : "public"
+		if (values[1] >= 64512 && values[1] <= 65023)
+			return "private"
+		if (values[1] >= 65152 && values[1] <= 65535)
+			return "private"
+		return "public"
+	}
+	BEGIN {
+		host = tolower(host)
+		if (host == "")
+			print "ambiguous"
+		else if (index(host, ":") > 0)
+			print classify_v6(host)
+		else if (host ~ /^[0-9a-fx.]+$/) {
+			# curl 会先用 inet_aton 解析这类"纯数字/十六进制"主机；解析不了或
+			# 解析成保留地址一律判为 ambiguous（默认拒绝）。代价是 cafe.be 这种
+			# 全十六进制字符的域名也会被判 ambiguous，需要 allow_private_webhook=1
+			# 才放行——安全侧宁可多拦。
+			class = classify_v4(host)
+			print (class == "") ? "ambiguous" : class
+		} else
+			print "name"
+	}
+	' 2>/dev/null
+}
+
+# 解析主机名（getent / nslookup，均带超时）；拿不到结果时输出为空。
+qnatter_host_resolve() {
+	local host="$1"
+	local dns_timeout="${QNATTER_WEBHOOK_DNS_TIMEOUT:-3}"
+	local out=""
+
+	if command -v getent >/dev/null 2>&1; then
+		out="$(qnatter_run_bounded "$dns_timeout" getent ahosts "$host" 2>/dev/null | awk '{ print $1 }')"
+	fi
+	if [ -z "$out" ] && command -v nslookup >/dev/null 2>&1; then
+		out="$(qnatter_run_bounded "$dns_timeout" nslookup "$host" 2>/dev/null | awk '
+			/^Name:/ { seen = 1; next }
+			/^Address/ && seen { print $NF }
+		')"
+	fi
+	printf '%s\n' "$out"
+}
+
+qnatter_allow_private_webhook() {
+	local value="${QNATTER_ALLOW_PRIVATE_WEBHOOK:-}"
+
+	if [ -z "$value" ] && command -v "$QNATTER_UCI_BIN" >/dev/null 2>&1; then
+		value="$("$QNATTER_UCI_BIN" -q get qnatter.global.allow_private_webhook 2>/dev/null || true)"
+	fi
+	qnatter_bool "$value"
+}
+
+# 解析 http(s) URL 的 authority，输出 "host port"（URL 未显式写端口时 port 为空）。
+# 结构非法（未闭合的 []、多余冒号、host 字符集外的内容）返回 1。
+# 判定与"固定给 curl 的地址"共用这一份解析，避免校验的 host 与实际连接的 host
+# 不是同一个。
+qnatter_webhook_url_host_port() {
+	local url="$1"
+	local rest authority host port="" bracketed=0
+
+	rest="${url#*://}"
+	authority="${rest%%[/?#]*}"
+	authority="${authority##*@}"
+	case "$authority" in
+		'['*']':*)
+			bracketed=1
+			host="${authority#[}"
+			host="${host%%]*}"
+			port="${authority##*]:}"
+			;;
+		'['*']')
+			bracketed=1
+			host="${authority#[}"
+			host="${host%%]*}"
+			;;
+		'['*|*']'*)
+			# 畸形/未闭合的方括号：curl 会按 URL 通配或非法地址处理
+			return 1
+			;;
+		*)
+			host="${authority%%:*}"
+			case "${authority#*:}" in
+				"$authority") ;;
+				*:*) return 1 ;;
+				*) port="${authority#*:}" ;;
+			esac
+			;;
+	esac
+	[ -n "$host" ] || return 1
+	if [ "$bracketed" = "1" ]; then
+		# [] 里必须是真正的 IPv6 字面量（[127.0.0.1] 之类一律拒绝）
+		case "$host" in
+			*[!0-9A-Fa-f:.]*) return 1 ;;
+		esac
+		case "$host" in
+			*:*) ;;
+			*) return 1 ;;
+		esac
+	else
+		# 普通 host 只允许字母/数字/点/连字符/下划线：curl URL 通配展开用的
+		# {} 与 []、以及其它怪字符在这里就全部拒绝。
+		case "$host" in
+			*[!A-Za-z0-9._-]*) return 1 ;;
+		esac
+	fi
+	case "$port" in
+		''|*[!0-9]*) [ -z "$port" ] || return 1 ;;
+	esac
+	if [ -n "$port" ]; then
+		# 先看长度再做数值比较：超范围整数会让 dash/busybox 的 test 写 stderr 并返回 2。
+		[ "${#port}" -le 5 ] || return 1
+		[ "$port" -ge 1 ] && [ "$port" -le 65535 ] || return 1
+	fi
+	printf '%s %s\n' "$host" "$port"
+	return 0
+}
+
+# curl 的多地址 --resolve（host:port:addr[,addr...]）需要 curl >= 7.84：旧版本会以
+# 参数解析失败（exit 2）退出。用一次只连本机、不会产生外部流量的探测判断并缓存结果。
+qnatter_curl_resolve_multi_ok() {
+	local rc
+
+	case "${QNATTER_CURL_RESOLVE_MULTI:-}" in
+		1) return 0 ;;
+		0) return 1 ;;
+	esac
+	"$QNATTER_CURL_BIN" --resolve qnatter-probe.invalid:19399:127.0.0.1,127.0.0.2 \
+		--max-time 1 -s -o /dev/null "http://qnatter-probe.invalid:19399/" >/dev/null 2>&1
+	rc=$?
+	if [ "$rc" = "2" ]; then
+		QNATTER_CURL_RESOLVE_MULTI=0
+		return 1
+	fi
+	QNATTER_CURL_RESOLVE_MULTI=1
+	return 0
+}
+
+# 输出 curl --resolve 需要的 "host:port:addr[,addr...]"（校验阶段解析出的地址）。
+#   - IP 字面量：curl 不会再解析域名，无需固定（无输出，返回 0）
+#   - 名称：解析出的地址全部为公网（或 allow_private=1）时全部固定；解析失败 /
+#     出现非公网地址时返回 1，调用方降级为"不固定"并告警。
+qnatter_webhook_resolve_pins() {
+	local url="$1"
+	local allow_private="${2:-0}"
+	local host_port host port addrs addr addr_list="" first
+
+	host_port="$(qnatter_webhook_url_host_port "$url")" || return 1
+	host="${host_port%% *}"
+	port="${host_port#* }"
+	case "$(qnatter_host_class "$host")" in
+		name) ;;
+		*) return 0 ;;
+	esac
+	if [ -z "$port" ]; then
+		case "$url" in
+			https://*) port=443 ;;
+			*) port=80 ;;
+		esac
+	fi
+	addrs="$(qnatter_host_resolve "$host")"
+	[ -n "$addrs" ] || return 1
+	for addr in $addrs; do
+		case "$(qnatter_host_class "$addr")" in
+			public) ;;
+			*)
+				[ "$allow_private" = "1" ] || return 1
+				;;
+		esac
+		case "$addr" in
+			*:*) addr="[$addr]" ;;
+		esac
+		# getent ahosts 会为同一地址输出多行（STREAM/DGRAM/RAW），去掉重复项，
+		# 否则 --resolve 的多地址列表会被同一 IP 灌满。
+		case ",$addr_list," in
+			*",$addr,"*) continue ;;
+		esac
+		addr_list="${addr_list:+$addr_list,}$addr"
+	done
+	[ -n "$addr_list" ] || return 1
+	case "$addr_list" in
+		*,*)
+			# 多地址写法在旧 curl 上不被接受：退化为只固定第一个地址（仍然消除
+			# rebinding 面），并明确告警。
+			if ! qnatter_curl_resolve_multi_ok; then
+				first="${addr_list%%,*}"
+				log "qnatter: ${QNATTER_CURL_BIN} does not support multiple --resolve addresses for ${QNATTER_INSTANCE:-default}; pinning ${first} only"
+				addr_list="$first"
+			fi
+			;;
+	esac
+	printf '%s:%s:%s\n' "$host" "$port" "$addr_list"
+	return 0
+}
+
+# completion webhook 目标是否放行：$1=URL，$2=1 表示管理员已显式允许私网目标。
+qnatter_webhook_target_allowed() {
+	local url="$1"
+	local allow_private="${2:-0}"
+	local host_port host class addr addrs
+
+	host_port="$(qnatter_webhook_url_host_port "$url")" || return 1
+	host="${host_port%% *}"
+
+	class="$(qnatter_host_class "$host")"
+	case "$class" in
+		public)
+			return 0
+			;;
+		private)
+			[ "$allow_private" = "1" ] && return 0
+			return 1
+			;;
+		ambiguous)
+			# 数字/十六进制模糊写法：curl 可能按 inet_aton 解析成 IP（历史上
+			# 012.0.0.1 → 10.0.0.1 就是这么绕过的），所以这里不做 fail-open：
+			# 只有 DNS 解析成功且全部是公网地址才放行，否则拒绝。
+			[ "$allow_private" = "1" ] && return 0
+			;;
+		name)
+			;;
+		*)
+			# 分类失败（awk 缺失等）时按不可信处理
+			[ "$allow_private" = "1" ] && return 0
+			return 1
+			;;
+	esac
+
+	# localhost / *.localhost 按 RFC 6761 永远指向回环，无需 DNS。
+	case "$host" in
+		localhost|localhost.|*.localhost|*.localhost.)
+			[ "$allow_private" = "1" ] && return 0
+			return 1
+			;;
+	esac
+
+	# 域名靠 DNS 绕过字面量判定（例如指向 127.0.0.1 的公网域名）：尽力解析，
+	# 只要有地址落在私网/回环/链路本地就拒绝。普通域名解析不到时不阻断（与
+	# LuCI 侧现有行为一致，残余 DNS rebinding 风险见报告）；数字模糊写法解析
+	# 不到时按拒绝处理。
+	addrs="$(qnatter_host_resolve "$host")"
+	if [ -z "$addrs" ]; then
+		if [ "$class" = "ambiguous" ]; then
+			log "completion webhook blocked for ${QNATTER_INSTANCE:-default}: numeric/hex host $host could not be verified"
+			return 1
+		fi
+		log "completion webhook DNS check inconclusive for ${QNATTER_INSTANCE:-default}: host=$host"
+		return 0
+	fi
+	for addr in $addrs; do
+		case "$(qnatter_host_class "$addr")" in
+			public) ;;
+			*)
+				[ "$allow_private" = "1" ] && continue
+				log "completion webhook blocked for ${QNATTER_INSTANCE:-default}: host $host resolves to non-public address $addr"
+				return 1
+				;;
+		esac
+	done
+	return 0
+}
+
+# auto_firewall 与 Cloudflare 更新都依赖上面的 URL 判定/地址固定函数，因此在
+# 函数定义之后才执行（顺序与旧版一致：先自动防火墙，再 Cloudflare SRV）。
 update_auto_firewall
 update_cloudflare_srv
 
@@ -282,7 +975,7 @@ run_completion_webhook() {
 	local success="${QNATTER_COMPLETION_WEBHOOK_SUCCESS:-}"
 	local disable_success_check="${QNATTER_COMPLETION_WEBHOOK_DISABLE_SUCCESS_CHECK:-1}"
 	local skip_unchanged="${QNATTER_COMPLETION_WEBHOOK_SKIP_UNCHANGED:-0}"
-	local payload response rc header
+	local payload response rc header allow_private=0 pin_args pin
 
 	qnatter_bool "$enabled" || return 0
 	[ -n "$url" ] || return 0
@@ -306,17 +999,61 @@ run_completion_webhook() {
 	fi
 
 	url="$(qnatter_render_template "$url")"
+	# 渲染后的 URL 才是真正交给 curl 的值：必须是 http(s) 且不能以 '-' 开头。
+	if ! qnatter_url_allowed "$url"; then
+		log "completion webhook skipped for ${QNATTER_INSTANCE:-default}: unsupported URL"
+		return 0
+	fi
+	# 回环/私网/链路本地目标默认拒绝：URL 来自 UCI，不能让受限用户借 root 的
+	# curl 打内网（SSRF）。只有 qnatter.global.allow_private_webhook=1 才放行。
+	qnatter_allow_private_webhook && allow_private=1
+	if ! qnatter_webhook_target_allowed "$url" "$allow_private"; then
+		log "completion webhook skipped for ${QNATTER_INSTANCE:-default}: URL targets a loopback/private/link-local address"
+		return 0
+	fi
+	# 校验时解析、使用时再解析之间存在时间差（DNS rebinding）：把校验阶段解析出的
+	# 地址用 --resolve 固定给 curl。解析不出来（设备缺少 getent/nslookup 等）时
+	# 不阻断发送，但明确告警，避免"看起来校验过"的假象。
+	pin_args=""
+	if ! pin_args="$(qnatter_webhook_resolve_pins "$url" "$allow_private")"; then
+		pin_args=""
+		log "completion webhook for ${QNATTER_INSTANCE:-default}: host could not be pinned to a verified address; curl will resolve the name again"
+	fi
 	if [ -n "$body" ]; then
 		payload="$(qnatter_render_template "$body")"
 	else
 		payload="$(qnatter_mapping_json)"
 	fi
+	# '--data-raw' 已经关掉 curl 的 "@文件" 语义，这里再显式拒绝，避免把
+	# body=@/etc/shadow 这类配置当成"功能正常"继续发出去。
+	case "$payload" in
+		@*)
+			log "completion webhook skipped for ${QNATTER_INSTANCE:-default}: request body must not start with @"
+			return 0
+			;;
+	esac
 	success="$(qnatter_render_template "$success")"
 
-	set -- -fsS -m "$timeout" -X "$method"
+	# -g 关闭 curl 的 URL 通配展开（{}、[]），配合上面的 host 判定避免
+	# http://{127.0.0.1,127.0.0.2}:port/ 这类绕过；--noproxy '*' 保证请求不会被
+	# 代理接管（代理会自己重新解析域名，绕过 --resolve 的固定）；--resolve 固定
+	# 校验阶段解析出的地址。
+	set -- -fsS -m "$timeout" -X "$method" -g --noproxy '*'
+	while IFS= read -r pin; do
+		[ -n "$pin" ] || continue
+		set -- "$@" --resolve "$pin"
+	done <<EOF
+$pin_args
+EOF
 	while IFS= read -r header; do
 		header="$(qnatter_render_template "$header")"
 		[ -n "$header" ] || continue
+		case "$header" in
+			@*)
+				log "completion webhook header ignored for ${QNATTER_INSTANCE:-default}: header must not start with @"
+				continue
+				;;
+		esac
 		set -- "$@" -H "$header"
 	done <<EOF
 $headers
@@ -325,11 +1062,11 @@ EOF
 		GET|HEAD)
 			;;
 		*)
-			[ -n "$payload" ] && set -- "$@" --data "$payload"
+			[ -n "$payload" ] && set -- "$@" --data-raw "$payload"
 			;;
 	esac
 
-	response="$("$QNATTER_CURL_BIN" "$@" "$url" 2>&1)"
+	response="$("$QNATTER_CURL_BIN" "$@" -- "$url" 2>&1)"
 	rc=$?
 	if [ "$rc" -ne 0 ]; then
 		log "completion webhook failed for ${QNATTER_INSTANCE:-default}: response=$(qnatter_one_line "$response")"
@@ -340,28 +1077,206 @@ EOF
 		return 0
 	fi
 
-	log "completion webhook sent for ${QNATTER_INSTANCE:-default}: endpoint=$url"
+	log "completion webhook sent for ${QNATTER_INSTANCE:-default}: endpoint=$(qnatter_sanitize_url "$url")"
 	return 0
+}
+
+# completion_script_inline 是 UCI 中的脚本文本，映射回调时以 root 执行。
+# 这里收紧执行面：长度上限、只允许白名单内的 shell 解释器、必须由 root 显式
+# 授权（见 qnatter_inline_authorized），并且始终带硬超时。仅靠 ACL 分组挡不住
+# "主 write 组仍可写 UCI"的入口，所以真正的开关是 root 拥有的授权标记文件。
+qnatter_script_shell_allowed() {
+	case "${1:-}" in
+		/bin/sh|/bin/ash|/bin/dash|/usr/bin/sh) return 0 ;;
+	esac
+	return 1
+}
+
+# 内联脚本执行授权：默认要求存在 /etc/qnatter/allow_inline_scripts
+# （QNATTER_ALLOW_INLINE_FILE 可覆盖，便于测试）。文件与父目录都必须属 root、
+# 且组/其他不可写——否则受限用户（能写 UCI 的那类用户）就能替换该文件，授权
+# 形同虚设。不满足时调用方跳过执行并记录告警。
+qnatter_inline_authorized() {
+	local marker="${QNATTER_ALLOW_INLINE_FILE:-/etc/qnatter/allow_inline_scripts}"
+	local dir
+
+	[ -n "$marker" ] || return 1
+	[ -f "$marker" ] || return 1
+	dir="$(dirname "$marker")"
+	[ -d "$dir" ] || return 1
+	[ -n "$(find "$marker" -type f ! -perm -002 ! -perm -020 -user root 2>/dev/null | head -n 1)" ] || return 1
+	[ -n "$(find "$dir" -type d ! -perm -002 ! -perm -020 -user root 2>/dev/null | head -n 1)" ] || return 1
+	return 0
+}
+
+# 内建看门狗：系统没有 timeout(1) 时（OpenWrt 默认 busybox 未启用 timeout
+# applet）用它保证脚本不会无限期跑下去——先 SIGTERM，宽限 kill_after 秒后
+# SIGKILL。脚本正文放在 $3 指向的 0600 文件里，由后台命令自己重定向读入：
+# POSIX 会把异步列表的 stdin 指向 /dev/null，靠函数级重定向是喂不进去的。
+# $4 为 setsid 路径（可为空）：非空时命令成为独立进程组组长，超时/退出都按
+# 进程组回收，脚本 fork 出来的子孙也会一起结束。
+qnatter_run_inline_watchdog() {
+	local timeout_sec="$1"
+	local kill_after="$2"
+	local script_file="$3"
+	local setsid_bin="$4"
+	local child watchdog rc
+
+	shift 4
+	if [ -n "$setsid_bin" ]; then
+		set -- "$setsid_bin" "$@"
+	fi
+	"$@" < "$script_file" &
+	child=$!
+	[ -n "$setsid_bin" ] && QNATTER_INLINE_PGID="$child"
+	(
+		sleep "$timeout_sec"
+		kill -TERM "-$child" 2>/dev/null || kill -TERM "$child" 2>/dev/null || exit 0
+		sleep "$kill_after"
+		kill -KILL "-$child" 2>/dev/null || kill -KILL "$child" 2>/dev/null
+	) &
+	watchdog=$!
+	wait "$child"
+	rc=$?
+	kill "$watchdog" 2>/dev/null || true
+	wait "$watchdog" 2>/dev/null || true
+	qnatter_inline_release_group
+	return "$rc"
 }
 
 run_completion_script() {
 	local enabled="${QNATTER_COMPLETION_SCRIPT_ENABLED:-0}"
 	local inline="${QNATTER_COMPLETION_SCRIPT_INLINE:-}"
+	local shell_bin="${QNATTER_SCRIPT_SHELL:-/bin/sh}"
+	local max_length="${QNATTER_SCRIPT_MAX_LENGTH:-4096}"
+	local timeout_sec="${QNATTER_SCRIPT_TIMEOUT:-10}"
+	local marker="${QNATTER_ALLOW_INLINE_FILE:-/etc/qnatter/allow_inline_scripts}"
+	local timeout_bin kill_after inline_runner="timeout" inline_script_file=""
+	local setsid_bin inline_pid inline_rc
 
 	qnatter_bool "$enabled" || return 0
-	if [ -n "$inline" ]; then
-		if printf '%s\n' "$inline" | QNATTER_SCRIPT_INSTANCE="${QNATTER_INSTANCE:-default}" \
-			QNATTER_SCRIPT_PROTOCOL="$protocol" \
-			QNATTER_SCRIPT_INNER_IP="$inner_ip" \
-			QNATTER_SCRIPT_INNER_PORT="$inner_port" \
-			QNATTER_SCRIPT_OUTER_IP="$outer_ip" \
-			QNATTER_SCRIPT_OUTER_PORT="$outer_port" \
-			/bin/sh -s -- "$protocol" "$inner_ip" "$inner_port" "$outer_ip" "$outer_port"; then
-			log "completion inline script ran for ${QNATTER_INSTANCE:-default}"
-		else
-			log "completion inline script failed for ${QNATTER_INSTANCE:-default}"
-		fi
+	[ -n "$inline" ] || return 0
+
+	case "$max_length" in
+		''|*[!0-9]*) max_length=4096 ;;
+	esac
+	case "$timeout_sec" in
+		''|*[!0-9]*) timeout_sec=10 ;;
+	esac
+
+	if [ "${#inline}" -gt "$max_length" ]; then
+		log "completion inline script rejected for ${QNATTER_INSTANCE:-default}: longer than ${max_length} bytes"
 		return 0
+	fi
+	if ! qnatter_script_shell_allowed "$shell_bin"; then
+		log "completion inline script rejected for ${QNATTER_INSTANCE:-default}: interpreter ${shell_bin} is not allowed"
+		return 0
+	fi
+	if [ ! -x "$shell_bin" ]; then
+		log "completion inline script rejected for ${QNATTER_INSTANCE:-default}: interpreter ${shell_bin} is not executable"
+		return 0
+	fi
+	# 注意：notify 侧只支持内联脚本文本，不实现任何"脚本文件路径"执行入口
+	# （文件形式的执行面在 ACL/rpcd 侧已收回）。因此这里只需守住内联入口。
+	if ! qnatter_inline_authorized; then
+		log "completion inline script blocked for ${QNATTER_INSTANCE:-default}: root authorization file $marker is missing, not root-owned, or group/other-writable"
+		return 0
+	fi
+
+	set -- "$shell_bin" -s -- "$protocol" "$inner_ip" "$inner_port" "$outer_ip" "$outer_port"
+	timeout_bin="$(qnatter_timeout_bin)"
+	kill_after="${QNATTER_SCRIPT_KILL_AFTER:-2}"
+	case "$kill_after" in
+		''|*[!0-9]*) kill_after=2 ;;
+	esac
+	if command -v "$timeout_bin" >/dev/null 2>&1; then
+		inline_runner="timeout"
+		if "$timeout_bin" -k "$kill_after" 1 true >/dev/null 2>&1; then
+			# -k：SIGTERM 之后宽限 kill_after 秒仍不退出就 SIGKILL，脚本里
+			# trap 掉 TERM 也逃不掉（只有 SIGTERM 的 timeout 是"软"限制）。
+			set -- "$timeout_bin" -k "$kill_after" "$timeout_sec" "$@"
+		else
+			inline_runner="timeout-soft"
+			log "completion inline script for ${QNATTER_INSTANCE:-default}: timeout does not support -k; only SIGTERM can be enforced"
+			set -- "$timeout_bin" "$timeout_sec" "$@"
+		fi
+	else
+		# 没有 timeout(1)（例如 OpenWrt 默认 busybox 未启用该 applet）：
+		# 退回内建看门狗，仍然做到超时后 SIGKILL，而不是放任脚本跑完。
+		inline_runner="watchdog"
+		log "completion inline script for ${QNATTER_INSTANCE:-default}: timeout not available; using built-in watchdog (SIGTERM, then SIGKILL after ${kill_after}s)"
+	fi
+
+	# 让内联脚本进入独立会话/进程组：notify 退出时 qnatter_notify_cleanup 按进程组
+	# 回收脚本及其 fork 出来的子孙（timeout -k 只能约束超时，管不了"父进程被杀后
+	# 脚本变成孤儿"）。busybox 自带 setsid；不可用时退化为现有行为并明确告警。
+	setsid_bin="$(qnatter_setsid_bin)" || setsid_bin=""
+	if [ -z "$setsid_bin" ]; then
+		log "completion inline script for ${QNATTER_INSTANCE:-default}: setsid not available; the script process group cannot be killed when notify exits"
+	elif [ "$inline_runner" != "watchdog" ]; then
+		set -- "$setsid_bin" "$@"
+	fi
+
+	if [ "$inline_runner" = "watchdog" ]; then
+		# 后台任务拿不到管道的 stdin（POSIX 把异步列表的 stdin 指向 /dev/null），
+		# 所以看门狗路径必须先把脚本落到 0600 的临时文件，再用重定向喂给 sh -s。
+		inline_script_file=""
+		if [ -n "${QNATTER_TMPDIR:-}" ] && [ -d "$QNATTER_TMPDIR" ]; then
+			inline_script_file="${QNATTER_TMPDIR}/inline-script"
+		else
+			inline_script_file="$(mktemp 2>/dev/null || true)"
+		fi
+		if [ -z "$inline_script_file" ] ||
+			! (umask 077; printf '%s\n' "$inline" > "$inline_script_file") 2>/dev/null; then
+			inline_script_file=""
+			# 连脚本都落不了盘：退化为无超时执行，但必须留下明确告警。
+			log "completion inline script for ${QNATTER_INSTANCE:-default}: cannot stage the script for the watchdog; cannot enforce a hard timeout"
+		fi
+		if [ -n "$inline_script_file" ]; then
+			if qnatter_run_inline_watchdog "$timeout_sec" "$kill_after" "$inline_script_file" "$setsid_bin" env \
+				QNATTER_SCRIPT_INSTANCE="${QNATTER_INSTANCE:-default}" \
+				QNATTER_SCRIPT_PROTOCOL="$protocol" \
+				QNATTER_SCRIPT_INNER_IP="$inner_ip" \
+				QNATTER_SCRIPT_INNER_PORT="$inner_port" \
+				QNATTER_SCRIPT_OUTER_IP="$outer_ip" \
+				QNATTER_SCRIPT_OUTER_PORT="$outer_port" \
+				"$@"; then
+				log "completion inline script ran for ${QNATTER_INSTANCE:-default}"
+			else
+				log "completion inline script failed for ${QNATTER_INSTANCE:-default}"
+			fi
+			rm -f "$inline_script_file"
+			return 0
+		fi
+	fi
+
+	# 走到这里说明：inline_runner 是 timeout/timeout-soft（$@ 已带 setsid 前缀），
+	# 或者看门狗路径连脚本都落不了盘（只能退化为无超时执行）。
+	if [ "$inline_runner" = "watchdog" ] && [ -n "$setsid_bin" ]; then
+		set -- "$setsid_bin" "$@"
+	fi
+
+	# 放进后台再 wait 是为了拿到脚本的 pid：setsid 之后它就是进程组组长，
+	# 退出 trap 里可以 kill -TERM -<pgid> 回收整棵子树。
+	printf '%s\n' "$inline" | env \
+		QNATTER_SCRIPT_INSTANCE="${QNATTER_INSTANCE:-default}" \
+		QNATTER_SCRIPT_PROTOCOL="$protocol" \
+		QNATTER_SCRIPT_INNER_IP="$inner_ip" \
+		QNATTER_SCRIPT_INNER_PORT="$inner_port" \
+		QNATTER_SCRIPT_OUTER_IP="$outer_ip" \
+		QNATTER_SCRIPT_OUTER_PORT="$outer_port" \
+		"$@" &
+	inline_pid=$!
+	if [ -n "$setsid_bin" ]; then
+		QNATTER_INLINE_PGID="$inline_pid"
+	fi
+	wait "$inline_pid"
+	inline_rc=$?
+	qnatter_inline_release_group
+	if [ "$inline_rc" -eq 0 ]; then
+		log "completion inline script ran for ${QNATTER_INSTANCE:-default}"
+	else
+		log "completion inline script failed for ${QNATTER_INSTANCE:-default}"
 	fi
 	return 0
 }
@@ -392,17 +1307,20 @@ elif qnatter_qb_valid_port "$inner_port"; then
 else
 	listen_port_source="invalid"
 fi
-cookie="/tmp/qnatter-qbittorrent-${runtime_slug}.cookie"
 json="$(qnatter_qb_preferences_json "$listen_port")"
-
-cleanup_cookie() {
-	rm -f "$cookie"
-}
-trap cleanup_cookie EXIT HUP INT TERM
 
 if [ -z "$url" ] || [ -z "$username" ]; then
 	log "qBittorrent is enabled but URL or username is empty for ${QNATTER_INSTANCE:-default}"
 	qnatter_write_status_json "$status_file" "${QNATTER_INSTANCE:-default}" "$protocol" "$inner_ip" "$inner_port" "$outer_ip" "$outer_port" "qBittorrent URL or username is empty"
+	run_user_notify
+	exit 0
+fi
+
+# URL 会拼上 /api/v2/... 后缀，但仍可能是 "-K<file>" 之类的值：先做 scheme
+# 白名单校验，拒绝非 http(s) 与以 '-' 开头的值（curl 选项注入）。
+if ! qnatter_url_allowed "$url"; then
+	log "qBittorrent URL is not a supported http(s) URL for ${QNATTER_INSTANCE:-default}"
+	qnatter_write_status_json "$status_file" "${QNATTER_INSTANCE:-default}" "$protocol" "$inner_ip" "$inner_port" "$outer_ip" "$outer_port" "qBittorrent URL is invalid"
 	run_user_notify
 	exit 0
 fi
@@ -414,27 +1332,47 @@ if ! qnatter_qb_valid_port "$listen_port"; then
 	exit 0
 fi
 
-rm -f "$cookie"
-log "qBittorrent update started for ${QNATTER_INSTANCE:-default}: url=$url listen_port=$listen_port source=$listen_port_source mapping=${protocol} ${inner_ip}:${inner_port} -> ${outer_ip}:${outer_port} forward=${QBITTORRENT_FORWARD:-0} target=${QBITTORRENT_TARGET_IP:-}:${QBITTORRENT_TARGET_PORT:-0} method=${QBITTORRENT_FORWARD_METHOD:-}"
+# cookie 与凭据文件都落在 0700 私有目录：cookie 由 curl 写成 0600，用户名/密码
+# 通过 --data-urlencode name@file 传入，不再出现在 /proc/<pid>/cmdline 里。
+cookie_dir="${QNATTER_TMPDIR:-}"
+if [ -z "$cookie_dir" ]; then
+	log "qBittorrent is enabled but no private temporary directory is available for ${QNATTER_INSTANCE:-default}"
+	qnatter_write_status_json "$status_file" "${QNATTER_INSTANCE:-default}" "$protocol" "$inner_ip" "$inner_port" "$outer_ip" "$outer_port" "qBittorrent temporary directory is not available"
+	run_user_notify
+	exit 0
+fi
+cookie="${cookie_dir}/qbittorrent.cookie"
+user_file="${cookie_dir}/qbittorrent-username"
+pass_file="${cookie_dir}/qbittorrent-password"
+if ! (umask 077; : > "$cookie"; : > "$user_file"; : > "$pass_file") 2>/dev/null; then
+	log "qBittorrent is enabled but its credential files could not be created for ${QNATTER_INSTANCE:-default}"
+	qnatter_write_status_json "$status_file" "${QNATTER_INSTANCE:-default}" "$protocol" "$inner_ip" "$inner_port" "$outer_ip" "$outer_port" "qBittorrent credential files could not be created"
+	run_user_notify
+	exit 0
+fi
+chmod 0600 "$cookie" "$user_file" "$pass_file" 2>/dev/null || true
+printf '%s' "$username" > "$user_file"
+printf '%s' "$password" > "$pass_file"
+
+log "qBittorrent update started for ${QNATTER_INSTANCE:-default}: url=$(qnatter_sanitize_url "$url") listen_port=$listen_port source=$listen_port_source mapping=${protocol} ${inner_ip}:${inner_port} -> ${outer_ip}:${outer_port} forward=${QBITTORRENT_FORWARD:-0} target=${QBITTORRENT_TARGET_IP:-}:${QBITTORRENT_TARGET_PORT:-0} method=${QBITTORRENT_FORWARD_METHOD:-}"
 login_response="$("$QNATTER_CURL_BIN" -fsS -m "${QBITTORRENT_TIMEOUT:-8}" -c "$cookie" \
-	--data-urlencode "username=$username" \
-	--data-urlencode "password=$password" \
-	"$url/api/v2/auth/login" 2>&1)"
+	--data-urlencode "username@$user_file" \
+	--data-urlencode "password@$pass_file" \
+	-- "$url/api/v2/auth/login" 2>&1)"
 login_rc=$?
 # qBittorrent 5.x may return HTTP 204 with an empty body on success, while
 # older releases return HTTP 200 with "Ok.". curl -f still rejects 4xx login
 # failures, and a non-empty body other than "Ok." remains a rejected login.
 if [ "$login_rc" -ne 0 ] || { [ -n "$login_response" ] && [ "$login_response" != "Ok." ]; }; then
-	log "qBittorrent login failed for ${QNATTER_INSTANCE:-default} at $url: response=$(qnatter_one_line "$login_response")"
+	log "qBittorrent login failed for ${QNATTER_INSTANCE:-default} at $(qnatter_sanitize_url "$url"): response=$(qnatter_one_line "$login_response")"
 	qnatter_write_status_json "$status_file" "${QNATTER_INSTANCE:-default}" "$protocol" "$inner_ip" "$inner_port" "$outer_ip" "$outer_port" "qBittorrent login failed"
-	rm -f "$cookie"
 	run_user_notify
 	exit 0
 fi
-log "qBittorrent login succeeded for ${QNATTER_INSTANCE:-default} at $url"
+log "qBittorrent login succeeded for ${QNATTER_INSTANCE:-default} at $(qnatter_sanitize_url "$url")"
 
 preferences_response="$("$QNATTER_CURL_BIN" -fsS -m "${QBITTORRENT_TIMEOUT:-8}" -b "$cookie" \
-	"$url/api/v2/app/preferences" 2>&1)"
+	-- "$url/api/v2/app/preferences" 2>&1)"
 preferences_rc=$?
 if [ "$preferences_rc" -eq 0 ]; then
 	current_listen_port="$(qnatter_json_listen_port "$preferences_response")"
@@ -446,17 +1384,15 @@ fi
 
 set_response="$("$QNATTER_CURL_BIN" -fsS -m "${QBITTORRENT_TIMEOUT:-8}" -b "$cookie" \
 	--data-urlencode "json=$json" \
-	"$url/api/v2/app/setPreferences" 2>&1)"
+	-- "$url/api/v2/app/setPreferences" 2>&1)"
 set_rc=$?
 if [ "$set_rc" -ne 0 ]; then
 	log "qBittorrent listen_port update failed for ${QNATTER_INSTANCE:-default}: listen_port=$listen_port response=$(qnatter_one_line "$set_response")"
 	qnatter_write_status_json "$status_file" "${QNATTER_INSTANCE:-default}" "$protocol" "$inner_ip" "$inner_port" "$outer_ip" "$outer_port" "qBittorrent update failed"
-	rm -f "$cookie"
 	run_user_notify
 	exit 0
 fi
 
-rm -f "$cookie"
 if [ -n "${current_listen_port:-}" ]; then
 	if [ "$current_listen_port" = "$listen_port" ]; then
 		log "qBittorrent listen_port unchanged for ${QNATTER_INSTANCE:-default}: $listen_port source=$listen_port_source mapping=${protocol} ${inner_ip}:${inner_port} -> ${outer_ip}:${outer_port}"

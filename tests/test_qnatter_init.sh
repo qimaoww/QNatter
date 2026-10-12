@@ -243,10 +243,15 @@ service_triggers
 grep -Fqx 'flush chain ip qnatter qnatter_dnat' "$nft_log" || fail "start_service did not flush stale DNAT rules"
 grep -Fqx 'flush chain ip qnatter qnatter_snat' "$nft_log" || fail "start_service did not flush stale SNAT rules"
 grep -Fqx 'flush chain ip qnatter qnatter_mark' "$nft_log" || fail "start_service did not flush stale mark rules"
-grep -Fqx 'rule del priority 20192' "$ip_log" || fail "start_service did not delete stale QNatter rule 20192"
+# 策略路由删除必须带 fwmark/lookup 选择器：只删 QNatter 自己装的那条规则，避免
+# 误删恰好同 priority 的第三方规则（busybox 的 ip 缺选择器时会退回旧写法）。
+grep -Fqx 'rule del priority 20192 fwmark 0x4e0000c0 lookup 20192' "$ip_log" || fail "start_service did not delete stale QNatter rule 20192 with the exact selector"
 grep -Fqx 'route flush table 20192' "$ip_log" || fail "start_service did not flush stale QNatter table 20192"
-grep -Fqx 'rule del priority 20253' "$ip_log" || fail "start_service did not delete stale QNatter rule 20253"
+grep -Fqx 'rule del priority 20253 fwmark 0x4e0000fd lookup 20253' "$ip_log" || fail "start_service did not delete stale QNatter rule 20253 with the exact selector"
 grep -Fqx 'route flush table 20253' "$ip_log" || fail "start_service did not flush stale QNatter table 20253"
+if grep -Fxq 'rule del priority 20192' "$ip_log" || grep -Fxq 'rule del priority 20253' "$ip_log"; then
+	fail "policy rule deletion must carry the fwmark/lookup selector"
+fi
 if grep -Fq 'priority 100' "$ip_log" || grep -Fq 'priority 24000' "$ip_log"; then
 	fail "start_service deleted non-QNatter policy rules"
 fi

@@ -9,7 +9,15 @@
 : "${QNATTER_LOG_DIR:=/var/log/qnatter}"
 : "${QNATTER_CURL_BIN:=curl}"
 : "${QNATTER_JSONFILTER_BIN:=jsonfilter}"
+: "${QNATTER_GETENT_BIN:=getent}"
+: "${QNATTER_NSLOOKUP_BIN:=nslookup}"
 : "${CLOUDFLARE_API_BASE:=https://api.cloudflare.com/client/v4}"
+: "${QNATTER_TIMEOUT_BIN:=timeout}"
+: "${QNATTER_SCRIPT_TIMEOUT:=10}"
+: "${QNATTER_SCRIPT_MAX_BYTES:=16384}"
+: "${QNATTER_SCRIPT_MAX_OUTPUT:=65536}"
+: "${QNATTER_WEBHOOK_TIMEOUT_MAX:=120}"
+: "${QNATTER_WEBHOOK_RESPONSE_MAX:=262144}"
 
 json_arg_string() {
 	local key="$1"
@@ -40,14 +48,34 @@ json_arg_text() {
 }
 
 json_escape_stream() {
-	awk 'BEGIN { ORS = ""; tab = sprintf("%c", 9); cr = sprintf("%c", 13) } {
+	# 逐字符转义：\ " \n \r \t 使用短转义，其余 < 0x20 与 0x7f 使用 \uXXXX，
+	# 否则日志/脚本输出里的控制字符（含 ANSI 颜色码）会破坏 JSON 响应。
+	awk 'BEGIN {
+		ORS = ""
+		for (i = 1; i < 128; i++)
+			ord[sprintf("%c", i)] = i
+	} {
 		if (NR > 1)
 			printf "\\n"
-		gsub(/\\/, "\\\\")
-		gsub(/"/, "\\\"")
-		gsub(cr, "\\r")
-		gsub(tab, "\\t")
-		printf "%s", $0
+		line = $0
+		out = ""
+		for (i = 1; i <= length(line); i++) {
+			char = substr(line, i, 1)
+			code = (char in ord) ? ord[char] : 0
+			if (char == "\\")
+				out = out "\\\\"
+			else if (char == "\"")
+				out = out "\\\""
+			else if (char == "\r")
+				out = out "\\r"
+			else if (char == "\t")
+				out = out "\\t"
+			else if (code > 0 && (code < 32 || code == 127))
+				out = out sprintf("\\u%04x", code)
+			else
+				out = out char
+		}
+		printf "%s", out
 	}'
 }
 
@@ -125,6 +153,8 @@ log_write() {
 
 	[ -d "$QNATTER_LOG_DIR" ] || return 0
 	timestamp="$(date '+%Y-%m-%d %H:%M:%S')"
+	# 单行化：未净化的实例名/消息里若含换行会伪造出额外日志行
+	message="$(printf '%s' "$message" | tr -d '\r' | tr '\n' ' ' | cut -c 1-500)"
 	printf '%s [%s] [LuCI] %s\n' "$timestamp" "$level" "$message" >> "$log_file" 2>/dev/null || true
 }
 
@@ -183,8 +213,10 @@ rename_instance() {
 
 	old_slug="$(runtime_slug "$old")"
 	new_slug="$(runtime_slug "$new")"
-	"$QNATTER_UCI_BIN" delete "firewall.qnatter_${old_slug}" >/dev/null 2>&1 || true
-	"$QNATTER_UCI_BIN" commit firewall >/dev/null 2>&1 || true
+	# 这里刻意不写 firewall UCI：直接改写 firewall.qnatter_<slug> 超出
+	# luci-app-qnatter 组声明的权限（write.uci 仅 qnatter），且属于不可逆删除。
+	# 遗留规则的清理改由 cleanup_firewall_rule 承担，后者归入独立的
+	# luci-app-qnatter-firewall ACL 组，仅授予显式信任的管理员。
 	move_if_exists "${QNATTER_RUN_DIR}/${old_slug}.json" "${QNATTER_RUN_DIR}/${new_slug}.json"
 	move_if_exists "${QNATTER_RUN_DIR}/${old_slug}.env" "${QNATTER_RUN_DIR}/${new_slug}.env"
 	move_if_exists "${QNATTER_RUN_DIR}/${old_slug}.notify" "${QNATTER_RUN_DIR}/${new_slug}.notify"
@@ -201,10 +233,51 @@ rename_instance() {
 	printf '}\n'
 }
 
+# 清理重命名/删除实例后遗留的 auto_firewall 规则（firewall.qnatter_<slug>）。
+# 该操作会写 firewall UCI，超出 luci-app-qnatter 组声明的 write.uci（仅 qnatter），
+# 因此单独暴露为方法并归入 luci-app-qnatter-firewall ACL 组，只授予显式信任的管理员。
+# 约束：仅限 qnatter_ 命名空间，且仅当同名 qnatter 实例已不存在时才允许删除，
+# 避免误删仍在运行的实例所依赖的放行规则。
+cleanup_firewall_rule() {
+	local instance="$1"
+	local slug section
+
+	valid_section_name "$instance" || {
+		emit_error "Invalid instance name"
+		return 0
+	}
+	if "$QNATTER_UCI_BIN" -q get "qnatter.${instance}" >/dev/null 2>&1; then
+		emit_error "Instance still exists"
+		return 0
+	fi
+
+	slug="$(runtime_slug "$instance")"
+	section="qnatter_${slug}"
+	case "$section" in
+		qnatter_*[!A-Za-z0-9_]*|"qnatter_")
+			emit_error "Invalid firewall section"
+			return 0
+			;;
+	esac
+
+	if ! "$QNATTER_UCI_BIN" -q get "firewall.${section}" >/dev/null 2>&1; then
+		printf '{"ok":true,"removed":false}\n'
+		return 0
+	fi
+	if ! "$QNATTER_UCI_BIN" delete "firewall.${section}" ||
+		! "$QNATTER_UCI_BIN" commit firewall; then
+		emit_error "Failed to remove firewall rule"
+		return 0
+	fi
+
+	printf '{"ok":true,"removed":true}\n'
+}
+
 cloudflare_uci_get() {
 	local section="$1"
 	local option="$2"
 
+	valid_section_name "$section" || return 0
 	"$QNATTER_UCI_BIN" -q get "qnatter.${section}.${option}" 2>/dev/null || true
 }
 
@@ -212,16 +285,29 @@ cloudflare_api_get() {
 	local section="$1"
 	local path="$2"
 	local token="${3:-}"
-	local base
+	local base header_file rc
 
+	valid_section_name "$section" || return 1
 	[ -n "$token" ] || token="$(cloudflare_uci_get "$section" cloudflare_api_token)"
 	[ -n "$token" ] || return 1
 
 	base="${CLOUDFLARE_API_BASE%/}"
-	"$QNATTER_CURL_BIN" -fsS -m "${CLOUDFLARE_TIMEOUT:-4}" \
-		-H "Authorization: Bearer $token" \
-		-H "Accept: application/json" \
-		"${base}${path}"
+	# 凭据不进 argv（/proc/<pid>/cmdline 对本地进程可读）：写入 0600 临时
+	# 文件后用 curl 的 -H @file 语法传入，命令行里只出现文件路径。
+	header_file="$(mktemp)" || return 1
+	chmod 0600 "$header_file" 2>/dev/null || true
+	if ! printf 'Authorization: Bearer %s\nAccept: application/json\n' \
+		"$(printf '%s' "$token" | tr -d '\r\n')" > "$header_file"; then
+		rm -f "$header_file"
+		return 1
+	fi
+	"$QNATTER_CURL_BIN" -g -fsS -m "${CLOUDFLARE_TIMEOUT:-4}" \
+		-H "@$header_file" \
+		--proto '=http,https' --proto-redir '=http,https' \
+		-- "${base}${path}"
+	rc=$?
+	rm -f "$header_file"
+	return $rc
 }
 
 cloudflare_jsonfilter_file() {
@@ -312,6 +398,10 @@ cloudflare_zones() {
 	local token="$2"
 	local response
 
+	valid_section_name "$section" || {
+		printf '{"zones":[],"error":"Invalid section name"}\n'
+		return 0
+	}
 	response="$(cloudflare_api_get "$section" '/zones?per_page=100' "$token")" || {
 		printf '{"zones":[],"error":"Cloudflare request failed"}\n'
 		return 0
@@ -325,17 +415,334 @@ cloudflare_srv_records() {
 	local token="$3"
 	local response
 
+	valid_section_name "$section" || {
+		printf '{"records":[],"error":"Invalid section name"}\n'
+		return 0
+	}
 	[ -n "$zone_id" ] || zone_id="$(cloudflare_uci_get "$section" cloudflare_zone_id)"
 	[ -n "$zone_id" ] || {
 		printf '{"records":[]}\n'
 		return 0
 	}
+	# 字符集/长度白名单（Cloudflare zone id 是 32 位十六进制）：阻止 ../../ 等路径穿越
+	case "$zone_id" in
+		*[!A-Za-z0-9_-]*)
+			printf '{"records":[],"error":"Invalid zone id"}\n'
+			return 0
+			;;
+	esac
+	if [ "${#zone_id}" -gt 64 ]; then
+		printf '{"records":[],"error":"Invalid zone id"}\n'
+		return 0
+	fi
 
 	response="$(cloudflare_api_get "$section" "/zones/${zone_id}/dns_records?type=SRV&per_page=100" "$token")" || {
 		printf '{"records":[],"error":"Cloudflare request failed"}\n'
 		return 0
 	}
 	cloudflare_emit_srv_records "$response"
+}
+
+run_with_timeout() {
+	local seconds="$1"
+	shift
+
+	if command -v "$QNATTER_TIMEOUT_BIN" >/dev/null 2>&1; then
+		"$QNATTER_TIMEOUT_BIN" "$seconds" "$@"
+	else
+		"$@"
+	fi
+}
+
+webhook_global_option() {
+	local option="$1"
+
+	"$QNATTER_UCI_BIN" -q get "qnatter.global.${option}" 2>/dev/null || true
+}
+
+host_address_class() {
+	# 主机字面量分类：private（回环/私网/链路本地/保留/组播）、public、
+	# ambiguous（数字/十六进制等 curl 仍可能解析为 IP 的模糊写法）、name（需 DNS）。
+	awk -v host="$1" '
+	function hexval(text,   i, char, digit, value) {
+		value = 0
+		for (i = 1; i <= length(text); i++) {
+			char = tolower(substr(text, i, 1))
+			digit = index("0123456789abcdef", char) - 1
+			if (digit < 0)
+				return -1
+			value = value * 16 + digit
+		}
+		return value
+	}
+	function v4_private(a, b, c) {
+		if (a == 0 || a == 10 || a == 127)
+			return 1
+		if (a == 100 && b >= 64 && b <= 127)
+			return 1
+		if (a == 169 && b == 254)
+			return 1
+		if (a == 172 && b >= 16 && b <= 31)
+			return 1
+		if (a == 192 && b == 168)
+			return 1
+		if (a == 192 && b == 0 && (c == 0 || c == 2))
+			return 1
+		if (a == 198 && (b == 18 || b == 19))
+			return 1
+		if (a == 198 && b == 51 && c == 100)
+			return 1
+		if (a == 203 && b == 0 && c == 113)
+			return 1
+		if (a >= 224)
+			return 1
+		return 0
+	}
+	function classify_v4(text,   count, part, i) {
+		count = split(text, part, ".")
+		if (count != 4)
+			return ""
+		for (i = 1; i <= 4; i++) {
+			if (part[i] !~ /^[0-9]+$/ || length(part[i]) > 3)
+				return ""
+			if (part[i] + 0 > 255)
+				return ""
+			# 前导零：getaddrinfo/inet_aton 会按八进制解释（012.0.0.1 → 10.0.0.1），
+			# 与十进制判定不一致，判为 ambiguous 一律拒绝
+			if (length(part[i]) > 1 && substr(part[i], 1, 1) == "0")
+				return ""
+		}
+		if (v4_private(part[1] + 0, part[2] + 0, part[3] + 0))
+			return "private"
+		return "public"
+	}
+	function classify_v6(text,   lower, idx, tail4, count, part, i, gap, head, tail, head_n, tail_n, zeros, groups, values, group) {
+		lower = tolower(text)
+		sub(/%[^%]*$/, "", lower)
+		if (index(lower, ".") > 0) {
+			idx = 0
+			for (i = length(lower); i >= 1; i--) {
+				if (substr(lower, i, 1) == ":") {
+					idx = i
+					break
+				}
+			}
+			if (idx < 2)
+				return "ambiguous"
+			tail4 = substr(lower, idx + 1)
+			count = split(tail4, part, ".")
+			if (count != 4)
+				return "ambiguous"
+			for (i = 1; i <= 4; i++) {
+				if (part[i] !~ /^[0-9]+$/ || part[i] + 0 > 255)
+					return "ambiguous"
+			}
+			lower = substr(lower, 1, idx) sprintf("%x:%x", part[1] * 256 + part[2], part[3] * 256 + part[4])
+		}
+		gap = index(lower, "::")
+		if (gap > 0) {
+			head = substr(lower, 1, gap - 1)
+			tail = substr(lower, gap + 2)
+		} else {
+			head = lower
+			tail = ""
+		}
+		head_n = (head == "") ? 0 : split(head, part, ":")
+		if (head != "") {
+			for (i = 1; i <= head_n; i++)
+				groups[i] = part[i]
+		}
+		tail_n = (tail == "") ? 0 : split(tail, part, ":")
+		if (gap > 0) {
+			if (head_n + tail_n > 7)
+				return "ambiguous"
+			zeros = 8 - head_n - tail_n
+		} else {
+			if (head_n != 8)
+				return "ambiguous"
+			zeros = 0
+		}
+		for (i = 1; i <= zeros; i++)
+			groups[head_n + i] = "0"
+		for (i = 1; i <= tail_n; i++)
+			groups[head_n + zeros + i] = part[i]
+		for (i = 1; i <= 8; i++) {
+			if (groups[i] == "")
+				return "ambiguous"
+			group = hexval(groups[i])
+			if (group < 0 || group > 65535)
+				return "ambiguous"
+			values[i] = group
+		}
+		if (values[1] == 0 && values[2] == 0 && values[3] == 0 && values[4] == 0 &&
+			values[5] == 0 && values[6] == 0 && values[7] == 0)
+			return "private"
+		if (values[1] == 0 && values[2] == 0 && values[3] == 0 && values[4] == 0 &&
+			values[5] == 0 && values[6] == 65535)
+			return v4_private(int(values[7] / 256), values[7] % 256, int(values[8] / 256)) ? "private" : "public"
+		if (values[1] >= 64512 && values[1] <= 65023)
+			return "private"
+		if (values[1] >= 65152 && values[1] <= 65535)
+			return "private"
+		return "public"
+	}
+	BEGIN {
+		host = tolower(host)
+		if (host == "")
+			print "ambiguous"
+		else if (index(host, ":") > 0)
+			print classify_v6(host)
+		else if (host ~ /^[0-9.]+$/) {
+			class = classify_v4(host)
+			print (class == "") ? "ambiguous" : class
+		} else if (host ~ /^0x/)
+			print "ambiguous"
+		else
+			print "name"
+	}'
+}
+
+# URL 结构校验 + host/port 提取（必须在模板渲染之后调用）。
+#   * { } 一律拒绝：curl 会对 URL 做通配展开（brace/range），把 {a,b}、[1-1] 展开成真实
+#     目标，判定串与实际连接目标不一致（curl -g/--globoff 之外再加一层独立防线）。
+#   * [ ] 只允许出现在 http(s)://[<合法 IPv6 字面量>] 形式里，其余（如 127.0.0.[1-1]）拒绝。
+#   * host 走字符白名单，避免本地解析与 curl 对 authority 的解读不一致。
+webhook_url_host_port() {
+	local url="$1"
+	local rest authority host port
+
+	case "$url" in
+		*'{'*|*'}'*) return 1 ;;
+	esac
+
+	rest="${url#*://}"
+	authority="${rest%%[/?#]*}"
+	authority="${authority##*@}"
+	[ -n "$authority" ] || return 1
+
+	host=""
+	port=""
+	case "$authority" in
+		\[*\])
+			host="${authority#\[}"
+			host="${host%\]}"
+			;;
+		\[*\]:*)
+			host="${authority#\[}"
+			host="${host%%\]*}"
+			port="${authority##*:}"
+			[ -n "$port" ] || return 1
+			;;
+		*\[*|*\]*)
+			return 1
+			;;
+		*)
+			host="${authority%%:*}"
+			case "$authority" in
+				*:*) port="${authority#*:}" ;;
+			esac
+			;;
+	esac
+	[ -n "$host" ] || return 1
+
+	case "$authority" in
+		\[*)
+			# 方括号内必须是合法 IPv6 字面量：字符集受限 + 分类器判得出 private/public
+			case "$host" in
+				*[!0-9A-Fa-f:.]*) return 1 ;;
+			esac
+			case "$host" in
+				*:*) ;;
+				*) return 1 ;;
+			esac
+			case "$(host_address_class "$host")" in
+				private|public) ;;
+				*) return 1 ;;
+			esac
+			;;
+		*)
+			case "$host" in
+				*[!A-Za-z0-9._-]*) return 1 ;;
+			esac
+			;;
+	esac
+
+	if [ -n "$port" ]; then
+		case "$port" in
+			*[!0-9]*) return 1 ;;
+		esac
+		[ "${#port}" -le 5 ] || return 1
+		[ "$port" -ge 1 ] && [ "$port" -le 65535 ] || return 1
+	fi
+
+	printf '%s %s' "$host" "$port"
+	return 0
+}
+
+host_resolve_addresses() {
+	local host="$1"
+	local out=""
+
+	if command -v "$QNATTER_GETENT_BIN" >/dev/null 2>&1; then
+		out="$(run_with_timeout 5 "$QNATTER_GETENT_BIN" hosts "$host" 2>/dev/null | awk '{ print $1 }')"
+	fi
+	if [ -z "$out" ] && command -v "$QNATTER_NSLOOKUP_BIN" >/dev/null 2>&1; then
+		# 只取应答段（"Name:" 之后）的 Address，避免把 DNS 服务器地址当成解析结果
+		out="$(run_with_timeout 5 "$QNATTER_NSLOOKUP_BIN" "$host" 2>/dev/null | awk '
+			/^Name:/ { seen = 1; next }
+			/^Address/ && seen { print $NF }
+		')"
+	fi
+	if [ -z "$out" ]; then
+		# 设备上通常没有 getent，只剩 busybox nslookup；/etc/hosts 里的名字 nslookup
+		# 查不到，这里补一次 hosts 文件查询（curl 连接时同样会走 /etc/hosts）
+		out="$(awk -v want="$host" '
+			{
+				sub(/#.*/, "", $0)
+				for (i = 2; i <= NF; i++)
+					if (tolower($i) == tolower(want)) { print $1; break }
+			}
+		' /etc/hosts 2>/dev/null)"
+	fi
+	# fail-closed：工具缺失 / 无输出 / NXDOMAIN 一律失败，调用方必须拒绝
+	[ -n "$out" ] || return 1
+	printf '%s\n' "$out"
+	return 0
+}
+
+# 0 = 允许；域名解析出的地址逐行打到 stdout，供 curl --resolve 固定
+# 1 = 目标地址不被允许（回环/私网/链路本地/模糊写法）
+# 2 = 无法解析（fail-closed，调用方必须拒绝）
+webhook_host_check() {
+	local host="$1"
+	local allow_private="${2:-0}"
+	local class addrs addr
+
+	[ -n "$host" ] || return 2
+	class="$(host_address_class "$host")"
+	case "$class" in
+		private|ambiguous)
+			[ "$allow_private" = "1" ] && return 0
+			return 1
+			;;
+		public)
+			return 0
+			;;
+	esac
+
+	addrs="$(host_resolve_addresses "$host")" || return 2
+	[ -n "$addrs" ] || return 2
+	for addr in $addrs; do
+		case "$(host_address_class "$addr")" in
+			public) ;;
+			private|ambiguous)
+				[ "$allow_private" = "1" ] || return 1
+				;;
+			*) return 2 ;;
+		esac
+	done
+	printf '%s\n' "$addrs"
+	return 0
 }
 
 webhook_one_line() {
@@ -379,7 +786,8 @@ webhook_render_template() {
 
 completion_webhook_test() {
 	local input="$1"
-	local section url method headers body success disable_success_check skip_unchanged timeout payload response rc header
+	local section url method headers body success disable_success_check skip_unchanged timeout payload response rc header allow_private
+	local host_port url_host url_port resolve_addrs addr addr_list
 
 	section="$(json_arg_text section "$input")"
 	section="${section:-manual_test}"
@@ -397,9 +805,16 @@ completion_webhook_test() {
 		emit_error "Webhook URL is empty"
 		return 0
 	}
+	valid_section_name "$section" || {
+		emit_error "Invalid section name"
+		return 0
+	}
 	case "$timeout" in
 		''|*[!0-9]*) timeout="8" ;;
 	esac
+	# curl -m 0 表示不限时，且调用方可以传超大值挂住 rpcd 子进程，因此夹在 [1, max]
+	[ "$timeout" -lt 1 ] && timeout="8"
+	[ "$timeout" -gt "$QNATTER_WEBHOOK_TIMEOUT_MAX" ] && timeout="$QNATTER_WEBHOOK_TIMEOUT_MAX"
 	method="$(printf '%s' "${method:-POST}" | tr '[:lower:]' '[:upper:]')"
 	case "$method" in
 		GET|POST|PUT|PATCH|DELETE|HEAD) ;;
@@ -411,6 +826,7 @@ completion_webhook_test() {
 	else
 		payload="$(webhook_render_template '{"event":"manual_test","instance":"#{instance}","protocol":"#{protocol}","inner_ip":"#{inner_ip}","inner_port":#{inner_port},"outer_ip":"#{outer_ip}","outer_port":#{outer_port}}' "$section")"
 	fi
+	# 先完成模板替换再校验最终 URL，避免用 #{...} 拼接绕过协议/地址白名单
 	url="$(webhook_render_template "$url" "$section")"
 	success="$(webhook_render_template "$success" "$section")"
 
@@ -419,10 +835,80 @@ completion_webhook_test() {
 		return 0
 	fi
 
-	set -- -fsS -m "$timeout" -X "$method"
+	case "$url" in
+		http://*|https://*) ;;
+		*)
+			emit_error "Only http:// and https:// webhook URLs are supported"
+			return 0
+			;;
+	esac
+	case "$url" in
+		-*)
+			emit_error "Invalid webhook URL"
+			return 0
+			;;
+	esac
+	case "$payload" in
+		@*)
+			emit_error "Webhook request body must not start with @"
+			return 0
+			;;
+	esac
+
+	allow_private=0
+	if [ "$(webhook_global_option allow_private_webhook)" = "1" ]; then
+		allow_private=1
+	fi
+	# 结构校验：拒绝 curl 通配字符（{ } 一律拒绝，[ ] 只放行合法 IPv6 字面量）
+	host_port="$(webhook_url_host_port "$url")" || {
+		emit_error "Invalid webhook URL"
+		return 0
+	}
+	url_host="${host_port%% *}"
+	url_port="${host_port#* }"
+	# fail-closed：解析失败/工具缺失/无输出一律拒绝，不允许"查不到就放行"
+	resolve_addrs="$(webhook_host_check "$url_host" "$allow_private")"
+	rc=$?
+	case "$rc" in
+		0) ;;
+		1)
+			emit_error "Webhook URL targets a loopback/private/link-local address"
+			return 0
+			;;
+		*)
+			emit_error "Webhook URL host cannot be resolved"
+			return 0
+			;;
+	esac
+
+	set -- -g -fsS -m "$timeout" -X "$method" \
+		--proto '=http,https' --proto-redir '=http,https' \
+		--max-filesize "$QNATTER_WEBHOOK_RESPONSE_MAX" \
+		--noproxy '*'
+	if [ -n "$resolve_addrs" ]; then
+		# 消除 check/use 时间差：把校验阶段解析出的地址固定给 curl（curl 不再自行解析域名，
+		# 因此校验后发生的 DNS rebinding 对实际连接无效）；多地址全部为公网才走到这里。
+		if [ -z "$url_port" ]; then
+			case "$url" in
+				https://*) url_port=443 ;;
+				*) url_port=80 ;;
+			esac
+		fi
+		addr_list=""
+		for addr in $resolve_addrs; do
+			case "$addr" in
+				*:*) addr="[$addr]" ;;
+			esac
+			addr_list="${addr_list:+${addr_list},}${addr}"
+		done
+		set -- "$@" --resolve "${url_host}:${url_port}:${addr_list}"
+	fi
 	while IFS= read -r header; do
 		header="$(webhook_render_template "$header" "$section")"
 		[ -n "$header" ] || continue
+		case "$header" in
+			@*) continue ;;
+		esac
 		set -- "$@" -H "$header"
 	done <<EOF
 $headers
@@ -431,12 +917,16 @@ EOF
 		GET|HEAD)
 			;;
 		*)
-			[ -n "$payload" ] && set -- "$@" --data "$payload"
+			# --data-raw 关闭 curl 的 "@文件" 语义，否则 body=@/etc/shadow 可外发任意文件
+			[ -n "$payload" ] && set -- "$@" --data-raw "$payload"
 			;;
 	esac
 
-	response="$("$QNATTER_CURL_BIN" "$@" "$url" 2>&1)"
+	response="$("$QNATTER_CURL_BIN" "$@" -- "$url" 2>&1)"
 	rc=$?
+	if [ -n "$response" ]; then
+		response="$(printf '%s' "$response" | head -c "$QNATTER_WEBHOOK_RESPONSE_MAX")"
+	fi
 	if [ "$rc" -ne 0 ]; then
 		printf '{"ok":false,"error":'
 		json_string "$(webhook_one_line "$response")"
@@ -457,7 +947,7 @@ EOF
 
 completion_script_test() {
 	local input="$1"
-	local section script output rc
+	local section script output rc size
 
 	section="$(json_arg_text section "$input")"
 	section="${section:-manual_test}"
@@ -467,6 +957,18 @@ completion_script_test() {
 		emit_error "Script content is empty"
 		return 0
 	}
+	valid_section_name "$section" || {
+		emit_error "Invalid section name"
+		return 0
+	}
+	size="$(printf '%s' "$script" | wc -c | tr -d '[:space:]')"
+	case "$size" in
+		''|*[!0-9]*) size=0 ;;
+	esac
+	if [ "$size" -gt "$QNATTER_SCRIPT_MAX_BYTES" ]; then
+		emit_error "Script is too large (max ${QNATTER_SCRIPT_MAX_BYTES} bytes)"
+		return 0
+	fi
 
 	output="$(printf '%s\n' "$script" | \
 		QNATTER_SCRIPT_INSTANCE="$section" \
@@ -475,8 +977,19 @@ completion_script_test() {
 		QNATTER_SCRIPT_INNER_PORT="51413" \
 		QNATTER_SCRIPT_OUTER_IP="203.0.113.10" \
 		QNATTER_SCRIPT_OUTER_PORT="62000" \
-		/bin/sh -s -- tcp 192.168.1.100 51413 203.0.113.10 62000 2>&1)"
+		run_with_timeout "$QNATTER_SCRIPT_TIMEOUT" /bin/sh -s -- tcp 192.168.1.100 51413 203.0.113.10 62000 2>&1)"
 	rc=$?
+	if [ -n "$output" ]; then
+		output="$(printf '%s' "$output" | head -c "$QNATTER_SCRIPT_MAX_OUTPUT")"
+	fi
+	if [ "$rc" -eq 124 ]; then
+		printf '{"ok":false,"error":'
+		json_string "Script timed out after ${QNATTER_SCRIPT_TIMEOUT}s"
+		printf ',"output":'
+		json_string "$(webhook_one_line "$output")"
+		printf '}\n'
+		return 0
+	fi
 	if [ "$rc" -ne 0 ]; then
 		printf '{"ok":false,"error":'
 		json_string "Script exited with status $rc"
@@ -557,7 +1070,7 @@ toggle_instance() {
 
 case "$1" in
 	list)
-		printf '{"status":{},"log":{"instance":"String","lines":"Integer"},"clear_log":{"instance":"String"},"cloudflare_zones":{"section":"String","token":"String"},"cloudflare_srv_records":{"section":"String","zone_id":"String","token":"String"},"completion_webhook_test":{"section":"String","url":"String","method":"String","headers":"String","body":"String","success":"String","disable_success_check":"String","skip_unchanged":"String","timeout":"Integer"},"completion_script_test":{"section":"String","script":"String"},"rename_instance":{"old":"String","new":"String"},"toggle_instance":{"instance":"String"}}\n'
+		printf '{"status":{},"log":{"instance":"String","lines":"Integer"},"clear_log":{"instance":"String"},"cloudflare_zones":{"section":"String","token":"String"},"cloudflare_srv_records":{"section":"String","zone_id":"String","token":"String"},"completion_webhook_test":{"section":"String","url":"String","method":"String","headers":"String","body":"String","success":"String","disable_success_check":"String","skip_unchanged":"String","timeout":"Integer"},"completion_script_test":{"section":"String","script":"String"},"rename_instance":{"old":"String","new":"String"},"toggle_instance":{"instance":"String"},"cleanup_firewall_rule":{"instance":"String"}}\n'
 		;;
 	call)
 		read -r input
@@ -581,12 +1094,20 @@ case "$1" in
 			cloudflare_zones)
 				section="$(json_arg_string section "$input")"
 				token="$(json_arg_string token "$input")"
+				valid_section_name "${section:-default}" || {
+					emit_error "Invalid section name"
+					exit 0
+				}
 				cloudflare_zones "${section:-default}" "$token"
 				;;
 			cloudflare_srv_records)
 				section="$(json_arg_string section "$input")"
 				zone_id="$(json_arg_string zone_id "$input")"
 				token="$(json_arg_string token "$input")"
+				valid_section_name "${section:-default}" || {
+					emit_error "Invalid section name"
+					exit 0
+				}
 				cloudflare_srv_records "${section:-default}" "$zone_id" "$token"
 				;;
 			completion_webhook_test)
@@ -604,6 +1125,11 @@ case "$1" in
 				instance="$(json_arg_string instance "$input")"
 				[ -n "$instance" ] || { emit_error "Missing instance"; exit 0; }
 				toggle_instance "$instance"
+				;;
+			cleanup_firewall_rule)
+				instance="$(json_arg_string instance "$input")"
+				[ -n "$instance" ] || { emit_error "Missing instance"; exit 0; }
+				cleanup_firewall_rule "$instance"
 				;;
 		esac
 		;;

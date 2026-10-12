@@ -28,6 +28,15 @@ var callRenameInstance = rpc.declare({
 	expect: { '': { ok: false } }
 });
 
+// 清理重命名后遗留的 auto_firewall 规则。该 rpcd 方法写 firewall UCI，
+// 权限单独归属 luci-app-qnatter-firewall ACL 组；缺少授权时调用会被拒绝。
+var callCleanupFirewallRule = rpc.declare({
+	object: 'luci.qnatter',
+	method: 'cleanup_firewall_rule',
+	params: [ 'instance' ],
+	expect: { '': { ok: false } }
+});
+
 var callCompletionWebhookTest = rpc.declare({
 	object: 'luci.qnatter',
 	method: 'completion_webhook_test',
@@ -600,7 +609,15 @@ return view.extend({
 								return;
 							}
 
-							window.location.reload();
+							// 旧实例名的 auto_firewall 规则由独立 rpcd 方法清理
+							// （luci-app-qnatter-firewall 组）；无授权时仅提示，不阻塞重命名结果。
+							return callCleanupFirewallRule(section_id).catch(function() {
+								ui.addNotification(null, E('p', {}, [
+									_('Renamed, but the leftover auto firewall rule (firewall.qnatter_%s) could not be removed automatically; remove it manually if the old port must not stay open.').format(section_id)
+								]), 'warning');
+							}).then(function() {
+								window.location.reload();
+							});
 						}).catch(function() {
 							ui.addNotification(null, E('p', {}, [ _('Rename failed') ]), 'danger');
 						});
@@ -678,6 +695,29 @@ return view.extend({
 		o = s.option(form.Value, 'log_lines', _('Log lines'));
 		o.datatype = 'range(20,1000)';
 		o.default = '200';
+
+		o = s.option(form.Flag, 'allow_private_webhook', _('Allow private webhook targets'));
+		o.default = '0';
+		o.rmempty = false;
+		o.description = _('Allow completion webhooks to target loopback, private and link-local addresses. This disables the SSRF guard for webhook requests, so a webhook may reach services on this router or anywhere in the LAN; keep it off unless a trusted local receiver is required.');
+		o.onchange = function(ev, section_id, value) {
+			if (value == '1')
+				ui.addNotification(null, E('p', {}, [
+					_('Private webhook targets are now allowed: completion webhooks may reach loopback, private and link-local addresses, including other services on this router or in the LAN. Save the form to apply this change.')
+				]), 'warning');
+			else
+				ui.addNotification(null, E('p', {}, [
+					_('Private webhook targets are blocked again: completion webhooks pointing at loopback, private or link-local addresses will be rejected. Save the form to apply this change.')
+				]), 'info');
+		};
+
+		o = s.option(form.ListValue, 'auto_firewall_reload', _('Firewall reload policy'));
+		o.value('auto', _('Automatic (skipped while OpenClash is running)'));
+		o.value('always', _('Always reload fw4'));
+		o.value('never', _('Never reload fw4'));
+		o.default = 'auto';
+		o.rmempty = false;
+		o.description = _('OpenClash injects its own rules directly into the inet fw4 table, and a full fw4 reload wipes them until its watchdog restores them (about two minutes). Automatic mode therefore skips the reload while OpenClash is running: the UCI rule is still written and takes effect at the next firewall reload.');
 
 		s = m.section(form.GridSection, 'instance', _('Instances'));
 		s.addremove = true;

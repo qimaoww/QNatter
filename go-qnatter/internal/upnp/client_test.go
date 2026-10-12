@@ -2,6 +2,7 @@ package upnp
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -58,7 +59,7 @@ func TestClientDiscoverRouterSelectsFirstForwardCapableDevice(t *testing.T) {
 	}
 }
 
-func TestClientDiscoverRouterReturnsNilWithoutForwardService(t *testing.T) {
+func TestClientDiscoverRouterReportsMissingForwardService(t *testing.T) {
 	noForward := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprint(w, `<?xml version="1.0"?>
 <root><device><serviceList>
@@ -78,9 +79,11 @@ func TestClientDiscoverRouterReturnsNilWithoutForwardService(t *testing.T) {
 		},
 	}
 
+	// N-P2-9：没有可用的转发服务时必须返回明确错误，而不是 (nil, nil)，
+	// 否则调用方会把"没有映射"当成"映射成功"。
 	device, err := client.DiscoverRouter(context.Background())
-	if err != nil {
-		t.Fatalf("DiscoverRouter returned error: %v", err)
+	if !errors.Is(err, ErrNoForwardService) {
+		t.Fatalf("DiscoverRouter error = %v, want ErrNoForwardService", err)
 	}
 	if device != nil {
 		t.Fatalf("DiscoverRouter returned %#v, want nil", device)

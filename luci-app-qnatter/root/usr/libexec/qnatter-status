@@ -10,10 +10,42 @@
 
 first=1
 
+json_escape() {
+	# 逐字符转义：\ " \n \r \t 使用短转义，其余 < 0x20 与 0x7f 使用 \uXXXX，
+	# 否则状态文件里的控制字符会破坏返回给前端的 JSON。
+	printf '%s' "$1" | awk 'BEGIN {
+		ORS = ""
+		for (i = 1; i < 128; i++)
+			ord[sprintf("%c", i)] = i
+	} {
+		if (NR > 1)
+			printf "\\n"
+		line = $0
+		out = ""
+		for (i = 1; i <= length(line); i++) {
+			char = substr(line, i, 1)
+			code = (char in ord) ? ord[char] : 0
+			if (char == "\\")
+				out = out "\\\\"
+			else if (char == "\"")
+				out = out "\\\""
+			else if (char == "\r")
+				out = out "\\r"
+			else if (char == "\t")
+				out = out "\\t"
+			else if (code > 0 && (code < 32 || code == 127))
+				out = out sprintf("\\u%04x", code)
+			else
+				out = out char
+		}
+		printf "%s", out
+	}'
+}
+
 json_pair() {
 	local key="$1"
 	local value="$2"
-	printf '"%s":"%s"' "$(qnatter_json_escape "$key")" "$(qnatter_json_escape "$value")"
+	printf '"%s":"%s"' "$(json_escape "$key")" "$(json_escape "$value")"
 }
 
 json_bool_pair() {
@@ -88,10 +120,38 @@ status_number_field() {
 	sed -n 's/.*"'"$key"'":\([0-9][0-9]*\).*/\1/p' "$file" | head -n 1
 }
 
+# 一次性快照所有进程环境：把「实例数 × 进程数」级别的 fork 降为「进程数」级别。
+# 快照失败时回退到逐进程扫描，语义保持一致。
+QNATTER_ENV_SNAPSHOT_READY=0
+QNATTER_ENV_BLOB=""
+
+qnatter_snapshot_env() {
+	local proc
+
+	QNATTER_ENV_BLOB=""
+	for proc in "$QNATTER_PROC_DIR"/[0-9]*; do
+		[ -r "$proc/environ" ] || continue
+		QNATTER_ENV_BLOB="$QNATTER_ENV_BLOB
+$({ tr '\0' '\n' < "$proc/environ"; } 2>/dev/null || true)"
+	done
+	QNATTER_ENV_SNAPSHOT_READY=1
+}
+
 instance_running() {
 	local name="$1"
 	local status_file="$2"
 	local proc env
+
+	if [ "$QNATTER_ENV_SNAPSHOT_READY" = "1" ]; then
+		if printf '%s\n' "$QNATTER_ENV_BLOB" | grep -Fqx "QNATTER_INSTANCE=$name" >/dev/null 2>&1; then
+			return 0
+		fi
+		if [ -n "$status_file" ] && printf '%s\n' "$QNATTER_ENV_BLOB" | grep -Fqx "QNATTER_STATUS_FILE=$status_file" >/dev/null 2>&1; then
+			return 0
+		fi
+		return 1
+	fi
+
 	for proc in "$QNATTER_PROC_DIR"/[0-9]*; do
 		[ -r "$proc/environ" ] || continue
 		env="$({ tr '\0' '\n' < "$proc/environ"; } 2>/dev/null || true)"
@@ -178,6 +238,7 @@ emit_instance() {
 	printf '}'
 }
 
+qnatter_snapshot_env
 printf '{"instances":['
 config_load qnatter
 config_foreach emit_instance instance

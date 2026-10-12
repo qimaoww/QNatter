@@ -31,7 +31,11 @@ func RunLoop(ctx context.Context, cfg config.Config, deps Dependencies, options 
 	if err != nil {
 		return err
 	}
-	defer session.Close()
+	defer func() {
+		if err := session.Close(); err != nil && deps.OnCloseError != nil {
+			deps.OnCloseError(err)
+		}
+	}()
 
 	ticks := options.Ticks
 	var ticker *time.Ticker

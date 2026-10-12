@@ -1,20 +1,25 @@
 package socketopts
 
 import (
+	"errors"
 	"fmt"
 	"net"
 	"net/netip"
-	"syscall"
 )
 
-const (
-	soBindToDevice = syscall.SO_BINDTODEVICE
-	soReusePort    = 0x0f
-)
+// errMissingSetter 表示调用方请求了某个选项却没有提供对应的 setter：
+// 静默跳过会让“设置了选项”与“实际生效”不一致。
+var errMissingSetter = errors.New("socketopts: missing setter for requested option")
 
 type Options struct {
 	Interface string
-	Reuse     bool
+	// Reuse 同时设置 SO_REUSEADDR 与 SO_REUSEPORT。它是 keep-alive/STUN
+	// 套接字与转发监听套接字共用同一内网端口所必需的；副作用是同一
+	// addr:port 上的第二个实例不会收到 EADDRINUSE，而会被内核负载均衡
+	// （表现为“时好时坏”），需要严格独占时请设置 DisableReusePort。
+	Reuse bool
+	// DisableReusePort 只关闭 SO_REUSEPORT，保留 SO_REUSEADDR。
+	DisableReusePort bool
 }
 
 type Setters struct {
@@ -49,43 +54,5 @@ func NetworkForSource(network string, source netip.AddrPort) string {
 		return "udp4"
 	default:
 		return network
-	}
-}
-
-func Control(options Options) func(network string, address string, conn syscall.RawConn) error {
-	return ControlWith(options, Setters{
-		Int: func(fd uintptr, level int, opt int, value int) error {
-			return syscall.SetsockoptInt(int(fd), level, opt, value)
-		},
-		String: func(fd uintptr, level int, opt int, value string) error {
-			return syscall.SetsockoptString(int(fd), level, opt, value)
-		},
-	})
-}
-
-func ControlWith(options Options, setters Setters) func(network string, address string, conn syscall.RawConn) error {
-	return func(network string, address string, conn syscall.RawConn) error {
-		var controlErr error
-		err := conn.Control(func(fd uintptr) {
-			if options.Reuse {
-				if setters.Int != nil {
-					if err := setters.Int(fd, syscall.SOL_SOCKET, syscall.SO_REUSEADDR, 1); err != nil {
-						controlErr = err
-						return
-					}
-					if err := setters.Int(fd, syscall.SOL_SOCKET, soReusePort, 1); err != nil {
-						controlErr = err
-						return
-					}
-				}
-			}
-			if options.Interface != "" && setters.String != nil {
-				controlErr = setters.String(fd, syscall.SOL_SOCKET, soBindToDevice, options.Interface)
-			}
-		})
-		if err != nil {
-			return err
-		}
-		return controlErr
 	}
 }

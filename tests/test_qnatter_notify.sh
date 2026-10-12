@@ -12,6 +12,21 @@ fail() {
 tmp="$(mktemp -d)"
 trap 'rm -rf "$tmp"' EXIT
 
+# completion_script_inline 现在要求存在"由 root 拥有、组/其他不可写"的授权文件
+# （见 qnatter-notify 的 qnatter_inline_authorized）。$tmp 由 mktemp -d 创建
+# （0700、root 所有），在其中放一个空文件即可满足该判据，从而在保持生产环境
+# fail-closed 语义不变的前提下覆盖内联脚本的执行路径。
+allow_inline_file="$tmp/allow-inline-scripts"
+: > "$allow_inline_file"
+chmod 0644 "$allow_inline_file"
+QNATTER_ALLOW_INLINE_FILE="$allow_inline_file"
+export QNATTER_ALLOW_INLINE_FILE
+
+# notify 把 cookie / 凭据文件放在 0700 私有目录里；测试固定到 $tmp 下，
+# 避免污染真实的 /var/run/qnatter，也便于断言"退出时被清理"。
+QNATTER_TMP_DIR="$tmp/private"
+export QNATTER_TMP_DIR
+
 status_file="$tmp/wan_ct.json"
 notify_log_file="$tmp/notify.log"
 args_file="$tmp/user-args.txt"
@@ -24,6 +39,8 @@ firewall_calls="$tmp/firewall-calls.txt"
 cf_curl_bin="$tmp/curl-cloudflare"
 cf_curl_args="$tmp/curl-cloudflare-args.txt"
 cf_curl_body="$tmp/curl-cloudflare-body.json"
+cf_curl_headers="$tmp/curl-cloudflare-headers.txt"
+: > "$cf_curl_headers"
 
 cat > "$user_script" <<EOF
 #!/bin/sh
@@ -54,6 +71,18 @@ while [ "\$#" -gt 0 ]; do
 		-X)
 			shift
 			[ "\$1" = "PATCH" ] && is_patch=1
+			;;
+		-H|--header)
+			shift
+			case "\$1" in
+				@*)
+					header_file="\${1#@}"
+					[ -r "\$header_file" ] && cat "\$header_file" >> "$cf_curl_headers"
+					;;
+				*)
+					printf '%s\n' "\$1" >> "$cf_curl_headers"
+					;;
+			esac
 			;;
 		--data|-d|--data-raw)
 			shift
@@ -91,7 +120,7 @@ EOF
 QNATTER_COMMON_SH="$ROOT/qnatter/files/qnatter-common.sh" \
 QNATTER_QBITTORRENT_SH="$ROOT/qnatter/files/qnatter-qbittorrent.sh" \
 QNATTER_UCI_BIN="$uci_bin" \
-QNATTER_FIREWALL_INIT="$firewall_bin" \
+QNATTER_FW4_BIN="$firewall_bin" \
 QNATTER_CURL_BIN="$cf_curl_bin" \
 QNATTER_NOTIFY_ENV="$env_file" \
 	"$ROOT/qnatter/files/qnatter-notify" tcp 10.10.10.10 51413 203.0.113.10 62000
@@ -135,20 +164,28 @@ for want in \
 do
 	grep -Fqx -- "$want" "$uci_calls" || fail "auto firewall did not run uci command: $want"
 done
-[ ! -s "$firewall_calls" ] || fail "auto firewall must not reload firewall from a mapping callback"
-grep -Fq 'auto firewall UCI rule updated for wan_ct; firewall reload deferred' "$notify_log_file" || \
-	fail "auto firewall reload deferral was not logged"
+[ -s "$firewall_calls" ] || fail "auto firewall must reload fw4 after writing the UCI rule"
+[ "$(grep -Fxc 'reload' "$firewall_calls")" = "1" ] || \
+	fail "auto firewall must reload fw4 exactly once for a changed rule"
+grep -Fq 'auto firewall reloaded for wan_ct' "$notify_log_file" || \
+	fail "auto firewall fw4 reload was not logged"
 
 for want in \
 	'-X' \
 	'PATCH' \
-	'Authorization: Bearer test-token' \
 	'Accept: application/json' \
 	'Content-Type: application/json' \
 	'https://api.cloudflare.com/client/v4/zones/zone/dns_records/record'
 do
 	grep -Fqx -- "$want" "$cf_curl_args" || fail "Cloudflare SRV curl call is missing: $want"
 done
+# API token 不得出现在 curl 命令行（/proc/<pid>/cmdline 同机可读），只能由
+# -H @file 读取的 0600 header 文件提供。
+if grep -Fq 'test-token' "$cf_curl_args"; then
+	fail "Cloudflare API token must not be passed on the curl command line"
+fi
+grep -Fqx 'Authorization: Bearer test-token' "$cf_curl_headers" || \
+	fail "Cloudflare SRV curl call must read the bearer token from a header file"
 grep -Fqx '{"type":"SRV","data":{"port":62000}}' "$cf_curl_body" || \
 	fail "Cloudflare SRV request body must use mapped outer port"
 grep -Fq 'Cloudflare SRV update started for wan_ct: port=62000' "$notify_log_file" || \
@@ -165,12 +202,26 @@ cf_selected_env_file="$tmp/cf-selected-notify.env"
 cf_selected_curl_bin="$tmp/curl-cloudflare-selected"
 cf_selected_args="$tmp/curl-cloudflare-selected-args.txt"
 cf_selected_body="$tmp/curl-cloudflare-selected-body.json"
+cf_selected_headers="$tmp/curl-cloudflare-selected-headers.txt"
+: > "$cf_selected_headers"
 
 cat > "$cf_selected_curl_bin" <<EOF
 #!/bin/sh
 printf '%s\n' "\$@" > "$cf_selected_args"
 while [ "\$#" -gt 0 ]; do
 	case "\$1" in
+		-H|--header)
+			shift
+			case "\$1" in
+				@*)
+					header_file="\${1#@}"
+					[ -r "\$header_file" ] && cat "\$header_file" >> "$cf_selected_headers"
+					;;
+				*)
+					printf '%s\n' "\$1" >> "$cf_selected_headers"
+					;;
+			esac
+			;;
 		--data|-d|--data-raw)
 			shift
 			printf '%s\n' "\$1" > "$cf_selected_body"
@@ -200,7 +251,10 @@ QNATTER_NOTIFY_ENV="$cf_selected_env_file" \
 
 grep -Fqx 'https://api.cloudflare.com/client/v4/zones/zone-selected/dns_records/record-selected' "$cf_selected_args" || \
 	fail "Cloudflare selected SRV update did not build endpoint from zone and record IDs"
-grep -Fqx 'Authorization: Bearer selected-token' "$cf_selected_args" || \
+if grep -Fq 'selected-token' "$cf_selected_args"; then
+	fail "Cloudflare selected SRV token must not be passed on the curl command line"
+fi
+grep -Fqx 'Authorization: Bearer selected-token' "$cf_selected_headers" || \
 	fail "Cloudflare selected SRV update did not send bearer token"
 grep -Fqx '{"type":"SRV","data":{"port":62006}}' "$cf_selected_body" || \
 	fail "Cloudflare selected SRV request body must use mapped outer port"
@@ -566,6 +620,8 @@ qb_ok_user_script="$tmp/qb-ok-user-notify.sh"
 qb_ok_env_file="$tmp/qb-ok-notify.env"
 curl_bin="$tmp/curl"
 curl_calls="$tmp/curl-calls.txt"
+curl_creds="$tmp/curl-credentials.txt"
+: > "$curl_creds"
 
 cat > "$qb_ok_user_script" <<EOF
 #!/bin/sh
@@ -576,7 +632,22 @@ chmod 0755 "$qb_ok_user_script"
 cat > "$curl_bin" <<EOF
 #!/bin/sh
 printf '%s\n' "\$*" >> "$curl_calls"
-case "\$*" in
+args="\$*"
+while [ "\$#" -gt 0 ]; do
+	case "\$1" in
+		--data-urlencode)
+			shift
+			case "\$1" in
+				*@*)
+					cred_file="\${1#*@}"
+					[ -r "\$cred_file" ] && printf '%s\n' "\$(cat "\$cred_file")" >> "$curl_creds"
+					;;
+			esac
+			;;
+	esac
+	shift
+done
+case "\$args" in
 	*/api/v2/auth/login*) : ;; # qBittorrent 5.x returns HTTP 204 with no body
 	*/api/v2/app/preferences*) printf '{"listen_port":51413}' ;;
 esac
@@ -606,8 +677,13 @@ QNATTER_NOTIFY_ENV="$qb_ok_env_file" \
 	"$ROOT/qnatter/files/qnatter-notify" tcp 10.10.10.30 51415 203.0.113.30 62002
 
 grep -Fq '/api/v2/auth/login' "$curl_calls" || fail "qBittorrent login API was not called"
-grep -Fq 'username=admin' "$curl_calls" || fail "qBittorrent username was not sent"
-grep -Fq 'password=secret' "$curl_calls" || fail "qBittorrent password was not sent"
+grep -Fq 'username@' "$curl_calls" || fail "qBittorrent username must be sent from a credential file"
+grep -Fq 'password@' "$curl_calls" || fail "qBittorrent password must be sent from a credential file"
+if grep -Fq 'username=admin' "$curl_calls" || grep -Fq 'password=secret' "$curl_calls"; then
+	fail "qBittorrent credentials must not appear on the curl command line"
+fi
+grep -Fqx admin "$curl_creds" || fail "qBittorrent username was not sent"
+grep -Fqx secret "$curl_creds" || fail "qBittorrent password was not sent"
 grep -Fq '/api/v2/app/setPreferences' "$curl_calls" || fail "qBittorrent preferences API was not called"
 grep -Fq 'json={"listen_port":62002}' "$curl_calls" || fail "qBittorrent listen_port should use outer port"
 grep -Fq '"message":"qBittorrent listen_port set to 62002"' "$qb_ok_status_file" || \
@@ -633,8 +709,8 @@ cmp -s "$expected_args" "$qb_ok_args_file" || fail "qBittorrent success path did
 qb_trap_status_file="$tmp/wan_trap.json"
 qb_trap_env_file="$tmp/qb-trap-notify.env"
 curl_trap_bin="$tmp/curl-trap"
-trap_cookie="/tmp/qnatter-qbittorrent-wan_trap.cookie"
-rm -f "$trap_cookie"
+qb_trap_tmp_dir="$tmp/qb-trap-private"
+rm -rf "$qb_trap_tmp_dir"
 
 cat > "$curl_trap_bin" <<EOF
 #!/bin/sh
@@ -672,6 +748,7 @@ QBITTORRENT_TARGET_PORT='0'
 QBITTORRENT_TIMEOUT='1'
 EOF
 
+QNATTER_TMP_DIR="$qb_trap_tmp_dir" \
 QNATTER_COMMON_SH="$ROOT/qnatter/files/qnatter-common.sh" \
 QNATTER_QBITTORRENT_SH="$ROOT/qnatter/files/qnatter-qbittorrent.sh" \
 QNATTER_LOGGER_BIN="$logger_bin" \
@@ -679,6 +756,44 @@ QNATTER_CURL_BIN="$curl_trap_bin" \
 QNATTER_NOTIFY_ENV="$qb_trap_env_file" \
 	"$ROOT/qnatter/files/qnatter-notify" tcp 10.10.10.31 51415 203.0.113.31 62004 || true
 
-[ ! -e "$trap_cookie" ] || fail "qBittorrent cookie must be removed when notify is interrupted"
+if [ -n "$(ls -A "$qb_trap_tmp_dir" 2>/dev/null || true)" ]; then
+	fail "qBittorrent cookie/credential files must be removed when notify is interrupted"
+fi
+
+# OpenClash 会把规则动态注入 inet fw4 表，整表 reload 会清掉它们（它只靠 watchdog
+# 恢复，间隔可达两分钟），因此 OpenClash 运行时默认跳过 reload；用户可用
+# qnatter.global.auto_firewall_reload 覆盖。放在文件末尾，避免覆盖前面用例的状态。
+openclash_stub="$tmp/openclash"
+cat > "$openclash_stub" <<'EOF'
+#!/bin/sh
+exit 0
+EOF
+chmod 0755 "$openclash_stub"
+
+run_notify_on_port() {
+	QNATTER_COMMON_SH="$ROOT/qnatter/files/qnatter-common.sh" \
+	QNATTER_QBITTORRENT_SH="$ROOT/qnatter/files/qnatter-qbittorrent.sh" \
+	QNATTER_UCI_BIN="$uci_bin" \
+	QNATTER_FW4_BIN="$firewall_bin" \
+	QNATTER_CURL_BIN="$cf_curl_bin" \
+	QNATTER_NOTIFY_ENV="$env_file" \
+		"$ROOT/qnatter/files/qnatter-notify" tcp 10.10.10.10 51413 203.0.113.10 "$1"
+}
+
+: > "$firewall_calls"
+QNATTER_OPENCLASH_INIT_BIN="$openclash_stub" run_notify_on_port 62011
+[ ! -s "$firewall_calls" ] || fail "must not reload fw4 while OpenClash is running"
+grep -Fq 'firewall reload skipped while OpenClash is running' "$notify_log_file" || \
+	fail "OpenClash-aware reload skip was not logged"
+
+: > "$firewall_calls"
+QNATTER_OPENCLASH_INIT_BIN="$openclash_stub" QNATTER_FIREWALL_RELOAD_MODE=always run_notify_on_port 62012
+[ -s "$firewall_calls" ] || fail "auto_firewall_reload=always must reload fw4 even with OpenClash running"
+
+: > "$firewall_calls"
+QNATTER_FIREWALL_RELOAD_MODE=never run_notify_on_port 62013
+[ ! -s "$firewall_calls" ] || fail "auto_firewall_reload=never must not reload fw4"
+grep -Fq "auto_firewall_reload='never'" "$notify_log_file" || \
+	fail "disabled firewall reload was not logged"
 
 printf 'qnatter notify checks passed\n'

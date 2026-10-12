@@ -3,12 +3,14 @@ package portcheck
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net"
 	"net/http"
 	"net/netip"
 	"strings"
+	"syscall"
 	"time"
 
 	"qnatter-openwrt/go-qnatter/internal/socketopts"
@@ -43,10 +45,20 @@ func (c Checker) TestLAN(ctx context.Context, addr netip.AddrPort, source netip.
 
 	conn, err := dialer.DialContext(ctx, "tcp", addr.String())
 	if err != nil {
-		return Closed
+		return classifyDialResult(err)
 	}
 	_ = conn.Close()
 	return Open
+}
+
+// classifyDialResult 区分“端口关闭”与“无法判定”：只有连接被拒绝
+// (RST → ECONNREFUSED) 才是 Closed，超时/网络不可达/权限等错误一律
+// 返回 Unknown，与 TestWAN 的三态语义保持一致。
+func classifyDialResult(err error) Result {
+	if errors.Is(err, syscall.ECONNREFUSED) {
+		return Closed
+	}
+	return Unknown
 }
 
 func (c Checker) TestWAN(ctx context.Context, port int, source netip.Addr) Result {

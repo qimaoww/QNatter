@@ -40,20 +40,40 @@ func TestSelectListenPortMatchesShellPrecedence(t *testing.T) {
 }
 
 func TestPreferencesJSON(t *testing.T) {
-	got := PreferencesJSON(62000)
+	got, err := PreferencesJSON(62000)
+	if err != nil {
+		t.Fatalf("PreferencesJSON(62000) returned error: %v", err)
+	}
 	if got != `{"listen_port":62000}` {
 		t.Fatalf("PreferencesJSON(62000) = %q", got)
 	}
 
-	got = PreferencesJSON(0)
-	if got != `{"listen_port":0}` {
-		t.Fatalf("PreferencesJSON(0) = %q", got)
+	// N-P2-11：非法端口必须报错，而不是静默写成 listen_port=0（0 表示
+	// "随机端口"，会把配置错误伪装成合法值）。
+	for _, port := range []int{0, -1, 65536} {
+		if got, err := PreferencesJSON(port); err == nil {
+			t.Fatalf("PreferencesJSON(%d) = %q, want error", port, got)
+		}
 	}
 }
 
 func TestNormalizeURL(t *testing.T) {
-	got := NormalizeURL("http://127.0.0.1:8080///")
+	got, err := NormalizeURL("http://127.0.0.1:8080///")
+	if err != nil {
+		t.Fatalf("NormalizeURL returned error: %v", err)
+	}
 	if got != "http://127.0.0.1:8080" {
 		t.Fatalf("NormalizeURL() = %q", got)
+	}
+
+	if got, err := NormalizeURL("https://example.com/"); err != nil || got != "https://example.com" {
+		t.Fatalf("NormalizeURL(https://example.com/) = %q, %v", got, err)
+	}
+
+	// scheme 白名单：非 http/https 一律拒绝。
+	for _, raw := range []string{"/", "", "ftp://127.0.0.1:8080", "file:///etc/passwd", "http://"} {
+		if got, err := NormalizeURL(raw); err == nil {
+			t.Fatalf("NormalizeURL(%q) = %q, want error", raw, got)
+		}
 	}
 }

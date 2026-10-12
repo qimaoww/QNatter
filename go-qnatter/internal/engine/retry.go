@@ -51,11 +51,29 @@ func retryable(err error, fn func(error) bool) bool {
 		errors.Is(err, syscall.ENODEV)
 }
 
+// 重试退避被夹取在 [minRetryDelay, maxRetryDelay]：既不会因为 -k 的
+// 溢出值退化为无退避热循环，也不会因为极端配置等待过久。
+const (
+	minRetryDelay = time.Second
+	maxRetryDelay = time.Hour
+)
+
 func retryDelay(cfg config.Config) time.Duration {
+	delay := 15 * time.Second
 	if cfg.KeepAliveInterval > 0 {
-		return time.Duration(cfg.KeepAliveInterval) * time.Second
+		// 先用秒级上界夹取再做乘法：int 秒 -> time.Duration 的乘法在
+		// 超大值上会回绕成负值，time.NewTimer(负值) 立即触发，使
+		// RunWithRetry 变成无退避热循环。
+		seconds := int64(cfg.KeepAliveInterval)
+		if maxSeconds := int64(maxRetryDelay / time.Second); seconds > maxSeconds {
+			seconds = maxSeconds
+		}
+		delay = time.Duration(seconds) * time.Second
 	}
-	return 15 * time.Second
+	if delay < minRetryDelay {
+		return minRetryDelay
+	}
+	return delay
 }
 
 func sleepRetry(ctx context.Context, delay time.Duration, sleep func(context.Context, time.Duration) error) error {

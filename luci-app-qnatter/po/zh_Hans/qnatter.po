@@ -34,9 +34,6 @@ msgstr "STUN 服务器重复：%s"
 msgid "Custom"
 msgstr "自定义"
 
-msgid "One server per line."
-msgstr "每行一个服务器。"
-
 msgid "Global Settings"
 msgstr "全局设置"
 
@@ -94,17 +91,11 @@ msgstr "重命名实例失败"
 msgid "Protocol"
 msgstr "协议"
 
-msgid "Runtime"
-msgstr "运行时"
-
 msgid "WAN network"
 msgstr "WAN 网络"
 
 msgid "WAN interface"
 msgstr "WAN 接口"
-
-msgid "Auto from WAN network"
-msgstr "自动使用 WAN 网络"
 
 msgid "Leave empty to bind to the default WAN device."
 msgstr "留空则自动绑定默认 WAN 设备。"
@@ -157,15 +148,6 @@ msgstr "保活间隔"
 msgid "Keep-alive server"
 msgstr "保活服务器"
 
-msgid "AUTOMATION"
-msgstr "AUTOMATION"
-
-msgid "Custom script trigger"
-msgstr "自定义脚本触发"
-
-msgid "Custom automation"
-msgstr "自定义触发"
-
 msgid "Custom triggers"
 msgstr "自定义触发"
 
@@ -187,9 +169,6 @@ msgstr "脚本测试失败"
 msgid "Webhook"
 msgstr "Webhook"
 
-msgid "Webhook trigger"
-msgstr "Webhook 触发"
-
 msgid "Webhook manual trigger test"
 msgstr "Webhook 手动触发测试"
 
@@ -201,9 +180,6 @@ msgstr "Webhook 测试成功"
 
 msgid "Webhook test failed"
 msgstr "Webhook 测试失败"
-
-msgid "Trigger only when the address differs from the last one"
-msgstr "仅在地址和上一次不同触发 Webhook"
 
 msgid "Trigger rule"
 msgstr "触发规则"
@@ -232,38 +208,20 @@ msgstr "请求主体"
 msgid "Success string"
 msgstr "成功字符串"
 
-msgid "Disable success string check"
-msgstr "禁用接口调用成功字符串检测"
-
 msgid "Timeout"
 msgstr "超时"
 
 msgid "Webhook timeout must be a positive integer."
 msgstr "Webhook 超时必须是正整数。"
 
-msgid "Completion webhook URL"
-msgstr "Webhook 接口地址"
-
-msgid "Completion webhook timeout"
-msgstr "Webhook 超时"
-
 msgid "Custom script"
 msgstr "自定义脚本"
-
-msgid "Run this shell script after punching succeeds. Arguments are protocol, internal IP, internal port, public IP, public port."
-msgstr "打洞成功后执行这段 Shell 脚本；参数依次为协议、内部 IP、内部端口、公网 IP、公网端口。"
 
 msgid "Cloudflare SRV"
 msgstr "Cloudflare SRV"
 
 msgid "Automatically patches the configured Cloudflare SRV record port to the current mapped public port."
 msgstr "自动把配置的 Cloudflare SRV 记录端口更新为当前映射的公网端口。"
-
-msgid "Cloudflare API URL"
-msgstr "Cloudflare API 地址"
-
-msgid "Cloudflare API token"
-msgstr "Cloudflare API Token"
 
 msgid "Cloudflare API token/key"
 msgstr "Cloudflare API Token/Key"
@@ -349,12 +307,6 @@ msgstr "异常"
 msgid "NOT RUNNING"
 msgstr "未运行"
 
-msgid "Reload"
-msgstr "重载"
-
-msgid "Reloading…"
-msgstr "正在重载…"
-
 msgid "Public address"
 msgstr "公网地址"
 
@@ -405,3 +357,39 @@ msgstr "清空日志"
 
 msgid "Logs cleared"
 msgstr "日志已清空"
+
+# Added in fix round 3: private-webhook switch, firewall cleanup warning, loading state.
+msgid "Loading..."
+msgstr "加载中…"
+
+msgid "Allow private webhook targets"
+msgstr "允许 Webhook 指向内网/回环地址"
+
+msgid "Allow completion webhooks to target loopback, private and link-local addresses. This disables the SSRF guard for webhook requests, so a webhook may reach services on this router or anywhere in the LAN; keep it off unless a trusted local receiver is required."
+msgstr "允许完成通知 Webhook 指向回环、内网或链路本地地址。这会关闭 Webhook 请求的 SSRF 防护，Webhook 可能访问本机或局域网内的任意服务；除非确实需要可信的本地接收端，否则请保持关闭。"
+
+msgid "Private webhook targets are now allowed: completion webhooks may reach loopback, private and link-local addresses, including other services on this router or in the LAN. Save the form to apply this change."
+msgstr "已允许 Webhook 指向内网/回环地址：完成通知 Webhook 现在可以访问回环、内网和链路本地地址（包括本路由器或局域网内的其他服务）。保存表单后生效。"
+
+msgid "Private webhook targets are blocked again: completion webhooks pointing at loopback, private or link-local addresses will be rejected. Save the form to apply this change."
+msgstr "已恢复阻止 Webhook 指向内网/回环地址：指向回环、内网或链路本地地址的完成通知 Webhook 将再次被拒绝。保存表单后生效。"
+
+msgid "Renamed, but the leftover auto firewall rule (firewall.qnatter_%s) could not be removed automatically; remove it manually if the old port must not stay open."
+msgstr "已重命名，但遗留的自动防火墙规则（firewall.qnatter_%s）未能自动删除；若旧端口不应继续开放，请手动删除该规则。"
+
+# OpenClash coexistence: firewall reload policy
+
+msgid "Firewall reload policy"
+msgstr "防火墙重载策略"
+
+msgid "Automatic (skipped while OpenClash is running)"
+msgstr "自动（检测到 OpenClash 运行时跳过）"
+
+msgid "Always reload fw4"
+msgstr "总是重载 fw4"
+
+msgid "Never reload fw4"
+msgstr "从不重载 fw4"
+
+msgid "OpenClash injects its own rules directly into the inet fw4 table, and a full fw4 reload wipes them until its watchdog restores them (about two minutes). Automatic mode therefore skips the reload while OpenClash is running: the UCI rule is still written and takes effect at the next firewall reload."
+msgstr "OpenClash 会把自己的规则直接注入 inet fw4 表，整表重载会清掉这些规则，需等它的 watchdog 恢复（约两分钟）。因此“自动”模式在检测到 OpenClash 运行时跳过重载：UCI 规则照常写入，并会在下一次防火墙重载时生效。"

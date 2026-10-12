@@ -63,6 +63,27 @@ start() {
 	start_service
 }
 
+# Phase 4 复用 /etc/init.d/qnatter（可通过 QNATTER_INIT_BIN 注入）：用一个独立
+# 的 mock 脚本记录这次派生调用，并按 QNATTER_TEST_INIT_RC 控制成功/失败。
+# 成功时它像真实 init 一样执行 start_service（跳过 procd 声明），这样运行时
+# 指纹文件会被真正更新，"reload 是否重新声明了实例"才能被断言到。
+init_log="$tmp/init.log"
+init_bin="$tmp/qnatter-init"
+cat > "$init_bin" <<EOF
+#!/bin/sh
+printf '%s\n' "\$1" >> "$init_log"
+rc="\${QNATTER_TEST_INIT_RC:-0}"
+[ "\$rc" = "0" ] || exit "\$rc"
+procd_open_instance() { :; }
+procd_set_param() { :; }
+procd_append_param() { :; }
+procd_close_instance() { :; }
+. "$ROOT/qnatter/files/qnatter.init"
+start_service
+exit \$?
+EOF
+chmod 0755 "$init_bin"
+
 cat > "$tmp/functions.sh" <<'EOF'
 config_load() {
 	[ "$1" = "qnatter" ] || return 1
@@ -177,9 +198,12 @@ QNATTER_LOG_DIR="$tmp/log"
 QNATTER_NFT_BIN="$tmp/nft"
 QNATTER_IP_BIN="$tmp/ip"
 QNATTER_UBUS_BIN="$tmp/ubus"
+QNATTER_INIT_BIN="$init_bin"
+QNATTER_LOCK_FILE="$tmp/qnatter.lock"
 QNATTER_TEST_NFT_LOG="$nft_log"
 QNATTER_TEST_IP_LOG="$ip_log"
-export QNATTER_FUNCTIONS_SH QNATTER_NETWORK_SH QNATTER_COMMON_SH QNATTER_QBITTORRENT_SH QNATTER_RUN_DIR QNATTER_LOG_DIR QNATTER_NFT_BIN QNATTER_IP_BIN QNATTER_UBUS_BIN QNATTER_TEST_NFT_LOG QNATTER_TEST_IP_LOG
+QNATTER_TEST_INIT_RC=0
+export QNATTER_FUNCTIONS_SH QNATTER_NETWORK_SH QNATTER_COMMON_SH QNATTER_QBITTORRENT_SH QNATTER_RUN_DIR QNATTER_LOG_DIR QNATTER_NFT_BIN QNATTER_IP_BIN QNATTER_UBUS_BIN QNATTER_INIT_BIN QNATTER_LOCK_FILE QNATTER_TEST_NFT_LOG QNATTER_TEST_IP_LOG QNATTER_TEST_INIT_RC
 INSTANCES="wan_ct"
 export GLOBAL_ENABLED HOT_RELOAD BIND_VALUE CF_TOKEN INSTANCES WAN_ADDR
 
@@ -233,27 +257,34 @@ grep -Fqx 'bind_ipv4=100.64.2.2' "$tmp/addr-new/wan_ct.runtime" || fail "updated
 : > "$service_log"
 : > "$procd_log"
 : > "$nft_log"
+: > "$init_log"
+WAN_ADDR="100.64.1.1"
 CF_TOKEN="token-two"
 reload_service
 
 [ ! -s "$service_log" ] || fail "notify-only reload should not restart backend"
 [ ! -s "$nft_log" ] || fail "notify-only reload must not flush nft runtime rules"
+[ ! -s "$init_log" ] || fail "hot reload must not re-declare instances when only notify settings changed"
 grep -Fq "CLOUDFLARE_API_TOKEN='token-two'" "$tmp/run/wan_ct.env" || fail "hot reload did not rewrite notify env"
 
 # Test: runtime change re-declares instances, procd handles per-instance restart
 : > "$service_log"
+: > "$init_log"
 : > "$nft_log"
 BIND_VALUE="pppoe-wan-new"
 reload_service
 [ ! -s "$service_log" ] || fail "runtime reload must not trigger full restart"
 [ ! -s "$nft_log" ] || fail "runtime reload must not flush nft runtime rules"
+grep -Fqx start "$init_log" || fail "runtime change must re-declare instances through the init script"
 
-# Test: HOT_RELOAD=0 same incremental behavior
+# Test: HOT_RELOAD=0 forces the full re-declaration path even when nothing changed
 : > "$service_log"
+: > "$init_log"
 : > "$nft_log"
 HOT_RELOAD=0
 reload_service
-[ ! -s "$service_log" ] || fail "reload must not trigger full restart even without hot_reload"
+[ ! -s "$service_log" ] || fail "reload must not run the in-process start() helper"
+grep -Fqx start "$init_log" || fail "hot_reload=0 must re-declare instances through the init script"
 [ ! -s "$nft_log" ] || fail "reload must not flush nft runtime rules"
 
 # Test: disabled service stops
@@ -271,6 +302,7 @@ fi
 : > "$service_log"
 : > "$procd_log"
 : > "$nft_log"
+: > "$init_log"
 INSTANCES="wan_ct wan_cm"
 GLOBAL_ENABLED=1
 HOT_RELOAD=1
@@ -278,14 +310,53 @@ BIND_VALUE="pppoe-wan"
 reload_service
 [ ! -s "$service_log" ] || fail "adding new instance must not restart existing instances"
 [ ! -s "$nft_log" ] || fail "adding new instance must not flush nft runtime rules"
+grep -Fqx start "$init_log" || fail "adding new instance must re-declare instances through the init script"
 
 # Test: reorder-only reload
 : > "$service_log"
 : > "$procd_log"
 : > "$nft_log"
+: > "$init_log"
 INSTANCES="wan_cm wan_ct"
 reload_service
 [ ! -s "$service_log" ] || fail "reorder-only reload should not restart backend"
 [ ! -s "$nft_log" ] || fail "reorder-only reload must not flush nft runtime rules"
+[ ! -s "$init_log" ] || fail "reorder-only reload must not re-declare instances"
+
+# Test: a failing Phase 4 (restart) must fail the reload and must not publish the
+# new instance list as "already applied".
+: > "$service_log"
+: > "$init_log"
+: > "$nft_log"
+INSTANCES="wan_ct"
+HOT_RELOAD=0
+QNATTER_TEST_INIT_RC=7
+export QNATTER_TEST_INIT_RC
+if reload_service; then
+	fail "reload must return non-zero when the restart phase fails"
+fi
+QNATTER_TEST_INIT_RC=0
+export QNATTER_TEST_INIT_RC
+grep -Fqx start "$init_log" || fail "failing reload must still invoke the init script"
+if grep -Fqx wan_cm "$tmp/run/.runtime-instances"; then
+	:
+else
+	fail "failed reload must keep the previously applied instance list"
+fi
+
+# Test: removing every instance must also drop the package's nft rules so that a
+# reload without instances cannot leave DNAT blackholes behind.
+: > "$service_log"
+: > "$init_log"
+: > "$nft_log"
+: > "$ip_log"
+INSTANCES=""
+HOT_RELOAD=1
+reload_service
+grep -Fqx 'flush chain ip qnatter qnatter_dnat' "$nft_log" || fail "reload without instances must flush DNAT rules"
+grep -Fqx 'flush chain ip qnatter qnatter_snat' "$nft_log" || fail "reload without instances must flush SNAT rules"
+grep -Fqx 'flush chain ip qnatter qnatter_mark' "$nft_log" || fail "reload without instances must flush mark rules"
+grep -Fqx start "$init_log" || fail "reload without instances must still re-declare an empty instance set"
+[ ! -s "$tmp/run/.runtime-instances" ] || fail "reload without instances must publish an empty instance list"
 
 printf 'qnatter reload checks passed\n'
