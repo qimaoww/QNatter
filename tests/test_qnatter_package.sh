@@ -551,6 +551,60 @@ assert_contains qnatter/Makefile 'define Build/Prepare'
 assert_not_contains qnatter/Makefile '^PKG_SOURCE'
 assert_not_contains qnatter/Makefile '^PKG_MIRROR_HASH'
 assert_not_contains qnatter/Makefile 'MikeWang000000/Natter.git'
+# XB-06 follow-up: Build/Prepare must not assume a LICENSE exists one level up.
+# In the feeds layout the repository root is that parent (feeds/qnatter/LICENSE),
+# but a copy dropped straight into package/qnatter has package/ above it, which
+# holds no LICENSE - the unconditional "$(CP) $(CURDIR)/../LICENSE" failed the
+# whole build there. The in-package copy must win, and a missing LICENSE must
+# never be fatal.
+assert_file qnatter/LICENSE
+assert_contains qnatter/LICENSE 'GNU GENERAL PUBLIC LICENSE'
+assert_contains qnatter/Makefile '\$\(CURDIR\)/LICENSE'
+assert_contains qnatter/Makefile '\$\(CURDIR\)/\.\./LICENSE'
+assert_not_contains qnatter/Makefile '^\t\$\(CP\) \$\(CURDIR\)/\.\./LICENSE'
+
+# Layout simulation: run the real Build/Prepare recipe body in every layout a
+# user can hit, and make sure a missing LICENSE can no longer abort the build.
+if command -v make >/dev/null 2>&1; then
+	bp_tmp="$(mktemp -d)"
+	awk '/^define Build\/Prepare$/{f=1} f{print} /^endef$/{if(f)exit}' \
+		"$ROOT/qnatter/Makefile" >"$bp_tmp/def.mk"
+	[ -s "$bp_tmp/def.mk" ] || fail 'could not extract Build/Prepare from qnatter/Makefile'
+
+	# $1 name, $2 package dir, $3 own LICENSE (yes/no), $4 parent LICENSE (yes/no)
+	bp_case() {
+		bp_name="$1"
+		bp_dir="$2"
+		bp_out="$bp_tmp/out-$1"
+		rm -rf "$bp_dir" "$bp_out"
+		mkdir -p "$bp_dir"
+		if [ "$3" = yes ]; then echo "OWN-$bp_name" >"$bp_dir/LICENSE"; fi
+		if [ "$4" = yes ]; then echo "PARENT-$bp_name" >"$(dirname "$bp_dir")/LICENSE"; fi
+		{
+			echo "CURDIR := $bp_dir"
+			echo "PKG_BUILD_DIR := $bp_out"
+			echo "CP := cp -fpR"
+			cat "$bp_tmp/def.mk"
+			printf 'prepare:\n\t$(Build/Prepare)\n'
+		} >"$bp_tmp/$bp_name.mk"
+		make -s -f "$bp_tmp/$bp_name.mk" prepare >"$bp_tmp/$bp_name.log" 2>&1 ||
+			fail "Build/Prepare failed in layout $bp_name: $(head -1 "$bp_tmp/$bp_name.log")"
+	}
+
+	bp_case feeds "$bp_tmp/feeds/qnatter/qnatter" no yes
+	[ -f "$bp_tmp/out-feeds/LICENSE" ] ||
+		fail 'Build/Prepare did not copy the parent LICENSE in the feeds layout'
+
+	bp_case package "$bp_tmp/package/qnatter" yes no
+	grep -q '^OWN-package$' "$bp_tmp/out-package/LICENSE" ||
+		fail 'Build/Prepare did not prefer the in-package LICENSE'
+
+	bp_case nolicense "$bp_tmp/nolicense/qnatter" no no
+
+	rm -rf "$bp_tmp"
+else
+	echo 'SKIP: make not available; Build/Prepare layout simulation skipped' >&2
+fi
 assert_contains qnatter/Makefile '\$\(INSTALL_BIN\) \$\(PKG_BUILD_DIR\)/qnatter-go \$\(1\)/usr/bin/qnatter-go'
 assert_contains qnatter/Makefile '\$\(LN\) qnatter-go \$\(1\)/usr/bin/QNatter'
 assert_contains qnatter/Makefile '^PKG_VERSION:=2\.2\.2$'

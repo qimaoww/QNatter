@@ -70,11 +70,18 @@ define Package/qnatter/conffiles
 endef
 
 # The build directory is created here (no upstream tarball is downloaded any
-# more); the LICENSE from the repository root is copied in so that
-# PKG_LICENSE_FILES can still be collected.
+# more); a LICENSE is copied in so that PKG_LICENSE_FILES can still be
+# collected. Never let a missing LICENSE fail the build: in the feeds layout
+# the repository root is one level up (feeds/qnatter/LICENSE), but when this
+# directory is dropped straight into package/qnatter the parent is package/
+# and holds no LICENSE, so the copy that ships inside the package wins.
 define Build/Prepare
 	mkdir -p $(PKG_BUILD_DIR)
-	$(CP) $(CURDIR)/../LICENSE $(PKG_BUILD_DIR)/LICENSE
+	if [ -f $(CURDIR)/LICENSE ]; then \
+		$(CP) $(CURDIR)/LICENSE $(PKG_BUILD_DIR)/LICENSE; \
+	elif [ -f $(CURDIR)/../LICENSE ]; then \
+		$(CP) $(CURDIR)/../LICENSE $(PKG_BUILD_DIR)/LICENSE; \
+	fi
 endef
 
 define Build/Compile
