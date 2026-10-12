@@ -4,7 +4,7 @@ include $(TOPDIR)/rules.mk
 
 PKG_NAME:=luci-app-qnatter
 PKG_VERSION:=1.1.0
-PKG_RELEASE:=1
+PKG_RELEASE:=2
 PKG_LICENSE:=GPL-3.0-only
 PKG_LICENSE_FILES:=LICENSE
 PKG_MAINTAINER:=qimaoww
@@ -27,7 +27,6 @@ for path in \
 	/usr/share/luci/menu.d/luci-app-qnatter.json \
 	/usr/share/rpcd/acl.d/luci-app-qnatter.json \
 	/www/luci-static/resources/qnatter/qnatter.css \
-	/www/luci-static/resources/view/qnatter/instances.js \
 	/www/luci-static/resources/view/qnatter/instances-v11.js \
 	/www/luci-static/resources/view/qnatter/log.js \
 	/www/luci-static/resources/view/qnatter/status.js \

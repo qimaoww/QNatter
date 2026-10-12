@@ -1,11 +1,13 @@
 package forward
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
 	"regexp"
 	"strconv"
+	"sync"
 	"time"
 )
 
@@ -37,11 +39,26 @@ func (ExecStarter) Start(name string, args ...string) (ExternalProcess, error) {
 	if err := cmd.Start(); err != nil {
 		return nil, err
 	}
-	return &osProcess{cmd: cmd}, nil
+	process := &osProcess{cmd: cmd, done: make(chan struct{})}
+	// 后台 Wait：既回收子进程（避免僵尸），又让 Exited() 反映真实状态。
+	process.reap()
+	return process, nil
 }
 
 type osProcess struct {
-	cmd *exec.Cmd
+	cmd     *exec.Cmd
+	once    sync.Once
+	done    chan struct{}
+	waitErr error
+}
+
+func (p *osProcess) reap() {
+	p.once.Do(func() {
+		go func() {
+			p.waitErr = p.cmd.Wait()
+			close(p.done)
+		}()
+	})
 }
 
 func (p *osProcess) Terminate() error {
@@ -59,11 +76,23 @@ func (p *osProcess) Kill() error {
 }
 
 func (p *osProcess) Wait() error {
-	return p.cmd.Wait()
+	p.reap()
+	<-p.done
+	return p.waitErr
 }
 
+// Exited 报告子进程是否已经退出。ProcessState 只有在 Wait 之后才非 nil，
+// 所以这里依赖后台 reap 维护的 done channel，而不是轮询 ProcessState。
 func (p *osProcess) Exited() bool {
-	return p.cmd.ProcessState != nil && p.cmd.ProcessState.Exited()
+	if p.done == nil {
+		return p.cmd.ProcessState != nil && p.cmd.ProcessState.Exited()
+	}
+	select {
+	case <-p.done:
+		return true
+	default:
+		return false
+	}
 }
 
 type SocatForwarder struct {
@@ -282,6 +311,10 @@ func versionString(parts []int) string {
 	return value + ")"
 }
 
+// terminateGrace 是 Terminate 之后等待子进程退出的时限，超时后升级为 Kill，
+// 保证 Stop 在有限时间内返回（否则 SIGTERM 后进程会卡在 Wait 上）。
+const terminateGrace = 3 * time.Second
+
 func stopExternal(process *ExternalProcess) error {
 	if process == nil || *process == nil {
 		return nil
@@ -289,10 +322,33 @@ func stopExternal(process *ExternalProcess) error {
 	proc := *process
 	*process = nil
 	if proc.Exited() {
-		return nil
+		return ignoreTerminationSignal(proc.Wait())
 	}
 	if err := proc.Terminate(); err != nil {
 		return err
 	}
-	return proc.Wait()
+	done := make(chan error, 1)
+	go func() {
+		done <- proc.Wait()
+	}()
+	select {
+	case err := <-done:
+		return ignoreTerminationSignal(err)
+	case <-time.After(terminateGrace):
+		_ = proc.Kill()
+		return ignoreTerminationSignal(<-done)
+	}
+}
+
+// ignoreTerminationSignal 把“被信号终止”的退出状态视为正常关闭：
+// 信号是我们自己 Terminate/Kill 发的，不应作为清理失败上报。
+func ignoreTerminationSignal(err error) error {
+	if err == nil {
+		return nil
+	}
+	var exitErr *exec.ExitError
+	if errors.As(err, &exitErr) && exitErr.ProcessState != nil && !exitErr.ProcessState.Exited() {
+		return nil
+	}
+	return err
 }

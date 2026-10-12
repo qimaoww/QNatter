@@ -16,12 +16,15 @@ status_bin="$tmp/qnatter-status"
 log_bin="$tmp/qnatter-log"
 log_calls="$tmp/log-calls.txt"
 uci_bin="$tmp/uci"
+uci_wan_enabled="$tmp/uci-wan-enabled"
+uci_global_enabled="$tmp/uci-global-enabled"
 mv_bin="$tmp/mv"
 init_bin="$tmp/qnatter-init"
 curl_bin="$tmp/curl-cloudflare"
 jsonfilter_bin="$tmp/jsonfilter"
 ubus_bin="$tmp/ubus"
 curl_calls="$tmp/curl-calls.txt"
+getent_bin="$tmp/getent-stub"
 uci_calls="$tmp/uci-calls.txt"
 mv_calls="$tmp/mv-calls.txt"
 init_calls="$tmp/init-calls.txt"
@@ -61,7 +64,8 @@ case "\$1" in
 	get)
 		case "\$2" in
 			qnatter.wan_ct) printf 'instance\n' ;;
-			qnatter.wan_ct.enabled) printf '0\n' ;;
+			qnatter.wan_ct.enabled) [ -f "$uci_wan_enabled" ] && printf '1\n' || printf '0\n' ;;
+			qnatter.global.enabled) [ -f "$uci_global_enabled" ] && printf '1\n' || printf '0\n' ;;
 			qnatter.wan_new) exit 1 ;;
 			qnatter.bad-name) exit 1 ;;
 			qnatter.wan_ct.cloudflare_api_token) printf 'cf-token\n' ;;
@@ -69,7 +73,16 @@ case "\$1" in
 			*) exit 1 ;;
 		esac
 		;;
-	rename|delete|commit|set)
+	rename|delete|commit)
+		exit 0
+		;;
+	set)
+		case "\$2" in
+			qnatter.wan_ct.enabled=1) : > "$uci_wan_enabled" ;;
+			qnatter.wan_ct.enabled=0) rm -f "$uci_wan_enabled" ;;
+			qnatter.global.enabled=1) : > "$uci_global_enabled" ;;
+			qnatter.global.enabled=0) rm -f "$uci_global_enabled" ;;
+		esac
 		exit 0
 		;;
 	*)
@@ -93,9 +106,28 @@ exit 0
 EOF
 chmod 0755 "$init_bin"
 
+# 确定性解析桩：webhook 的 host 校验改为 fail-closed（解析失败即拒绝）后，
+# 测试域名必须能解析出公网地址才能通过校验；只解析测试域名，其余保持
+# NXDOMAIN，以便继续覆盖"解析失败必须拒绝"这条负向行为。
+cat > "$getent_bin" <<'EOF'
+#!/bin/sh
+case "${2:-$1}" in
+	hooks.example) printf '93.184.216.34 hooks.example\n' ;;
+	*) exit 2 ;;
+esac
+EOF
+chmod 0755 "$getent_bin"
+QNATTER_GETENT_BIN="$getent_bin"
+export QNATTER_GETENT_BIN
+
 cat > "$curl_bin" <<EOF
 #!/bin/sh
 printf '%s\n' "\$*" >> "$curl_calls"
+for arg in "\$@"; do
+	case "\$arg" in
+		@*) cat "\${arg#@}" >> "$curl_calls" 2>/dev/null ;;
+	esac
+done
 case "\$*" in
 	*'hooks.example/test'*)
 		printf 'manual-ok 62000\n'
@@ -221,7 +253,21 @@ webhook_test_output="$(
 grep -Fq -- '-X PUT' "$curl_calls" || fail "webhook test did not use requested method"
 grep -Fq -- 'Content-Type: text/plain' "$curl_calls" || fail "webhook test did not send requested header"
 grep -Fq -- 'X-Test: 62000' "$curl_calls" || fail "webhook test did not expand header template"
-grep -Fq -- '--data port=62000' "$curl_calls" || fail "webhook test did not expand request body"
+grep -Fq -- '--data-raw port=62000' "$curl_calls" || fail "webhook test did not expand request body"
+grep -Fq -- '-g' "$curl_calls" || fail "webhook curl must disable URL globbing (-g)"
+grep -Fq -- '--resolve' "$curl_calls" || fail "webhook curl must pin the resolved address (--resolve)"
+for bad_url in 'http://{127.0.0.1,127.0.0.2}:19301/x' 'http://127.0.0.[1-1]:19301/x' 'http://nonexistent.invalid/x' 'http://012.0.0.1/x'; do
+	bad_output="$(
+		printf '{"section":"wan_ct","url":"%s","method":"GET","timeout":"2"}\n' "$bad_url" | \
+			QNATTER_CURL_BIN="$curl_bin" \
+			QNATTER_JSONFILTER_BIN="$jsonfilter_bin" \
+			"$rpcd" call completion_webhook_test
+	)"
+	case "$bad_output" in
+		*'"ok":false'*) : ;;
+		*) fail "unsafe webhook URL was accepted: $bad_url -> $bad_output" ;;
+	esac
+done
 
 script_test_output="$(
 	printf '{"section":"wan_ct","script":"echo script-ok-$QNATTER_SCRIPT_INSTANCE-$QNATTER_SCRIPT_PROTOCOL-$QNATTER_SCRIPT_OUTER_PORT"}\n' | \
@@ -247,9 +293,27 @@ rename_output="$(
 )"
 [ "$rename_output" = '{"ok":true,"name":"wan_new"}' ] || fail "rename output = $rename_output"
 grep -Fqx 'rename qnatter.wan_ct=wan_new' "$uci_calls" || fail "rename did not rename qnatter UCI section"
-grep -Fqx 'delete firewall.qnatter_wan_ct' "$uci_calls" || fail "rename did not delete old auto firewall section"
 grep -Fqx 'commit qnatter' "$uci_calls" || fail "rename did not commit qnatter config"
-grep -Fqx 'commit firewall' "$uci_calls" || fail "rename did not commit firewall config"
+if grep -Fq 'firewall' "$uci_calls"; then
+	fail "rename_instance must not write the firewall UCI"
+fi
+
+cleanup_existing_output="$(
+	printf '{"instance":"wan_ct"}\n' | \
+		QNATTER_UCI_BIN="$uci_bin" \
+		"$rpcd" call cleanup_firewall_rule
+)"
+[ "$cleanup_existing_output" = '{"ok":false,"error":"Instance still exists"}' ] || \
+	fail "cleanup must refuse while the instance still exists: $cleanup_existing_output"
+
+cleanup_stale_output="$(
+	printf '{"instance":"wan_new"}\n' | \
+		QNATTER_UCI_BIN="$uci_bin" \
+		"$rpcd" call cleanup_firewall_rule
+)"
+[ "$cleanup_stale_output" = '{"ok":true,"removed":false}' ] || \
+	fail "cleanup output = $cleanup_stale_output"
+
 grep -Fqx "$run_dir/wan_ct.json $run_dir/wan_new.json" "$mv_calls" || fail "rename did not move status file"
 grep -Fqx "$run_dir/wan_ct.env $run_dir/wan_new.env" "$mv_calls" || fail "rename did not move env file"
 grep -Fqx "$run_dir/wan_ct.notify $run_dir/wan_new.notify" "$mv_calls" || fail "rename did not move notify wrapper"
@@ -260,11 +324,41 @@ toggle_output="$(
 	printf '{"instance":"wan_ct"}\n' | \
 		QNATTER_UCI_BIN="$uci_bin" \
 		QNATTER_INIT_BIN="$init_bin" \
+		QNATTER_LOG_DIR="$log_dir" \
 		"$rpcd" call toggle_instance
 )"
 [ "$toggle_output" = '{"ok":true,"enabled":1}' ] || fail "toggle_instance output = $toggle_output"
 grep -Fqx 'set qnatter.wan_ct.enabled=1' "$uci_calls" || fail "toggle_instance did not enable the instance"
+grep -Fqx 'set qnatter.global.enabled=1' "$uci_calls" || fail "toggle_instance did not enable the global service"
 grep -Fqx 'reload' "$init_calls" || fail "toggle_instance did not reload QNatter"
+grep -Fq 'service enabled (was: disabled)' "$log_dir/wan_ct.log" || fail "toggle_instance did not log the global enable"
+
+: > "$uci_calls"
+toggle_disable_output="$(
+	printf '{"instance":"wan_ct"}\n' | \
+		QNATTER_UCI_BIN="$uci_bin" \
+		QNATTER_INIT_BIN="$init_bin" \
+		QNATTER_LOG_DIR="$log_dir" \
+		"$rpcd" call toggle_instance
+)"
+[ "$toggle_disable_output" = '{"ok":true,"enabled":0}' ] || fail "toggle_instance disable output = $toggle_disable_output"
+grep -Fqx 'set qnatter.wan_ct.enabled=0' "$uci_calls" || fail "toggle_instance did not disable the instance"
+if grep -Fq 'set qnatter.global.enabled' "$uci_calls"; then
+	fail "toggle_instance must not touch the global switch when disabling"
+fi
+
+: > "$uci_calls"
+toggle_reenable_output="$(
+	printf '{"instance":"wan_ct"}\n' | \
+		QNATTER_UCI_BIN="$uci_bin" \
+		QNATTER_INIT_BIN="$init_bin" \
+		QNATTER_LOG_DIR="$log_dir" \
+		"$rpcd" call toggle_instance
+)"
+[ "$toggle_reenable_output" = '{"ok":true,"enabled":1}' ] || fail "toggle_instance re-enable output = $toggle_reenable_output"
+if grep -Fq 'set qnatter.global.enabled' "$uci_calls"; then
+	fail "toggle_instance must not re-set an already enabled global switch"
+fi
 
 invalid_rename_output="$(
 	printf '{"old":"wan_ct","new":"bad-name"}\n' | QNATTER_UCI_BIN="$uci_bin" "$rpcd" call rename_instance

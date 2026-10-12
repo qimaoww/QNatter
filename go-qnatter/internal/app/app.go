@@ -186,6 +186,9 @@ func runEngineWithLog(ctx context.Context, cfg config.Config, log io.Writer) err
 			OnUPnPError: func(operation string, err error) {
 				logUPnPError(log, operation, err)
 			},
+			OnCloseError: func(err error) {
+				logLine(log, "W", "failed to release resources: %v", err)
+			},
 			PortCheck:    lanPortChecker,
 			InitialCheck: splitPortChecker{lan: lanPortChecker, wan: wanPortChecker},
 		}

@@ -42,6 +42,10 @@ type Config struct {
 
 type stringList []string
 
+// maxKeepAliveInterval 是 -k 允许的最大秒数（24h）：更大的值没有实际
+// 意义，而且是 retryDelay 乘法溢出的入口。
+const maxKeepAliveInterval = 24 * 60 * 60
+
 func (s *stringList) String() string {
 	return strings.Join(*s, ",")
 }
@@ -122,6 +126,9 @@ func validateConfig(cfg *Config) error {
 	if cfg.KeepAliveInterval <= 0 {
 		return fmt.Errorf("not a positive integer: %d", cfg.KeepAliveInterval)
 	}
+	if cfg.KeepAliveInterval > maxKeepAliveInterval {
+		return fmt.Errorf("keep-alive interval is too large: %d (max %d)", cfg.KeepAliveInterval, maxKeepAliveInterval)
+	}
 	if !validPort(cfg.BindPort) {
 		return fmt.Errorf("invalid port number: %d", cfg.BindPort)
 	}
@@ -137,6 +144,8 @@ func validateConfig(cfg *Config) error {
 		cfg.BindValue = normalized
 	} else if looksLikeIPv4Literal(cfg.BindValue) {
 		return fmt.Errorf("invalid IP address: %s", cfg.BindValue)
+	} else if !validInterfaceName(cfg.BindValue) {
+		return fmt.Errorf("invalid interface name: %s", cfg.BindValue)
 	}
 	normalizedTarget, ok := normalizeIPv4(cfg.TargetIP)
 	if !ok {
@@ -184,6 +193,27 @@ func looksLikeIPv4Literal(value string) bool {
 		}
 	}
 	return hasDot
+}
+
+// validInterfaceName 校验 -i 传非 IP 值时是否像一个网络接口名。
+// 以前任何非法值都会被当成接口名放行，拼写错误要到运行时才以
+// ENODEV/EADDRNOTAVAIL 暴露（配合重试会放大成排障困难）。
+func validInterfaceName(value string) bool {
+	if value == "" || len(value) > 64 {
+		return false
+	}
+	hasLetter := false
+	for _, char := range value {
+		switch {
+		case char >= 'a' && char <= 'z', char >= 'A' && char <= 'Z',
+			char == '_', char == '.', char == ':', char == '@', char == '-':
+			hasLetter = true
+		case char >= '0' && char <= '9':
+		default:
+			return false
+		}
+	}
+	return hasLetter
 }
 
 func defaultSTUNServers(udp bool) []string {

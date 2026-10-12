@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/netip"
+	"time"
 
 	"qnatter-openwrt/go-qnatter/internal/config"
 	"qnatter-openwrt/go-qnatter/internal/forward"
@@ -11,6 +12,10 @@ import (
 	"qnatter-openwrt/go-qnatter/internal/status"
 	"qnatter-openwrt/go-qnatter/internal/stun"
 )
+
+// upnpRevokeTimeout 限制退出时撤销 UPnP 映射的等待时间：撤销是尽力而为，
+// 不应因为路由器无响应而无限拖住进程退出。
+const upnpRevokeTimeout = 5 * time.Second
 
 type STUNClient interface {
 	GetMapping(context.Context) (stun.Mapping, error)
@@ -24,6 +29,7 @@ type KeepAlive interface {
 type UPnPMapper interface {
 	Forward(context.Context, UPnPMapping) error
 	Renew(context.Context) error
+	Revoke(context.Context) error
 }
 
 type UPnPMapping struct {
@@ -62,6 +68,7 @@ type Dependencies struct {
 	OnMapped           func(Result)
 	OnTransientFailure func(string, error, int, int)
 	OnUPnPError        func(string, error)
+	OnCloseError       func(error)
 	UPnP               UPnPMapper
 }
 
@@ -88,6 +95,8 @@ type Session struct {
 	UPnP      UPnPMapper
 }
 
+// Close 释放本次会话持有的全部资源：转发规则、keep-alive socket 与
+// 路由器上的 UPnP 端口映射。重复调用是安全的，返回第一个错误。
 func (s *Session) Close() error {
 	var firstErr error
 	if s.Forwarder != nil {
@@ -102,6 +111,16 @@ func (s *Session) Close() error {
 		}
 		s.KeepAlive = nil
 	}
+	if s.UPnP != nil {
+		// 撤销路由器上的映射，避免端口被占到租约自然过期。
+		ctx, cancel := context.WithTimeout(context.Background(), upnpRevokeTimeout)
+		err := s.UPnP.Revoke(ctx)
+		cancel()
+		if err != nil && firstErr == nil {
+			firstErr = err
+		}
+		s.UPnP = nil
+	}
 	return firstErr
 }
 
@@ -110,7 +129,9 @@ func RunOnce(ctx context.Context, cfg config.Config, deps Dependencies) (Result,
 	if err != nil {
 		return Result{}, err
 	}
-	defer session.Close()
+	if err := session.Close(); err != nil {
+		return session.Result, err
+	}
 	return session.Result, nil
 }
 
@@ -133,15 +154,42 @@ func StartSession(ctx context.Context, cfg config.Config, deps Dependencies) (*S
 	if keepAlive == nil {
 		return nil, fmt.Errorf("missing keep-alive client")
 	}
+	// 从这里开始已经持有资源（socket / 转发规则 / UPnP 映射）：任何
+	// 失败路径都必须回收，统一由下面的 defer 负责，避免泄漏 fd、规则
+	// 与路由器端口映射。
+	session := &Session{KeepAlive: keepAlive}
+	committed := false
+	defer func() {
+		if committed {
+			return
+		}
+		if err := session.Close(); err != nil && deps.OnCloseError != nil {
+			deps.OnCloseError(err)
+		}
+	}()
+
 	if err := keepAlive.KeepAlive(); err != nil {
 		return nil, err
 	}
-	mapping, err := deps.STUN.GetMapping(ctx)
+	// first.Inner 是 keep-alive socket 绑定的本地地址/端口：NewKeepAlive
+	// 用它作为 Source，注入 deps.KeepAlive 时按同一契约由调用方保证。
+	// 后面所有决策都必须与它一致（G-14）。
+	observed, err := deps.STUN.GetMapping(ctx)
 	if err != nil {
 		return nil, err
 	}
-	if !mapping.Inner.IsValid() {
-		mapping.Inner = first.Inner
+	if !observed.Inner.IsValid() {
+		observed.Inner = first.Inner
+	}
+	mapping := observed
+	if first.Inner.IsValid() && observed.Inner.IsValid() && observed.Inner != first.Inner {
+		// G-14：第二次查询换了本地源端口，则 observed.Outer 属于另一个本地
+		// 端口，而 keep-alive socket 保活的是 first.Inner 上的映射。继续按
+		// observed 下发转发规则，等于用一个"没人保活、也不是监听端口"的映射
+		// 对外宣称成功（报文会变成黑洞）。这里统一回到第一次观测 ——
+		// Inner/Outer 取同一对，keep-alive、转发监听与上报三者一致 ——
+		// 并把这次不一致通过 Unstable 暴露给用户。
+		mapping = first
 	}
 
 	method := forward.ResolveMethod(forward.FactoryOptions{
@@ -159,6 +207,7 @@ func StartSession(ctx context.Context, cfg config.Config, deps Dependencies) (*S
 	if err != nil {
 		return nil, err
 	}
+	session.Forwarder = fwd
 
 	bind, err := BindFromConfig(cfg)
 	if err != nil {
@@ -194,6 +243,9 @@ func StartSession(ctx context.Context, cfg config.Config, deps Dependencies) (*S
 			LeaseDuration:  cfg.KeepAliveInterval * 3,
 		}); err == nil {
 			activeUPnP = deps.UPnP
+			// 映射一建立就挂到 session 上：此后任何失败路径（Notify、
+			// 端口检查、targetClosed 重试）都会撤销它。
+			session.UPnP = deps.UPnP
 		} else if deps.OnUPnPError != nil {
 			deps.OnUPnPError("forward port", err)
 		}
@@ -219,24 +271,32 @@ func StartSession(ctx context.Context, cfg config.Config, deps Dependencies) (*S
 		Method:   method,
 		Mapping:  mapping,
 		Target:   target,
-		Unstable: first.Outer.IsValid() && mapping.Outer.IsValid() && first.Outer != mapping.Outer,
+		Unstable: unstableMapping(first, observed),
 		Ports:    portReport,
 	}
 	if deps.OnMapped != nil {
 		deps.OnMapped(result)
 	}
 
-	session := &Session{
-		Result:    result,
-		Forwarder: fwd,
-		KeepAlive: keepAlive,
-		UPnP:      activeUPnP,
-	}
+	session.Result = result
+	session.UPnP = activeUPnP
 	if cfg.RetryTarget && !cfg.UDP && targetClosed(ctx, deps, session, portReport) {
-		_ = session.Close()
+		// defer 负责回收 forwarder / keep-alive / UPnP 映射。
 		return nil, ErrTargetClosed
 	}
+	committed = true
 	return session, nil
+}
+
+// unstableMapping 报告两次 STUN 观测是否不一致：Outer 变化说明 NAT 映射在
+// 漂移；Inner 变化说明本地源端口变了 —— keep-alive socket 保活的映射与
+// 转发监听使用的映射已经不是同一对。两者都必须上报，否则用户只看到
+// "网络正常"（G-14：以前只比较 Outer，Inner 变化完全不上报）。
+func unstableMapping(first, second stun.Mapping) bool {
+	if first.Inner.IsValid() && second.Inner.IsValid() && first.Inner != second.Inner {
+		return true
+	}
+	return first.Outer.IsValid() && second.Outer.IsValid() && first.Outer != second.Outer
 }
 
 func checkInitialPorts(ctx context.Context, cfg config.Config, deps Dependencies, target netip.AddrPort, mapping stun.Mapping) PortReport {

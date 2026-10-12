@@ -108,7 +108,7 @@ return view.extend({
 			}
 		}, [ _('Clear logs') ]);
 
-		poll.add(refresh, 2);
+		poll.add(refresh, 5);
 		refresh();
 
 		return E('div', { 'class': 'qnatter-page qnatter-log-page' + detectThemeClass() }, [

@@ -3,8 +3,10 @@ package stun
 import (
 	"context"
 	"crypto/rand"
+	"encoding/binary"
 	"errors"
 	"fmt"
+	"io"
 	"net"
 	"net/netip"
 	"strconv"
@@ -174,8 +176,7 @@ func (t NetworkTransport) Exchange(ctx context.Context, network string, server S
 	if _, err := conn.Write(request); err != nil {
 		return netip.AddrPort{}, nil, err
 	}
-	buf := make([]byte, 1500)
-	n, err := conn.Read(buf)
+	buf, err := readResponse(conn, network)
 	if err != nil {
 		return netip.AddrPort{}, nil, err
 	}
@@ -183,7 +184,44 @@ func (t NetworkTransport) Exchange(ctx context.Context, network string, server S
 	if err != nil {
 		return netip.AddrPort{}, nil, err
 	}
-	return inner, buf[:n], nil
+	return inner, buf, nil
+}
+
+// maxMessageSize 是单条 STUN 消息允许的最大长度（含 20 字节头部）。
+const maxMessageSize = 1500
+
+// readResponse 按传输语义读取一条完整响应。
+//
+// UDP 是数据报语义，一次 Read 即一条消息；TCP 是流式语义，必须按
+// STUN 头部的 length 字段读满整条消息（RFC 5389 §7.2.2），否则被分段
+// 的响应会被截断，ParseMappedAddress 会报 "short STUN response"。
+func readResponse(conn net.Conn, network string) ([]byte, error) {
+	if strings.HasPrefix(network, "udp") {
+		buf := make([]byte, maxMessageSize)
+		n, err := conn.Read(buf)
+		if err != nil {
+			return nil, err
+		}
+		return buf[:n], nil
+	}
+
+	header := make([]byte, 20)
+	if _, err := io.ReadFull(conn, header); err != nil {
+		return nil, err
+	}
+	size := int(binary.BigEndian.Uint16(header[2:4]))
+	total := 20 + size
+	if total > maxMessageSize {
+		return nil, fmt.Errorf("stun response too large: %d bytes (limit %d)", total, maxMessageSize)
+	}
+	buf := make([]byte, total)
+	copy(buf, header)
+	if size > 0 {
+		if _, err := io.ReadFull(conn, buf[20:]); err != nil {
+			return nil, err
+		}
+	}
+	return buf, nil
 }
 
 func parseNetAddr(addr net.Addr) (netip.AddrPort, error) {

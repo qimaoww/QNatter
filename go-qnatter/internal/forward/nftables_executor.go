@@ -52,11 +52,7 @@ func (f *NftablesForwarder) Start(options StartOptions) error {
 		}
 	}
 
-	output, err := runner.Run(NftablesDNATRule(options))
-	if err != nil {
-		return err
-	}
-	handle, err := ParseNftablesHandle(output)
+	handle, err := f.insertRule(runner, "qnatter_dnat", NftablesDNATSpec(options), NftablesDNATRule(options))
 	if err != nil {
 		return err
 	}
@@ -69,12 +65,7 @@ func (f *NftablesForwarder) Start(options StartOptions) error {
 				snatOptions.SNATIP = sourceIP
 			}
 		}
-		output, err = runner.Run(NftablesSNATRule(snatOptions))
-		if err != nil {
-			_ = f.Stop()
-			return err
-		}
-		handle, err = ParseNftablesHandle(output)
+		handle, err = f.insertRule(runner, "qnatter_snat", NftablesSNATSpec(snatOptions), NftablesSNATRule(snatOptions))
 		if err != nil {
 			_ = f.Stop()
 			return err
@@ -91,24 +82,14 @@ func (f *NftablesForwarder) Start(options StartOptions) error {
 			_ = f.Stop()
 			return err
 		}
-		output, err = runner.Run(NftablesConnMarkRule(options, policy.Mark))
-		if err != nil {
-			_ = f.Stop()
-			return err
-		}
-		handle, err = ParseNftablesHandle(output)
+		handle, err = f.insertRule(runner, "qnatter_mark", NftablesConnMarkSpec(options, policy.Mark), NftablesConnMarkRule(options, policy.Mark))
 		if err != nil {
 			_ = f.Stop()
 			return err
 		}
 		f.ConnMarkHandle = handle
 
-		output, err = runner.Run(NftablesRouteMarkRule(options, policy.Mark))
-		if err != nil {
-			_ = f.Stop()
-			return err
-		}
-		handle, err = ParseNftablesHandle(output)
+		handle, err = f.insertRule(runner, "qnatter_mark", NftablesRouteMarkSpec(options, policy.Mark), NftablesRouteMarkRule(options, policy.Mark))
 		if err != nil {
 			_ = f.Stop()
 			return err
@@ -117,6 +98,40 @@ func (f *NftablesForwarder) Start(options StartOptions) error {
 	}
 
 	return nil
+}
+
+// insertRule 插入一条规则并返回它的句柄。
+//
+// G-08：规则插入成功但 `nft --echo --handle` 没有回显句柄时，句柄未知意味着
+// 这条规则再也删不掉（nft 只支持按 handle 删除）。所以解析失败必须回滚：
+// 用 `list chain` 的输出按规则文本回找句柄并删除；确实删不掉时把原因一起
+// 返回，让调用方在日志里看到残留规则，而不是静默留下孤儿规则。
+func (f *NftablesForwarder) insertRule(runner Runner, chain string, spec string, rule string) (int, error) {
+	output, err := runner.Run(rule)
+	if err != nil {
+		return 0, err
+	}
+	handle, err := ParseNftablesHandle(output)
+	if err != nil {
+		if rollbackErr := f.deleteRuleBySpec(runner, chain, spec); rollbackErr != nil {
+			return 0, fmt.Errorf("%w; the inserted rule in chain %s (%s) could not be removed: %v", err, chain, spec, rollbackErr)
+		}
+		return 0, err
+	}
+	return handle, nil
+}
+
+func (f *NftablesForwarder) deleteRuleBySpec(runner Runner, chain string, spec string) error {
+	output, err := runner.Run(fmt.Sprintf("list chain ip qnatter %s", chain))
+	if err != nil {
+		return err
+	}
+	handle, err := LookupRuleHandle(output, spec)
+	if err != nil {
+		return err
+	}
+	_, err = runner.Run(fmt.Sprintf("delete rule ip qnatter %s handle %d", chain, handle))
+	return err
 }
 
 func (f *NftablesForwarder) ensureRouteMarkChain(runner Runner) error {

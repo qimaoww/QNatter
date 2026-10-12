@@ -369,7 +369,7 @@ return view.extend({
 			window.clearTimeout(refreshTimer);
 			refreshTimer = window.setTimeout(function() {
 				refresh().finally(function() {
-					scheduleRefresh(document.hidden ? 10000 : 1000);
+					scheduleRefresh(document.hidden ? 30000 : 3000);
 				});
 			}, delay);
 		}
@@ -377,12 +377,12 @@ return view.extend({
 		document.addEventListener('visibilitychange', function() {
 			if (!document.hidden) {
 				window.clearTimeout(refreshTimer);
-				refresh().finally(function() { scheduleRefresh(1000); });
+				refresh().finally(function() { scheduleRefresh(3000); });
 			}
 		});
 
 		refresh();
-		scheduleRefresh(1000);
+		scheduleRefresh(3000);
 
 		return root;
 	}

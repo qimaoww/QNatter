@@ -431,6 +431,7 @@ type fakeUPnP struct {
 	events   *[]string
 	err      error
 	renewErr error
+	revoked  bool
 }
 
 type sequencePortCheck struct {
@@ -469,4 +470,12 @@ func (u *fakeUPnP) Renew(context.Context) error {
 		*u.events = append(*u.events, "upnp-renew")
 	}
 	return u.renewErr
+}
+
+func (u *fakeUPnP) Revoke(context.Context) error {
+	if u.events != nil {
+		*u.events = append(*u.events, "upnp-revoke")
+	}
+	u.revoked = true
+	return nil
 }

@@ -76,6 +76,7 @@ run_hotplug() {
 	INTERFACE="$2" \
 	DEVICE="$3" \
 	QNATTER_FUNCTIONS_SH="$tmp/functions.sh" \
+	QNATTER_COMMON_SH="$ROOT/qnatter/files/qnatter-common.sh" \
 	QNATTER_INIT_BIN="$init_bin" \
 		sh "$ROOT/qnatter/files/qnatter.hotplug"
 }
@@ -84,10 +85,10 @@ run_hotplug ifup wan pppoe-wan
 grep -Fqx enabled "$init_log" || fail "ifup wan should check service enabled"
 grep -Fqx reload "$init_log" || fail "ifup wan should reload QNatter"
 
+# bind_value 指向设备名时，设备名变化（pppoe-wan -> eth0）也必须触发：只用
+# 设备名匹配会让这次 ifup 丢失（实例再也等不到新的地址）。
 run_hotplug ifup wan eth0
-if [ -s "$init_log" ]; then
-	fail "ifup wan with non-matching device must not reload bound QNatter instance"
-fi
+grep -Fqx reload "$init_log" || fail "ifup wan must reload when the bound device name changed"
 
 run_hotplug ifupdate other eth1.2
 grep -Fqx reload "$init_log" || fail "ifupdate matching bind_value should reload QNatter"
@@ -98,6 +99,11 @@ grep -Fqx reload "$init_log" || fail "instance without bind_value should reload 
 run_hotplug ifup lan br-lan
 if [ -s "$init_log" ]; then
 	fail "disabled matching instance must not reload QNatter"
+fi
+
+run_hotplug ifup wan9 eth9
+if [ -s "$init_log" ]; then
+	fail "non-matching interface must not reload QNatter"
 fi
 
 run_hotplug ifdown wan pppoe-wan

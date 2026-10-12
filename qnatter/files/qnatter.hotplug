@@ -4,8 +4,10 @@
 
 : "${QNATTER_FUNCTIONS_SH:=/lib/functions.sh}"
 : "${QNATTER_INIT_BIN:=/etc/init.d/qnatter}"
+: "${QNATTER_COMMON_SH:=/usr/share/qnatter/qnatter-common.sh}"
 
 . "$QNATTER_FUNCTIONS_SH"
+. "$QNATTER_COMMON_SH"
 
 MATCHED=0
 
@@ -13,16 +15,18 @@ qnatter_match_interface() {
 	local section="$1"
 	local enabled network bind_value
 
-	config_get_bool enabled "$section" enabled 0
+	qnatter_config_get_bool enabled "$section" enabled 0
 	[ "$enabled" = "1" ] || return 0
 
-	config_get network "$section" network "wan"
-	config_get bind_value "$section" bind_value ""
+	qnatter_config_get network "$section" network "wan"
+	qnatter_config_get bind_value "$section" bind_value ""
 	if [ -n "$bind_value" ]; then
 		[ "$bind_value" = "$DEVICE" ] && MATCHED=1
-	else
-		[ "$network" = "$INTERFACE" ] && MATCHED=1
 	fi
+	# bind_value 可能是 IP（永远不等于 $DEVICE），也可能绑定的设备名已经变化
+	# （pppoe-wan1 -> eth0）；network 名匹配作为兜底，避免漏掉这次 ifup。
+	[ "$network" = "$INTERFACE" ] && MATCHED=1
+	return 0
 }
 
 config_load qnatter

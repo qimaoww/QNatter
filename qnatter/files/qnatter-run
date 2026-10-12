@@ -5,4 +5,108 @@ shift
 
 mkdir -p "$(dirname "$log_file")"
 [ -n "${QNATTER_STATUS_FILE:-}" ] && rm -f "$QNATTER_STATUS_FILE"
+
+# ---------------------------------------------------------------------------
+# respawn 失败可观测性（SH-P2-12）
+#
+# procd 只在 respawn 重试额度用尽时打一条自己的 syslog（"s in a crash loop"），
+# 之后永久放弃重启，init 层没有任何状态可查。本包装在每次启动前把上一轮的
+# 结果、连续快速退出次数与 respawn 额度落到 ${RUN_DIR}/<slug>.respawn
+# （key=value，便于 logread/status 页面直接读），并在额度用尽时同时写实例
+# 日志与 syslog，用户按日志就能判断"为什么起不来 / 为什么不再重启"。
+#
+# 计数规则与 procd 保持一致（procd service/instance.c: instance_exit_done）：
+# runtime < respawn_threshold 时连续失败计数 +1，否则清零；计数 > respawn_retry
+# 后 procd 不再重启该实例。本包装的这次启动意味着上一轮进程已经退出，因此
+# "上一轮启动至今 < threshold" 就等价于 procd 眼中的一次快速退出。
+#
+# 注意：exec 保留原有进程模型（不 fork、不转发信号），procd 监督的仍然是
+# qnatter-go 本体；包装只做启动前记录。
+# ---------------------------------------------------------------------------
+qnatter_slug="${log_file##*/}"
+qnatter_slug="${qnatter_slug%.log}"
+qnatter_state_dir="${QNATTER_RESPAWN_STATE_DIR:-${QNATTER_RUN_DIR:-/var/run/qnatter}}"
+qnatter_state_file="${qnatter_state_dir}/${qnatter_slug}.respawn"
+qnatter_runtime_file="${qnatter_state_dir}/${qnatter_slug}.runtime"
+qnatter_threshold="${QNATTER_RESPAWN_THRESHOLD:-3600}"
+qnatter_retry="${QNATTER_RESPAWN_RETRY:-5}"
+qnatter_logger_bin="${QNATTER_LOGGER_BIN:-logger}"
+
+qnatter_is_digits() {
+	case "${1:-}" in
+		''|*[!0-9]*) return 1 ;;
+	esac
+	return 0
+}
+
+qnatter_run_say() {
+	printf '%s %s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$*" >> "$log_file" 2>/dev/null || true
+	if command -v "$qnatter_logger_bin" >/dev/null 2>&1; then
+		"$qnatter_logger_bin" -t qnatter "$*" >/dev/null 2>&1 || true
+	fi
+	return 0
+}
+
+# 额度来自 init 写入的 runtime fingerprint（respawn=threshold:timeout:retry），
+# 读不到时用与 qnatter.init 中 procd_set_param respawn 相同的默认值。
+if [ -r "$qnatter_runtime_file" ]; then
+	qnatter_respawn="$(sed -n 's/^respawn=//p' "$qnatter_runtime_file" 2>/dev/null | head -n 1)"
+	qnatter_rest="${qnatter_respawn#*:}"
+	if qnatter_is_digits "${qnatter_respawn%%:*}" &&
+		qnatter_is_digits "${qnatter_rest%%:*}" &&
+		qnatter_is_digits "${qnatter_rest#*:}"; then
+		qnatter_threshold="${qnatter_respawn%%:*}"
+		qnatter_retry="${qnatter_rest#*:}"
+	fi
+fi
+
+qnatter_now="$(date +%s)"
+qnatter_prev_start=""
+qnatter_prev_failures="0"
+if [ -r "$qnatter_state_file" ]; then
+	qnatter_prev_start="$(sed -n 's/^last_start=//p' "$qnatter_state_file" 2>/dev/null | head -n 1)"
+	qnatter_prev_failures="$(sed -n 's/^fast_exits=//p' "$qnatter_state_file" 2>/dev/null | head -n 1)"
+fi
+qnatter_is_digits "$qnatter_prev_failures" || qnatter_prev_failures=0
+
+qnatter_failures=0
+qnatter_previous_runtime="unknown"
+if qnatter_is_digits "$qnatter_prev_start"; then
+	qnatter_previous_runtime=$((qnatter_now - qnatter_prev_start))
+	[ "$qnatter_previous_runtime" -ge 0 ] || qnatter_previous_runtime=0
+	if [ "$qnatter_previous_runtime" -lt "$qnatter_threshold" ]; then
+		qnatter_failures=$((qnatter_prev_failures + 1))
+	else
+		qnatter_failures=0
+	fi
+fi
+
+if [ "$qnatter_failures" -gt 0 ] && [ "$qnatter_failures" -lt "$qnatter_retry" ]; then
+	qnatter_run_say "qnatter: instance ${qnatter_slug} restarted after ${qnatter_previous_runtime}s (respawn attempt ${qnatter_failures}/${qnatter_retry} within ${qnatter_threshold}s)"
+fi
+
+if [ -d "$qnatter_state_dir" ]; then
+	qnatter_state="running"
+	[ "$qnatter_failures" -ge "$qnatter_retry" ] && qnatter_state="respawn-exhausted"
+	if {
+		printf 'instance=%s\n' "${QNATTER_INSTANCE:-$qnatter_slug}"
+		printf 'slug=%s\n' "$qnatter_slug"
+		printf 'state=%s\n' "$qnatter_state"
+		printf 'fast_exits=%s\n' "$qnatter_failures"
+		printf 'previous_runtime=%s\n' "$qnatter_previous_runtime"
+		printf 'respawn_threshold=%s\n' "$qnatter_threshold"
+		printf 'respawn_retry=%s\n' "$qnatter_retry"
+		printf 'log_file=%s\n' "$log_file"
+		printf 'last_start=%s\n' "$qnatter_now"
+		printf 'last_start_at=%s\n' "$(date '+%Y-%m-%d %H:%M:%S')"
+	} > "${qnatter_state_file}.$$" 2>/dev/null; then
+		mv "${qnatter_state_file}.$$" "$qnatter_state_file" 2>/dev/null ||
+			rm -f "${qnatter_state_file}.$$"
+	fi
+fi
+
+if [ "$qnatter_failures" -ge "$qnatter_retry" ]; then
+	qnatter_run_say "qnatter: instance ${qnatter_slug} failed ${qnatter_failures} times within ${qnatter_threshold}s: procd respawn retry (${qnatter_retry}) is exhausted and procd will stop restarting this instance unless this attempt stays up; check ${log_file} and 'logread -e qnatter'"
+fi
+
 exec "${QNATTER_GO_BIN:-/usr/bin/qnatter-go}" "$@" >> "$log_file" 2>&1

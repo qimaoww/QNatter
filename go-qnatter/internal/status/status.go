@@ -45,7 +45,9 @@ func RuntimeSlug(name string) string {
 		} else if char < 128 {
 			out.WriteString(fmt.Sprintf("_x%02x", char))
 		} else {
-			out.WriteByte('_')
+			// 非 ASCII 用码点转义，避免不同实例名塌缩成同一个 "_"
+			// （例如 "中文" 与 "测试" 都变成 "__"）导致状态文件互相覆盖。
+			out.WriteString(fmt.Sprintf("_u%04x", char))
 		}
 	}
 	if out.Len() == 0 {
@@ -55,7 +57,19 @@ func RuntimeSlug(name string) string {
 }
 
 func hasHexEscapePrefix(runes []rune) bool {
-	return len(runes) >= 3 && runes[0] == 'x' && isHex(runes[1]) && isHex(runes[2])
+	if len(runes) >= 3 && runes[0] == 'x' && isHex(runes[1]) && isHex(runes[2]) {
+		return true
+	}
+	// 识别 `_uXXXX`（非 ASCII 转义）前缀，避免字面量与之碰撞。
+	if len(runes) >= 5 && runes[0] == 'u' {
+		for _, char := range runes[1:5] {
+			if !isHex(char) {
+				return false
+			}
+		}
+		return true
+	}
+	return false
 }
 
 func isHex(char rune) bool {

@@ -11,9 +11,9 @@ import (
 )
 
 type TestServer struct {
-	mu     sync.Mutex
-	tcp    net.Listener
-	udp    *net.UDPConn
+	mu      sync.Mutex
+	tcp     net.Listener
+	udp     *net.UDPConn
 	udpAddr *net.UDPAddr
 }
 
@@ -23,6 +23,11 @@ func (s *TestServer) Start(options StartOptions) error {
 
 	if options.IP == "" {
 		options.IP = "0.0.0.0"
+	}
+	// 与 SocketForwarder 相同的端口占用检查（G-12）：test 模式同样带
+	// SO_REUSEPORT，同端口的第二个实例同样会被随机分流。
+	if err := sharedListenPortError(options.IP, options.Port, options.UDP); err != nil {
+		return err
 	}
 	if options.UDP {
 		return s.startUDP(options)

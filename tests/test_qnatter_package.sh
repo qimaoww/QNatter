@@ -147,7 +147,6 @@ assert_file qnatter/files/qnatter.uci-default
 [ -x "$ROOT/qnatter/files/qnatter.uci-default" ] || fail "qnatter uci-defaults source is not executable"
 
 assert_file luci-app-qnatter/Makefile
-assert_file luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances.js
 assert_file luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances-v11.js
 assert_file luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/stun.js
 assert_file luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/status.js
@@ -174,59 +173,57 @@ assert_no_path luci-app-qnatter/root/www/luci-static/qnatter
 assert_not_contains luci-app-qnatter/Makefile 'luci-compat'
 assert_not_contains luci-app-qnatter/Makefile 'LUCI_DEPENDS:=.*\+luci-compat'
 assert_contains luci-app-qnatter/Makefile '^PKG_VERSION:=1\.1\.0$'
-assert_contains luci-app-qnatter/Makefile '^PKG_RELEASE:=1$'
+assert_contains luci-app-qnatter/Makefile '^PKG_RELEASE:=2$'
 assert_contains luci-app-qnatter/Makefile 'define Package/luci-app-qnatter/postinst'
 assert_contains luci-app-qnatter/Makefile 'chown root:root "\$\$root\$\$path"'
-assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances.js "^'require form';"
-assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances.js "^'require fs';"
-assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances.js "^'require rpc';"
-assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances.js "^'require tools\\.widgets as widgets';"
-assert_not_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances.js 'cbi\('
-assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances.js 'qnatter-theme-aurora'
-assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances.js "L\\.resource\\('qnatter/qnatter\\.css'\\)"
-assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances.js "\\?v=1\\.1\\.0-r1"
+assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances-v11.js "^'require form';"
+assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances-v11.js "^'require fs';"
+assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances-v11.js "^'require rpc';"
+assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances-v11.js "^'require tools\\.widgets as widgets';"
+assert_not_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances-v11.js 'cbi\('
+assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances-v11.js 'qnatter-theme-aurora'
+assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances-v11.js "L\\.resource\\('qnatter/qnatter\\.css'\\)"
 assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances-v11.js "\\?v=1\\.1\\.0-r1"
 assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/stun.js "\\?v=1\\.1\\.0-r1"
-assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances.js 'hideInGrid'
-assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances.js 'option\.keylist'
-assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances.js 'indexOf\(String\(value\)\)'
-assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances.js "return E\\('button'"
-assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances.js "hideInGrid\\(s\\.option\\(widgets\\.DeviceSelect, 'bind_value'"
-assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances.js "widgets\\.DeviceSelect, 'bind_value', _\\('WAN interface'\\)"
-assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances.js "form\\.Flag, 'hot_reload', _\\('Hot reload'\\)"
-assert_not_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances.js "form\\.Value, 'label'"
-assert_not_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances.js "form\\.ListValue, 'runtime'"
-assert_not_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances.js "/usr/bin/python3"
-assert_not_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances.js 'tools\.python'
-assert_not_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances.js "o\\.value\\('python'"
-assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances.js 'o\.rmempty = true'
-assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances.js 'o\.nocreate = true'
-assert_not_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances.js "s\\.option\\(form\\.ListValue, 'network'"
-assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances.js "fs\\.stat\\('/usr/bin/socat'\\)"
-assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances.js "fs\\.stat\\('/usr/bin/gost'\\)"
-assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances.js 'tools\.socat'
-assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances.js 'tools\.gost'
-assert_not_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances.js "o\\.value\\('iptables'"
-assert_not_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances.js "o\\.value\\('iptables-snat'"
-assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances.js "o\\.depends\\('qbittorrent_forward', '0'\\)"
-assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances.js "o\\.depends\\('qbittorrent_enabled', '0'\\)"
-assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances.js "hideInGrid\\(s\\.option\\(form\\.Flag, 'auto_firewall'"
-assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances.js "hideInGrid\\(s\\.option\\(form\\.Value, 'target_ip'"
-assert_option_block_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances.js target_ip "o.depends('qbittorrent_enabled', '0')"
-assert_option_block_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances.js target_ip "o.depends('qbittorrent_forward', '0')"
-assert_option_block_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances.js target_port "o.depends('qbittorrent_enabled', '0')"
-assert_option_block_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances.js target_port "o.depends('qbittorrent_forward', '0')"
-assert_not_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances.js 'Port 0 forwards to the QNatter mapped internal port\.'
-assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances.js "form\\.DynamicList, 'stun_server'"
+assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances-v11.js 'hideInGrid'
+assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances-v11.js 'option\.keylist'
+assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances-v11.js 'indexOf\(String\(value\)\)'
+assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances-v11.js "return E\\('button'"
+assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances-v11.js "hideInGrid\\(s\\.option\\(widgets\\.DeviceSelect, 'bind_value'"
+assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances-v11.js "widgets\\.DeviceSelect, 'bind_value', _\\('WAN interface'\\)"
+assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances-v11.js "form\\.Flag, 'hot_reload', _\\('Hot reload'\\)"
+assert_not_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances-v11.js "form\\.Value, 'label'"
+assert_not_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances-v11.js "form\\.ListValue, 'runtime'"
+assert_not_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances-v11.js "/usr/bin/python3"
+assert_not_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances-v11.js 'tools\.python'
+assert_not_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances-v11.js "o\\.value\\('python'"
+assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances-v11.js 'o\.rmempty = true'
+assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances-v11.js 'o\.nocreate = true'
+assert_not_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances-v11.js "s\\.option\\(form\\.ListValue, 'network'"
+assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances-v11.js "fs\\.stat\\('/usr/bin/socat'\\)"
+assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances-v11.js "fs\\.stat\\('/usr/bin/gost'\\)"
+assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances-v11.js 'tools\.socat'
+assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances-v11.js 'tools\.gost'
+assert_not_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances-v11.js "o\\.value\\('iptables'"
+assert_not_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances-v11.js "o\\.value\\('iptables-snat'"
+assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances-v11.js "o\\.depends\\('qbittorrent_forward', '0'\\)"
+assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances-v11.js "o\\.depends\\('qbittorrent_enabled', '0'\\)"
+assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances-v11.js "hideInGrid\\(s\\.option\\(form\\.Flag, 'auto_firewall'"
+assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances-v11.js "hideInGrid\\(s\\.option\\(form\\.Value, 'target_ip'"
+assert_option_block_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances-v11.js target_ip "o.depends('qbittorrent_enabled', '0')"
+assert_option_block_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances-v11.js target_ip "o.depends('qbittorrent_forward', '0')"
+assert_option_block_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances-v11.js target_port "o.depends('qbittorrent_enabled', '0')"
+assert_option_block_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances-v11.js target_port "o.depends('qbittorrent_forward', '0')"
+assert_not_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances-v11.js 'Port 0 forwards to the QNatter mapped internal port\.'
 assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances-v11.js "form\\.DynamicList, 'stun_server'"
-assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances.js "renderStunDynamicList"
-assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances.js "filterListValues"
-assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances.js "refreshDynamicListChoices"
-assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances.js "o\\.placeholder = _\\('Custom'\\)"
-assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances.js "Try these instance STUN servers before the global list"
-assert_not_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances.js "custom_placeholder = 'host\\[:port\\]'"
-assert_not_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances.js "Select a candidate or enter a custom host\\[:port\\]"
-assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances.js "uniqueListValues"
+assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances-v11.js "renderStunDynamicList"
+assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances-v11.js "filterListValues"
+assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances-v11.js "refreshDynamicListChoices"
+assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances-v11.js "o\\.placeholder = _\\('Custom'\\)"
+assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances-v11.js "Try these instance STUN servers before the global list"
+assert_not_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances-v11.js "custom_placeholder = 'host\\[:port\\]'"
+assert_not_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances-v11.js "Select a candidate or enter a custom host\\[:port\\]"
+assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances-v11.js "uniqueListValues"
 assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/stun.js "form\\.DynamicList"
 assert_not_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/stun.js "form\\.TextValue"
 assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/stun.js "serverDynamicList\\(s, 'tcp_server'"
@@ -244,34 +241,18 @@ assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/stun.
 assert_contains luci-app-qnatter/root/usr/share/luci/menu.d/luci-app-qnatter.json '"path": "qnatter/stun"'
 assert_contains luci-app-qnatter/root/usr/share/rpcd/acl.d/luci-app-qnatter.json '"completion_webhook_test"'
 assert_contains luci-app-qnatter/root/usr/share/rpcd/acl.d/luci-app-qnatter.json '"completion_script_test"'
-assert_not_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances.js "form\\.Value, 'notify_script'"
-assert_not_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances.js 'addOptionClass'
-assert_not_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances.js 'qnatter-automation-card-start'
-assert_not_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances.js 'qnatter-automation-card'
+assert_not_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances-v11.js "form\\.Value, 'notify_script'"
+assert_not_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances-v11.js 'addOptionClass'
+assert_not_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances-v11.js 'qnatter-automation-card-start'
+assert_not_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances-v11.js 'qnatter-automation-card'
 assert_not_contains luci-app-qnatter/htdocs/luci-static/resources/qnatter/qnatter.css 'qnatter-automation-card'
-assert_line_order luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances.js "s.option(form.ListValue, 'qbittorrent_forward_method'" "s.option(form.DummyValue, '_automation_panel'"
-assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances.js "qnatter-automation-title"
-assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances.js "layout=automation6"
-assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances.js "s\\.option\\(form\\.DummyValue, '_automation_panel'"
-assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances.js 'renderAutomationPanel'
-assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances.js 'writeAutomationField'
-assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances.js 'callCompletionWebhookTest'
-assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances.js 'callCompletionScriptTest'
-assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances.js 'Script manual trigger test'
-assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances.js 'setAutomationResult'
-assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances.js 'Running script test...'
-assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances.js 'Running webhook test...'
-assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances.js "data-result': 'script-test"
-assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances.js "data-result': 'webhook-test"
-assert_not_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances.js "ui\\.addNotification\\(null, E\\('p', \\[ text \\]\\), ok \\? 'info' : 'danger'\\)"
-assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances.js 'completion_webhook_success_check'
-assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances.js 'completion_webhook_method'
-assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances.js 'completion_webhook_headers'
-assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances.js 'completion_webhook_body'
-assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances.js 'completion_webhook_success'
-assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances.js 'completion_webhook_disable_success_check'
-assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances.js 'completion_webhook_skip_unchanged'
-assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances.js 'completion_script_inline'
+assert_line_order luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances-v11.js "s.option(form.ListValue, 'qbittorrent_forward_method'" "s.option(form.DummyValue, '_automation_panel'"
+assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances-v11.js "qnatter-automation-title"
+assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances-v11.js "layout=automation6"
+assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances-v11.js "s\\.option\\(form\\.DummyValue, '_automation_panel'"
+assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances-v11.js 'renderAutomationPanel'
+assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances-v11.js 'writeAutomationField'
+assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances-v11.js 'callCompletionWebhookTest'
 assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances-v11.js 'callCompletionScriptTest'
 assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances-v11.js 'Script manual trigger test'
 assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances-v11.js 'setAutomationResult'
@@ -280,6 +261,14 @@ assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/insta
 assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances-v11.js "data-result': 'script-test"
 assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances-v11.js "data-result': 'webhook-test"
 assert_not_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances-v11.js "ui\\.addNotification\\(null, E\\('p', \\[ text \\]\\), ok \\? 'info' : 'danger'\\)"
+assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances-v11.js 'completion_webhook_success_check'
+assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances-v11.js 'completion_webhook_method'
+assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances-v11.js 'completion_webhook_headers'
+assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances-v11.js 'completion_webhook_body'
+assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances-v11.js 'completion_webhook_success'
+assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances-v11.js 'completion_webhook_disable_success_check'
+assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances-v11.js 'completion_webhook_skip_unchanged'
+assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances-v11.js 'completion_script_inline'
 assert_contains luci-app-qnatter/htdocs/luci-static/resources/qnatter/qnatter.css 'qnatter-automation-panel'
 assert_contains luci-app-qnatter/htdocs/luci-static/resources/qnatter/qnatter.css 'qnatter-automation-section'
 assert_contains luci-app-qnatter/htdocs/luci-static/resources/qnatter/qnatter.css 'qnatter-automation-grid'
@@ -290,18 +279,18 @@ assert_contains luci-app-qnatter/htdocs/luci-static/resources/qnatter/qnatter.cs
 assert_css_block_contains luci-app-qnatter/htdocs/luci-static/resources/qnatter/qnatter.css '.qnatter-automation-panel' 'width: 100%'
 assert_css_block_contains luci-app-qnatter/htdocs/luci-static/resources/qnatter/qnatter.css '.qnatter-form-page .cbi-value[data-name="_automation_panel"] > .cbi-value-title' 'display: none'
 assert_css_block_contains luci-app-qnatter/htdocs/luci-static/resources/qnatter/qnatter.css '.qnatter-form-page .cbi-value[data-name="_automation_panel"] > .cbi-value-field' 'width: 100%'
-assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances.js "hideInGrid\\(s\\.option\\(form\\.Flag, 'cloudflare_enabled'"
-assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances.js "hideInGrid\\(s\\.option\\(form\\.Value, 'cloudflare_api_token'"
-assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances.js "hideInGrid\\(s\\.option\\(form\\.ListValue, 'cloudflare_zone_id'"
-assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances.js "hideInGrid\\(s\\.option\\(form\\.ListValue, 'cloudflare_record_id'"
-assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances.js 'callCloudflareZones'
-assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances.js 'callCloudflareSrvRecords'
-assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances.js 'callRenameInstance'
-assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances.js "rename_instance"
-assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances.js "form\\.Value, '_rename_to'"
-assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances.js "form\\.DummyValue, '_rename_instance'"
-assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances.js "_\\(result && result\\.error \\? result\\.error : 'Rename failed'\\)"
-assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances.js "hideInGrid\\(s\\.option\\(form\\.Flag, 'qbittorrent_enabled'"
+assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances-v11.js "hideInGrid\\(s\\.option\\(form\\.Flag, 'cloudflare_enabled'"
+assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances-v11.js "hideInGrid\\(s\\.option\\(form\\.Value, 'cloudflare_api_token'"
+assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances-v11.js "hideInGrid\\(s\\.option\\(form\\.ListValue, 'cloudflare_zone_id'"
+assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances-v11.js "hideInGrid\\(s\\.option\\(form\\.ListValue, 'cloudflare_record_id'"
+assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances-v11.js 'callCloudflareZones'
+assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances-v11.js 'callCloudflareSrvRecords'
+assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances-v11.js 'callRenameInstance'
+assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances-v11.js "rename_instance"
+assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances-v11.js "form\\.Value, '_rename_to'"
+assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances-v11.js "form\\.DummyValue, '_rename_instance'"
+assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances-v11.js "_\\(result && result\\.error \\? result\\.error : 'Rename failed'\\)"
+assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances-v11.js "hideInGrid\\(s\\.option\\(form\\.Flag, 'qbittorrent_enabled'"
 assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/status.js 'qnatter-theme-aurora'
 assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/status.js "expect: \\{ '': \\{ instances: \\[\\] \\} \\}"
 assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/status.js 'data\.instances'
@@ -339,6 +328,9 @@ assert_contains luci-app-qnatter/root/usr/libexec/rpcd/luci.qnatter '"cloudflare
 assert_contains luci-app-qnatter/root/usr/libexec/rpcd/luci.qnatter '"cloudflare_srv_records":\{"section":"String","zone_id":"String","token":"String"\}'
 assert_contains luci-app-qnatter/root/usr/libexec/rpcd/luci.qnatter '"rename_instance":\{"old":"String","new":"String"\}'
 assert_contains luci-app-qnatter/root/usr/libexec/rpcd/luci.qnatter '"toggle_instance":\{"instance":"String"\}'
+assert_contains luci-app-qnatter/root/usr/libexec/rpcd/luci.qnatter 'qnatter\.global\.enabled'
+assert_contains luci-app-qnatter/root/usr/libexec/rpcd/luci.qnatter 'set "qnatter\.global\.enabled=1"'
+assert_contains luci-app-qnatter/root/usr/libexec/rpcd/luci.qnatter 'service enabled \(was: disabled\)'
 assert_contains luci-app-qnatter/root/usr/libexec/rpcd/luci.qnatter 'valid_section_name "\$instance"'
 assert_contains luci-app-qnatter/root/usr/libexec/rpcd/luci.qnatter '\$QNATTER_INIT_BIN" reload'
 assert_contains luci-app-qnatter/root/usr/libexec/rpcd/luci.qnatter 'cloudflare_api_get'
@@ -512,12 +504,18 @@ assert_contains qnatter/Makefile 'DEPENDS:=.*\+curl'
 assert_contains qnatter/Makefile 'DEPENDS:=.*\+nftables'
 assert_contains qnatter/Makefile 'DEPENDS:=.*\+firewall4'
 assert_contains qnatter/Makefile 'DEPENDS:=.*\+kmod-nft-nat'
-assert_contains qnatter/Makefile 'QNATTER_GOOS\?=linux'
-assert_contains qnatter/Makefile 'QNATTER_GOARCH\?=\$\(subst aarch64,arm64'
+assert_contains qnatter/Makefile 'QNATTER_GOOS:=linux'
+assert_contains qnatter/Makefile 'QNATTER_GOARCH:=\$\(subst aarch64,arm64'
 assert_contains qnatter/Makefile 'x86_64,amd64,\$\(ARCH\)'
-assert_contains qnatter/Makefile 'QNATTER_GOMIPS\?='
-assert_contains qnatter/Makefile 'QNATTER_GOARM\?='
-assert_contains qnatter/Makefile 'QNATTER_GOMIPS64\?='
+assert_contains qnatter/Makefile 'QNATTER_GOMIPS:='
+assert_contains qnatter/Makefile 'QNATTER_GOARM:='
+assert_contains qnatter/Makefile 'QNATTER_GOMIPS64:='
+# Mapping variables must not be overridable from the environment (XB-01 / N1).
+assert_not_contains qnatter/Makefile 'QNATTER_GOARCH\?='
+assert_not_contains qnatter/Makefile 'QNATTER_GOARM\?='
+assert_not_contains qnatter/Makefile 'QNATTER_GOMIPS\?='
+assert_not_contains qnatter/Makefile 'QNATTER_GO386\?='
+assert_contains qnatter/Makefile 'QNATTER_EXPECTED_GOARCH:=\$\(subst aarch64,arm64'
 assert_contains qnatter/Makefile 'vfp vfpv2,\$\(QNATTER_TARGET_FPU\)'
 assert_contains qnatter/Makefile 'CONFIG_HAS_FPU'
 assert_contains qnatter/Makefile 'cannot map target architecture'
@@ -526,7 +524,29 @@ assert_contains qnatter/Makefile 'GOARCH="\$\(QNATTER_GOARCH\)"'
 assert_contains qnatter/Makefile 'GOMIPS="\$\(QNATTER_GOMIPS\)"'
 assert_contains qnatter/Makefile 'GOMIPS64="\$\(QNATTER_GOMIPS64\)"'
 assert_contains qnatter/Makefile 'GOARM="\$\(QNATTER_GOARM\)"'
+assert_contains qnatter/Makefile 'QNATTER_GO386:='
+assert_contains qnatter/Makefile 'CONFIG_TARGET_x86_geode'
+assert_contains qnatter/Makefile 'GO386="\$\(QNATTER_GO386\)"'
+assert_contains qnatter/Makefile 'QNATTER_SUPPORTED_GOARCH:='
+assert_contains qnatter/Makefile 'unsupported GOARCH'
+assert_contains qnatter/Makefile 'build -buildvcs=false'
+assert_contains qnatter/Makefile 'GOARCH=\$\$built, expected'
+assert_contains qnatter/Makefile 'expected \$\(QNATTER_EXPECTED_GOARCH\)'
+assert_contains qnatter/Makefile 'DEPENDS:=.*@\(aarch64||arm||'
 assert_contains qnatter/Makefile 'go build .* -o \$\(PKG_BUILD_DIR\)/qnatter-go ./cmd/qnatter'
+# XB-07: sub-architecture baselines are pinned explicitly.
+assert_contains qnatter/Makefile 'QNATTER_GOAMD64:='
+assert_contains qnatter/Makefile 'QNATTER_GOARM64:='
+assert_contains qnatter/Makefile 'QNATTER_GO_PPC64:='
+assert_contains qnatter/Makefile 'GOAMD64="\$\(QNATTER_GOAMD64\)"'
+assert_contains qnatter/Makefile 'GOARM64="\$\(QNATTER_GOARM64\)"'
+assert_contains qnatter/Makefile 'GO_PPC64="\$\(QNATTER_GO_PPC64\)"'
+# XB-06: no upstream tarball is downloaded (the Go sources ship in-repo), so
+# PKG_SOURCE/PKG_MIRROR_HASH must not reappear with an unchecked download.
+assert_contains qnatter/Makefile 'define Build/Prepare'
+assert_not_contains qnatter/Makefile '^PKG_SOURCE'
+assert_not_contains qnatter/Makefile '^PKG_MIRROR_HASH'
+assert_not_contains qnatter/Makefile 'MikeWang000000/Natter.git'
 assert_contains qnatter/Makefile '\$\(INSTALL_BIN\) \$\(PKG_BUILD_DIR\)/qnatter-go \$\(1\)/usr/bin/qnatter-go'
 assert_contains qnatter/Makefile '\$\(LN\) qnatter-go \$\(1\)/usr/bin/QNatter'
 assert_contains qnatter/Makefile '^PKG_VERSION:=2\.2\.2$'
@@ -545,7 +565,6 @@ assert_not_contains qnatter/Makefile '\+python3-light'
 assert_not_contains qnatter/Makefile 'qnatter.py'
 assert_not_contains qnatter/Makefile './files/QNatter'
 assert_not_contains qnatter/Makefile 'qnatter-python-wrapper.py'
-assert_contains luci-app-qnatter/Makefile '^PKG_RELEASE:=1$'
 assert_contains luci-app-qnatter/Makefile 'LUCI_DEPENDS:=.*\+qnatter'
 assert_contains luci-app-qnatter/Makefile 'LUCI_DEPENDS:=.*\+luci-base'
 assert_contains luci-app-qnatter/Makefile 'LUCI_DEPENDS:=.*\+rpcd'
@@ -553,34 +572,34 @@ assert_contains luci-app-qnatter/Makefile 'LUCI_DEPENDS:=.*\+uhttpd'
 assert_contains luci-app-qnatter/Makefile 'LUCI_DEPENDS:=.*\+uhttpd-mod-ubus'
 assert_contains luci-app-qnatter/Makefile 'LUCI_DEPENDS:=.*\+uci'
 assert_contains luci-app-qnatter/Makefile 'LUCI_DEPENDS:=.*\+jsonfilter'
-assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances.js 'getCloudflareToken'
-assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances.js 'findCloudflareOption'
-assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances.js 'contextOption\.section\.children'
-assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances.js 'refreshCloudflareZones'
-assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances.js 'refreshCloudflareSrvRecords'
-assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances.js "hideInGrid\\(s\\.option\\(form\\.DummyValue, '_cloudflare_load_zones', _\\('Read zones'\\)"
-assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances.js "hideInGrid\\(s\\.option\\(form\\.DummyValue, '_cloudflare_load_records', _\\('Read SRV records'\\)"
-assert_not_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances.js "form\\.Button, '_cloudflare_load_zones'"
-assert_not_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances.js "form\\.Button, '_cloudflare_load_records'"
-assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances.js 'cloudflareButtonRenderer\(refreshCloudflareZones\)'
-assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances.js 'cloudflareButtonRenderer\(refreshCloudflareSrvRecords\)'
-assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances.js 'return handler\(this, section_id\)'
-assert_not_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances.js 'var tokenOption, zoneOption, recordOption'
-assert_not_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances.js 'o\.load = function\(section_id\)[^}]*callCloudflareZones'
-assert_not_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances.js 'o\.load = function\(section_id\)[^}]*callCloudflareSrvRecords'
-assert_not_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances.js 'return refreshCloudflareSrvRecords\(contextOption, section_id\);'
-assert_option_block_not_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances.js cloudflare_api_token "refreshCloudflareZones(this, section_id)"
-assert_option_block_not_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances.js cloudflare_zone_id "refreshCloudflareSrvRecords(this, section_id)"
-assert_option_block_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances.js _cloudflare_load_zones "o.inputtitle = _('Read zones')"
-assert_option_block_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances.js _cloudflare_load_zones "o.inputstyle = 'apply'"
-assert_option_block_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances.js _cloudflare_load_zones "o.default = '1'"
-assert_option_block_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances.js _cloudflare_load_zones "o.rmempty = true"
-assert_option_block_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances.js _cloudflare_load_zones "o.renderWidget = cloudflareButtonRenderer(refreshCloudflareZones)"
-assert_option_block_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances.js _cloudflare_load_records "o.inputtitle = _('Read SRV records')"
-assert_option_block_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances.js _cloudflare_load_records "o.inputstyle = 'apply'"
-assert_option_block_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances.js _cloudflare_load_records "o.default = '1'"
-assert_option_block_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances.js _cloudflare_load_records "o.rmempty = true"
-assert_option_block_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances.js _cloudflare_load_records "o.renderWidget = cloudflareButtonRenderer(refreshCloudflareSrvRecords)"
+assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances-v11.js 'getCloudflareToken'
+assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances-v11.js 'findCloudflareOption'
+assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances-v11.js 'contextOption\.section\.children'
+assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances-v11.js 'refreshCloudflareZones'
+assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances-v11.js 'refreshCloudflareSrvRecords'
+assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances-v11.js "hideInGrid\\(s\\.option\\(form\\.DummyValue, '_cloudflare_load_zones', _\\('Read zones'\\)"
+assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances-v11.js "hideInGrid\\(s\\.option\\(form\\.DummyValue, '_cloudflare_load_records', _\\('Read SRV records'\\)"
+assert_not_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances-v11.js "form\\.Button, '_cloudflare_load_zones'"
+assert_not_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances-v11.js "form\\.Button, '_cloudflare_load_records'"
+assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances-v11.js 'cloudflareButtonRenderer\(refreshCloudflareZones\)'
+assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances-v11.js 'cloudflareButtonRenderer\(refreshCloudflareSrvRecords\)'
+assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances-v11.js 'return handler\(this, section_id\)'
+assert_not_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances-v11.js 'var tokenOption, zoneOption, recordOption'
+assert_not_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances-v11.js 'o\.load = function\(section_id\)[^}]*callCloudflareZones'
+assert_not_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances-v11.js 'o\.load = function\(section_id\)[^}]*callCloudflareSrvRecords'
+assert_not_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances-v11.js 'return refreshCloudflareSrvRecords\(contextOption, section_id\);'
+assert_option_block_not_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances-v11.js cloudflare_api_token "refreshCloudflareZones(this, section_id)"
+assert_option_block_not_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances-v11.js cloudflare_zone_id "refreshCloudflareSrvRecords(this, section_id)"
+assert_option_block_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances-v11.js _cloudflare_load_zones "o.inputtitle = _('Read zones')"
+assert_option_block_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances-v11.js _cloudflare_load_zones "o.inputstyle = 'apply'"
+assert_option_block_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances-v11.js _cloudflare_load_zones "o.default = '1'"
+assert_option_block_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances-v11.js _cloudflare_load_zones "o.rmempty = true"
+assert_option_block_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances-v11.js _cloudflare_load_zones "o.renderWidget = cloudflareButtonRenderer(refreshCloudflareZones)"
+assert_option_block_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances-v11.js _cloudflare_load_records "o.inputtitle = _('Read SRV records')"
+assert_option_block_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances-v11.js _cloudflare_load_records "o.inputstyle = 'apply'"
+assert_option_block_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances-v11.js _cloudflare_load_records "o.default = '1'"
+assert_option_block_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances-v11.js _cloudflare_load_records "o.rmempty = true"
+assert_option_block_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances-v11.js _cloudflare_load_records "o.renderWidget = cloudflareButtonRenderer(refreshCloudflareSrvRecords)"
 assert_contains luci-app-qnatter/root/usr/libexec/rpcd/luci.qnatter 'CLOUDFLARE_TIMEOUT:-4'
 assert_contains qnatter/files/qnatter.uci-default 'QNATTER_UCI_CONFIG:=/etc/config/qnatter'
 assert_contains qnatter/files/qnatter.uci-default 'QNATTER_UCI_DEFAULT:=/etc/config/qnatter.default'
@@ -595,7 +614,6 @@ assert_po_translation 'Global Settings' '全局设置'
 assert_po_translation 'Hot reload' '热加载'
 assert_po_translation 'Reload notify-only changes without restarting running QNatter processes.' '仅重载通知类配置变更，不重启正在运行的 QNatter 进程。'
 assert_po_translation 'Expose ports behind full-cone NAT with optional forwarding and qBittorrent port updates.' '通过全锥形 NAT 暴露端口，并可选转发和更新 qBittorrent 监听端口。'
-assert_po_translation 'Runtime' '运行时'
 assert_not_contains luci-app-qnatter/po/zh_Hans/qnatter.po 'msgid "Label"'
 assert_po_translation 'WAN interface' 'WAN 接口'
 assert_po_translation 'Leave empty to bind to the default WAN device.' '留空则自动绑定默认 WAN 设备。'
@@ -618,13 +636,7 @@ assert_po_translation 'Read zones' '读取区域'
 assert_po_translation 'Cloudflare zone' 'Cloudflare 区域'
 assert_po_translation 'Cloudflare SRV record' 'Cloudflare SRV 记录'
 assert_po_translation 'Read SRV records' '读取 SRV 记录'
-assert_po_translation 'AUTOMATION' 'AUTOMATION'
-assert_po_translation 'Custom script trigger' '自定义脚本触发'
-assert_po_translation 'Webhook trigger' 'Webhook 触发'
-assert_po_translation 'Completion webhook URL' 'Webhook 接口地址'
-assert_po_translation 'Completion webhook timeout' 'Webhook 超时'
 assert_po_translation 'Custom script' '自定义脚本'
-assert_po_translation 'Run this shell script after punching succeeds. Arguments are protocol, internal IP, internal port, public IP, public port.' '打洞成功后执行这段 Shell 脚本；参数依次为协议、内部 IP、内部端口、公网 IP、公网端口。'
 assert_not_contains luci-app-qnatter/po/zh_Hans/qnatter.po 'Port 0 forwards to the QNatter mapped internal port\.'
 assert_po_translation 'Port 0 forwards to the port QNatter reports after punching.' '端口 0 会转发到 QNatter 打洞后报告的端口。'
 assert_po_translation 'QNatter Status' 'QNatter 状态'
@@ -646,6 +658,12 @@ assert_po_translation 'Waiting for mapping' '等待映射'
 assert_po_translation 'QNatter Logs' 'QNatter 日志'
 assert_po_translation 'Clear logs' '清空日志'
 assert_po_translation 'Logs cleared' '日志已清空'
+assert_po_translation 'Loading...' '加载中…'
+assert_po_translation 'Allow private webhook targets' '允许 Webhook 指向内网/回环地址'
+assert_po_translation 'Allow completion webhooks to target loopback, private and link-local addresses. This disables the SSRF guard for webhook requests, so a webhook may reach services on this router or anywhere in the LAN; keep it off unless a trusted local receiver is required.' '允许完成通知 Webhook 指向回环、内网或链路本地地址。这会关闭 Webhook 请求的 SSRF 防护，Webhook 可能访问本机或局域网内的任意服务；除非确实需要可信的本地接收端，否则请保持关闭。'
+assert_po_translation 'Private webhook targets are now allowed: completion webhooks may reach loopback, private and link-local addresses, including other services on this router or in the LAN. Save the form to apply this change.' '已允许 Webhook 指向内网/回环地址：完成通知 Webhook 现在可以访问回环、内网和链路本地地址（包括本路由器或局域网内的其他服务）。保存表单后生效。'
+assert_po_translation 'Private webhook targets are blocked again: completion webhooks pointing at loopback, private or link-local addresses will be rejected. Save the form to apply this change.' '已恢复阻止 Webhook 指向内网/回环地址：指向回环、内网或链路本地地址的完成通知 Webhook 将再次被拒绝。保存表单后生效。'
+assert_po_translation 'Renamed, but the leftover auto firewall rule (firewall.qnatter_%s) could not be removed automatically; remove it manually if the old port must not stay open.' '已重命名，但遗留的自动防火墙规则（firewall.qnatter_%s）未能自动删除；若旧端口不应继续开放，请手动删除该规则。'
 
 tmp="$(mktemp -d)"
 trap 'rm -rf "$tmp"' EXIT
@@ -707,8 +725,6 @@ cp "$ROOT/qnatter/files/qnatter-qbittorrent.sh" "$tmp/"
 	. "$ROOT/qnatter/files/qnatter-common.sh"
 	old_path="$PATH"
 
-	[ "$(qnatter_slug wan_ct)" = "wan_ct" ] || exit 26
-	[ "$(qnatter_slug 'wan-ct')" = "wan_ct" ] || exit 27
 	[ "$(qnatter_runtime_slug wan_ct)" = "wan_ct" ] || exit 29
 	[ "$(qnatter_runtime_slug 'wan-ct')" != "$(qnatter_runtime_slug wan_ct)" ] || exit 30
 	[ "$(qnatter_runtime_slug 'wan.ct')" != "$(qnatter_runtime_slug wan_ct)" ] || exit 31

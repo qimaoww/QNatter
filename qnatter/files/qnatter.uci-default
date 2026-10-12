@@ -53,14 +53,20 @@ qnatter_migrate_route_slot() {
 	fi
 
 	new_slot="$(qnatter_next_route_slot)" || return 0
+	# changed 只在写入真正成功时置位：uci 调用失败（只读文件系统/权限不足）
+	# 时不能提交一个"看起来改过了"的配置。
 	if "$QNATTER_UCI_BIN" set "qnatter.${section}.route_slot=${new_slot}" >/dev/null 2>&1; then
 		changed=1
 		qnatter_record_route_slot "$new_slot"
 	fi
+	return 0
 }
 
 qnatter_add_default_stun_servers() {
-	"$QNATTER_UCI_BIN" set qnatter.stun='stun' >/dev/null 2>&1 || return 0
+	local server
+	local stun_added=0
+
+	"$QNATTER_UCI_BIN" set qnatter.stun='stun' >/dev/null 2>&1 || true
 	for server in \
 		fwa.lifesizecloud.com \
 		global.turn.twilio.com \
@@ -74,7 +80,7 @@ qnatter_add_default_stun_servers() {
 		stun.telnyx.com \
 		turn.cloud-rtc.com:80
 	do
-		"$QNATTER_UCI_BIN" add_list "qnatter.stun.tcp_server=${server}" >/dev/null 2>&1 || true
+		"$QNATTER_UCI_BIN" add_list "qnatter.stun.tcp_server=${server}" >/dev/null 2>&1 && stun_added=1
 	done
 	for server in \
 		stun.miwifi.com \
@@ -93,14 +99,22 @@ qnatter_add_default_stun_servers() {
 		stun.sonetel.com \
 		stun.telnyx.com
 	do
-		"$QNATTER_UCI_BIN" add_list "qnatter.stun.udp_server=${server}" >/dev/null 2>&1 || true
+		"$QNATTER_UCI_BIN" add_list "qnatter.stun.udp_server=${server}" >/dev/null 2>&1 && stun_added=1
 	done
-	changed=1
+	# 至少要有一条服务器写入成功才允许 commit：只建了空壳 section（add_list 全
+	# 失败）就提交，会让实例带着"空 STUN 配置"上线；全部失败时保持 changed=0，
+	# 下次启动会重新迁移。
+	[ "$stun_added" = "1" ] && changed=1
+	return 0
 }
 
 if [ ! -e "$QNATTER_UCI_CONFIG" ]; then
 	[ -r "$QNATTER_UCI_DEFAULT" ] || exit 0
-	cp "$QNATTER_UCI_DEFAULT" "$QNATTER_UCI_CONFIG"
+	# /etc/config/qnatter 含 qBittorrent 密码与 Cloudflare API Token：显式 umask 077
+	# 复制并补一次 chmod 0600，避免调用方 umask（022/002）把配置拷成 0644/0664。
+	if (umask 077; cp "$QNATTER_UCI_DEFAULT" "$QNATTER_UCI_CONFIG") 2>/dev/null; then
+		chmod 0600 "$QNATTER_UCI_CONFIG" 2>/dev/null || true
+	fi
 fi
 
 if command -v "$QNATTER_UCI_BIN" >/dev/null 2>&1; then
@@ -109,10 +123,25 @@ if command -v "$QNATTER_UCI_BIN" >/dev/null 2>&1; then
 	if ! "$QNATTER_UCI_BIN" -q get qnatter.global.hot_reload >/dev/null 2>&1; then
 		"$QNATTER_UCI_BIN" set qnatter.global.hot_reload='1' >/dev/null 2>&1 && changed=1
 	fi
+	# allow_private_webhook：completion webhook / Cloudflare 端点的私网放行开关。
+	# 老配置升级上来时显式落默认值 0（默认拒绝回环/私网目标），避免用户误以为
+	# "未设置"就是放行。写入失败不置 changed。
+	if ! "$QNATTER_UCI_BIN" -q get qnatter.global.allow_private_webhook >/dev/null 2>&1; then
+		"$QNATTER_UCI_BIN" set qnatter.global.allow_private_webhook='0' >/dev/null 2>&1 && changed=1
+	fi
+	# auto_firewall_reload：auto（默认；OpenClash 在跑就跳过 fw4 整表 reload）|
+	# always | never。老配置升级时落 'auto'，避免 QNatter 在装了 OpenClash 的设备上
+	# 整表重载 fw4 而清掉 OpenClash 动态注入 inet fw4 的规则。
+	if ! "$QNATTER_UCI_BIN" -q get qnatter.global.auto_firewall_reload >/dev/null 2>&1; then
+		"$QNATTER_UCI_BIN" set qnatter.global.auto_firewall_reload='auto' >/dev/null 2>&1 && changed=1
+	fi
 	if ! "$QNATTER_UCI_BIN" -q get qnatter.stun >/dev/null 2>&1; then
 		qnatter_add_default_stun_servers
 	fi
-	for section in $("$QNATTER_UCI_BIN" -q show qnatter 2>/dev/null | sed -n 's/^qnatter\.\([A-Za-z0-9_][A-Za-z0-9_]*\)=instance$/\1/p'); do
+	# section 名允许 '-'、'.'（UCI 合法）；只放行"字母/数字/下划线/点开头"且
+	# 其余字符为字母/数字/下划线/点/连字符的名字，避免把 @instance[0] 之类的
+	# 匿名引用或带空白的怪名字喂给 uci。
+	for section in $("$QNATTER_UCI_BIN" -q show qnatter 2>/dev/null | sed -n 's/^qnatter\.\([A-Za-z0-9_.][A-Za-z0-9_.-]*\)=instance$/\1/p'); do
 		"$QNATTER_UCI_BIN" -q delete "qnatter.${section}.label" >/dev/null 2>&1 && changed=1
 		qnatter_migrate_route_slot "$section"
 	done

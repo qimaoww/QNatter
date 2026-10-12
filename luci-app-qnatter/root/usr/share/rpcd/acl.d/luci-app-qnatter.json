@@ -1,17 +1,40 @@
 {
 	"luci-app-qnatter": {
-		"description": "Grant access to QNatter LuCI application",
+		"description": "Grant access to QNatter LuCI application (the granted ubus methods only write the qnatter UCI configuration; firewall rule cleanup is deliberately not part of this group and requires the separate luci-app-qnatter-firewall grant)",
 		"read": {
 			"uci": [ "qnatter", "network" ],
 			"ubus": {
-				"luci.qnatter": [ "status", "log", "cloudflare_zones", "cloudflare_srv_records" ],
-				"service": [ "list" ]
+				"luci.qnatter": [ "status", "log", "cloudflare_zones", "cloudflare_srv_records" ]
 			}
 		},
 		"write": {
 			"uci": [ "qnatter" ],
 			"ubus": {
-				"luci.qnatter": [ "clear_log", "completion_webhook_test", "completion_script_test", "rename_instance", "toggle_instance" ]
+				"luci.qnatter": [ "clear_log", "rename_instance", "toggle_instance" ]
+			}
+		}
+	},
+
+	"luci-app-qnatter-test": {
+		"description": "Grant QNatter trigger-testing privileges (the webhook/script tests execute as root and can reach arbitrary URLs; assign only to fully trusted administrators)",
+		"read": {
+			"ubus": {
+				"luci.qnatter": [ "status", "log" ]
+			}
+		},
+		"write": {
+			"ubus": {
+				"luci.qnatter": [ "completion_webhook_test", "completion_script_test" ]
+			}
+		}
+	},
+
+	"luci-app-qnatter-firewall": {
+		"description": "Grant QNatter firewall rule cleanup (removes the firewall.qnatter_<instance> auto-firewall rule left behind when an instance is renamed or deleted; the method refuses to run while an instance of that name still exists and only ever touches the qnatter_ rule namespace). This capability is separate from luci-app-qnatter because it writes the firewall UCI configuration, which that group never declares; assign only to fully trusted administrators",
+		"read": {},
+		"write": {
+			"ubus": {
+				"luci.qnatter": [ "cleanup_firewall_rule" ]
 			}
 		}
 	}

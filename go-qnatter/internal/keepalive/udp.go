@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net"
 	"net/netip"
+	"strconv"
 	"time"
 
 	"qnatter-openwrt/go-qnatter/internal/socketopts"
@@ -72,7 +73,7 @@ func (c *UDPClient) dial() (net.Conn, error) {
 		Interface: c.Interface,
 		Reuse:     true,
 	})
-	return dialer.Dial(network, fmt.Sprintf("%s:%d", c.Host, c.Port))
+	return dialer.Dial(network, net.JoinHostPort(c.Host, strconv.Itoa(c.Port)))
 }
 
 func (c *UDPClient) disconnect() {
