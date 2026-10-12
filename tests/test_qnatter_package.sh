@@ -532,6 +532,10 @@ assert_contains qnatter/Makefile 'unsupported GOARCH'
 assert_contains qnatter/Makefile 'build -buildvcs=false'
 assert_contains qnatter/Makefile 'GOARCH=\$\$built, expected'
 assert_contains qnatter/Makefile 'expected \$\(QNATTER_EXPECTED_GOARCH\)'
+# 自校验必须用不依赖字段位置的解析，并且解析失败时打印原始输出（否则会像
+# 早期实现那样在真实构建环境里静默误判）。
+assert_contains qnatter/Makefile 'cannot determine the GOARCH'
+assert_not_contains qnatter/Makefile 'grep -o .GOARCH='
 assert_contains qnatter/Makefile 'DEPENDS:=.*@\(aarch64||arm||'
 assert_contains qnatter/Makefile 'go build .* -o \$\(PKG_BUILD_DIR\)/qnatter-go ./cmd/qnatter'
 # XB-07: sub-architecture baselines are pinned explicitly.
