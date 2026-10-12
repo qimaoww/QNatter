@@ -84,19 +84,18 @@ define Build/Prepare
 	fi
 endef
 
+# The post-build GOARCH self-check lives in scripts/check-goarch.sh on purpose.
+# Inside a define, a doubled-dollar reference reaches the shell only after two
+# rounds of make expansion (OpenWrt wraps package recipes in several layers of
+# define), so inline shell variables silently collapse to their last letters and
+# inline command substitution becomes the empty string - which is exactly how a
+# perfectly good build reported "built binary GOARCH=uilt". Keeping the quoting
+# inside a script means shell variables stay shell variables.
 define Build/Compile
 	[ -n "$(QNATTER_GOARCH)" ] || { echo "qnatter: cannot map target architecture '$(ARCH)' to GOARCH" >&2; exit 1; }
 	[ -n "$(filter $(QNATTER_GOARCH),$(QNATTER_SUPPORTED_GOARCH))" ] || { echo "qnatter: target architecture '$(ARCH)' maps to unsupported GOARCH '$(QNATTER_GOARCH)'" >&2; exit 1; }
 	cd $(CURDIR)/../go-qnatter && CGO_ENABLED=0 GOOS="$(QNATTER_GOOS)" GOARCH="$(QNATTER_GOARCH)" GOMIPS="$(QNATTER_GOMIPS)" GOMIPS64="$(QNATTER_GOMIPS64)" GOARM="$(QNATTER_GOARM)" GO386="$(QNATTER_GO386)" GOAMD64="$(QNATTER_GOAMD64)" GOARM64="$(QNATTER_GOARM64)" GO_PPC64="$(QNATTER_GO_PPC64)" go build -buildvcs=false -trimpath -ldflags="-s -w" -o $(PKG_BUILD_DIR)/qnatter-go ./cmd/qnatter
-	@bin="$(PKG_BUILD_DIR)/qnatter-go"; \
-	 out="$$(go version -m "$$bin" 2>&1)"; \
-	 built="$$(printf '%s\n' "$$out" | awk -F'\t' '{ for (i = 1; i <= NF; i++) if ($$i ~ /^GOARCH=/) { sub(/^GOARCH=/, "", $$i); print $$i; exit } }')"; \
-	 if [ -z "$$built" ]; then \
-	 	echo "qnatter: cannot determine the GOARCH of $$bin; 'go version -m' said:" >&2; \
-	 	printf '%s\n' "$$out" >&2; \
-	 	exit 1; \
-	 fi; \
-	 [ "$$built" = "$(QNATTER_EXPECTED_GOARCH)" ] || { echo "qnatter: built binary GOARCH=$$built, expected $(QNATTER_EXPECTED_GOARCH) (target ARCH=$(ARCH))" >&2; exit 1; }
+	sh $(CURDIR)/scripts/check-goarch.sh "$(PKG_BUILD_DIR)/qnatter-go" "$(QNATTER_EXPECTED_GOARCH)" "$(ARCH)"
 endef
 
 define Package/qnatter/install
