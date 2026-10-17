@@ -2,6 +2,7 @@
 'require view';
 'require poll';
 'require rpc';
+'require qnatter.theme as qnatterTheme';
 'require ui';
 
 var callLog = rpc.declare({
@@ -23,24 +24,6 @@ var callStatus = rpc.declare({
 	method: 'status',
 	expect: { '': { instances: [] } }
 });
-
-function detectThemeClass() {
-	var text = [
-		document.documentElement.className || '',
-		document.body ? document.body.className || '' : '',
-		Array.prototype.map.call(document.querySelectorAll('link[href]'), function(link) {
-			return link.getAttribute('href') || '';
-		}).join(' ')
-	].join(' ');
-
-	if (/luci-theme-aurora|theme-aurora|aurora/i.test(text))
-		return ' qnatter-theme-aurora';
-
-	if (/luci-theme-argon|theme-argon|argon/i.test(text))
-		return ' qnatter-theme-argon';
-
-	return '';
-}
 
 return view.extend({
 	render: function() {
@@ -111,10 +94,10 @@ return view.extend({
 		poll.add(refresh, 5);
 		refresh();
 
-		return E('div', { 'class': 'qnatter-page qnatter-log-page' + detectThemeClass() }, [
+		return qnatterTheme.annotate(E('div', { 'class': 'qnatter-page qnatter-log-page' + qnatterTheme.className() }, [
 			E('link', {
 				'rel': 'stylesheet',
-				'href': L.resource('qnatter/qnatter.css') + '?v=1.1.0-r1'
+				'href': L.resource('qnatter/qnatter.css') + '?v=1.1.0-r2'
 			}),
 			E('div', { 'class': 'qnatter-toolbar' }, [
 				E('h2', {}, [ _('QNatter Logs') ]),
@@ -124,6 +107,6 @@ return view.extend({
 				])
 			]),
 			log
-		]);
+		]));
 	}
 });

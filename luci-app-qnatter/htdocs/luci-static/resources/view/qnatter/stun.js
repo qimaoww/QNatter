@@ -2,6 +2,7 @@
 'require view';
 'require form';
 'require uci';
+'require qnatter.theme as qnatterTheme';
 'require ui';
 
 var DEFAULT_TCP_STUN_SERVERS = [
@@ -35,24 +36,6 @@ var DEFAULT_UDP_STUN_SERVERS = [
 	'stun.sonetel.com',
 	'stun.telnyx.com'
 ];
-
-function detectThemeClass() {
-	var text = [
-		document.documentElement.className || '',
-		document.body ? document.body.className || '' : '',
-		Array.prototype.map.call(document.querySelectorAll('link[href]'), function(link) {
-			return link.getAttribute('href') || '';
-		}).join(' ')
-	].join(' ');
-
-	if (/luci-theme-aurora|theme-aurora|aurora/i.test(text))
-		return ' qnatter-theme-aurora';
-
-	if (/luci-theme-argon|theme-argon|argon/i.test(text))
-		return ' qnatter-theme-argon';
-
-	return '';
-}
 
 function normalizeServerValue(value) {
 	return String(value || '').replace(/^\s+|\s+$/g, '');
@@ -219,13 +202,13 @@ return view.extend({
 		serverDynamicList(s, 'udp_server', _('UDP STUN servers'));
 
 		return Promise.resolve(m.render()).then(function(node) {
-			return E('div', { 'class': 'qnatter-page qnatter-form-page' + detectThemeClass() }, [
+			return qnatterTheme.annotate(E('div', { 'class': 'qnatter-page qnatter-form-page' + qnatterTheme.className() }, [
 				E('link', {
 					'rel': 'stylesheet',
-					'href': L.resource('qnatter/qnatter.css') + '?v=1.1.0-r1'
+					'href': L.resource('qnatter/qnatter.css') + '?v=1.1.0-r2'
 				}),
 				node
-			]);
+			]));
 		});
 	}
 });

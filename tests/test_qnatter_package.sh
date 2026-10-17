@@ -181,10 +181,15 @@ assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/insta
 assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances-v11.js "^'require rpc';"
 assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances-v11.js "^'require tools\\.widgets as widgets';"
 assert_not_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances-v11.js 'cbi\('
-assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances-v11.js 'qnatter-theme-aurora'
+assert_contains luci-app-qnatter/htdocs/luci-static/resources/qnatter/theme.js 'qnatter-theme-aurora'
+assert_contains luci-app-qnatter/htdocs/luci-static/resources/qnatter/theme.js 'qnatter-theme-argon'
+assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances-v11.js "'require qnatter\\.theme as qnatterTheme'"
+assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/status.js "'require qnatter\\.theme as qnatterTheme'"
+assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/log.js "'require qnatter\\.theme as qnatterTheme'"
+assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/stun.js "'require qnatter\\.theme as qnatterTheme'"
 assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances-v11.js "L\\.resource\\('qnatter/qnatter\\.css'\\)"
-assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances-v11.js "\\?v=1\\.1\\.0-r1"
-assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/stun.js "\\?v=1\\.1\\.0-r1"
+assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances-v11.js "\\?v=1\\.1\\.0-r2"
+assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/stun.js "\\?v=1\\.1\\.0-r2"
 assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances-v11.js 'hideInGrid'
 assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances-v11.js 'option\.keylist'
 assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances-v11.js 'indexOf\(String\(value\)\)'
@@ -291,7 +296,7 @@ assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/insta
 assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances-v11.js "form\\.DummyValue, '_rename_instance'"
 assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances-v11.js "_\\(result && result\\.error \\? result\\.error : 'Rename failed'\\)"
 assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/instances-v11.js "hideInGrid\\(s\\.option\\(form\\.Flag, 'qbittorrent_enabled'"
-assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/status.js 'qnatter-theme-aurora'
+assert_not_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/status.js 'function detectThemeClass'
 assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/status.js "expect: \\{ '': \\{ instances: \\[\\] \\} \\}"
 assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/status.js 'data\.instances'
 assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/status.js "method: 'toggle_instance'"
@@ -307,16 +312,16 @@ assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/statu
 assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/status.js 'document\.hidden'
 assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/status.js 'setTimeout'
 assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/status.js 'updateCard'
-assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/status.js "\\?v=1\\.1\\.0-r1"
+assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/status.js "\\?v=1\\.1\\.0-r2"
 assert_not_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/status.js 'grid\.replaceChildren\.apply'
 assert_not_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/status.js "_\\('Group'\\)"
 assert_not_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/status.js 'item\.label'
 assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/status.js 'item\.name[[:space:]]*\|\|[[:space:]]*item\.instance'
-assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/log.js 'qnatter-theme-aurora'
+assert_not_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/log.js 'function detectThemeClass'
 assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/log.js "expect: \\{ '': \\{ instances: \\[\\] \\} \\}"
 assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/log.js "expect: \\{ '': \\{ log: '' \\} \\}"
 assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/log.js 'data\.log'
-assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/log.js "\\?v=1\\.1\\.0-r1"
+assert_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/log.js "\\?v=1\\.1\\.0-r2"
 assert_not_contains luci-app-qnatter/htdocs/luci-static/resources/view/qnatter/log.js 'label'
 assert_contains luci-app-qnatter/root/usr/share/luci/menu.d/luci-app-qnatter.json '"type"[[:space:]]*:[[:space:]]*"view"'
 assert_contains luci-app-qnatter/root/usr/share/luci/menu.d/luci-app-qnatter.json '"path"[[:space:]]*:[[:space:]]*"qnatter/instances-v11"'

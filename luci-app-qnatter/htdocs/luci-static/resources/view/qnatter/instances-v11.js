@@ -6,6 +6,7 @@
 'require rpc';
 'require ui';
 'require tools.widgets as widgets';
+'require qnatter.theme as qnatterTheme';
 
 var callCloudflareZones = rpc.declare({
 	object: 'luci.qnatter',
@@ -52,24 +53,6 @@ var callCompletionScriptTest = rpc.declare({
 });
 
 var DEFAULT_WEBHOOK_BODY = '{"event":"mapped","instance":"#{instance}","protocol":"#{protocol}","inner_ip":"#{inner_ip}","inner_port":#{inner_port},"outer_ip":"#{outer_ip}","outer_port":#{outer_port}}';
-
-function detectThemeClass() {
-	var text = [
-		document.documentElement.className || '',
-		document.body ? document.body.className || '' : '',
-		Array.prototype.map.call(document.querySelectorAll('link[href]'), function(link) {
-			return link.getAttribute('href') || '';
-		}).join(' ')
-	].join(' ');
-
-	if (/luci-theme-aurora|theme-aurora|aurora/i.test(text))
-		return ' qnatter-theme-aurora';
-
-	if (/luci-theme-argon|theme-argon|argon/i.test(text))
-		return ' qnatter-theme-argon';
-
-	return '';
-}
 
 function hideInGrid(option) {
 	option.modalonly = true;
@@ -931,13 +914,13 @@ return view.extend({
 		};
 
 		return Promise.resolve(m.render()).then(function(node) {
-			return E('div', { 'class': 'qnatter-page qnatter-form-page' + detectThemeClass() }, [
+			return qnatterTheme.annotate(E('div', { 'class': 'qnatter-page qnatter-form-page' + qnatterTheme.className() }, [
 				E('link', {
 					'rel': 'stylesheet',
-					'href': L.resource('qnatter/qnatter.css') + '?v=1.1.0-r1&layout=automation6'
+					'href': L.resource('qnatter/qnatter.css') + '?v=1.1.0-r2&layout=automation6'
 				}),
 				node
-			]);
+			]));
 		});
 	}
 });
