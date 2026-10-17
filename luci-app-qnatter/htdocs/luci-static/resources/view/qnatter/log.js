@@ -63,30 +63,61 @@ return view.extend({
 			instanceSelect.value = currentInstance;
 		}
 
+		var lastError = '';
+
+		// 轮询失败时保留用户正在阅读的日志内容：只在错误变化时提示一次，
+		// 日志本来就为空时才把原因写进文本框，避免每 5 秒刷屏。
+		function reportError(err) {
+			var message = (err && err.message) || String(err);
+
+			if (message === lastError)
+				return;
+
+			lastError = message;
+
+			if (!log.value)
+				log.value = message;
+
+			ui.addNotification(null, E('p', {}, [ message ]), 'danger');
+		}
+
 		function refreshLog() {
 			return callLog(currentInstance, 300).then(function(data) {
 				log.value = data.log || '';
 				log.scrollTop = log.scrollHeight;
-			}).catch(function(err) {
-				log.value = err.message || String(err);
-			});
+				lastError = '';
+			}).catch(reportError);
 		}
 
 		function refresh() {
 			return callStatus().then(function(data) {
 				updateInstances(data.instances || []);
 				return refreshLog();
-			}).catch(function(err) {
-				log.value = err.message || String(err);
-			});
+			}).catch(reportError);
 		}
 
 		var clear = E('button', {
+			'type': 'button',
 			'class': 'cbi-button cbi-button-remove',
 			'click': function() {
+				if (clear.disabled)
+					return;
+
+				clear.disabled = true;
+				clear.setAttribute('aria-busy', 'true');
+
 				return callClearLog(currentInstance).then(function() {
 					log.value = '';
+					lastError = '';
 					ui.addNotification(null, E('p', {}, [ _('Logs cleared') ]));
+				}).catch(function(err) {
+					var message = (err && err.message) || String(err);
+
+					lastError = message;
+					ui.addNotification(null, E('p', {}, [ _('Failed to clear logs') + ': ' + message ]), 'danger');
+				}).finally(function() {
+					clear.disabled = false;
+					clear.setAttribute('aria-busy', 'false');
 				});
 			}
 		}, [ _('Clear logs') ]);

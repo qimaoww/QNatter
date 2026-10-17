@@ -399,3 +399,6 @@ msgstr "请先填写脚本内容"
 
 msgid "Fill in the webhook URL first"
 msgstr "请先填写 Webhook 地址"
+
+msgid "Failed to clear logs"
+msgstr "清空日志失败"
