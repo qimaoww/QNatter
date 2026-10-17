@@ -393,3 +393,9 @@ msgstr "从不重载 fw4"
 
 msgid "OpenClash injects its own rules directly into the inet fw4 table, and a full fw4 reload wipes them until its watchdog restores them (about two minutes). Automatic mode therefore skips the reload while OpenClash is running: the UCI rule is still written and takes effect at the next firewall reload."
 msgstr "OpenClash 会把自己的规则直接注入 inet fw4 表，整表重载会清掉这些规则，需等它的 watchdog 恢复（约两分钟）。因此“自动”模式在检测到 OpenClash 运行时跳过重载：UCI 规则照常写入，并会在下一次防火墙重载时生效。"
+
+msgid "Fill in the script content first"
+msgstr "请先填写脚本内容"
+
+msgid "Fill in the webhook URL first"
+msgstr "请先填写 Webhook 地址"
