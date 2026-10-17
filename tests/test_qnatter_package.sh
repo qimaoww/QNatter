@@ -365,7 +365,9 @@ assert_contains luci-app-qnatter/htdocs/luci-static/resources/qnatter/qnatter.cs
 assert_contains luci-app-qnatter/htdocs/luci-static/resources/qnatter/qnatter.css '\.qnatter-theme-aurora\.qnatter-form-page \.cbi-section-table'
 assert_contains luci-app-qnatter/htdocs/luci-static/resources/qnatter/qnatter.css '\.qnatter-theme-aurora\.qnatter-log-page \.qnatter-log'
 assert_contains luci-app-qnatter/htdocs/luci-static/resources/qnatter/qnatter.css 'text-transform: none'
-assert_contains luci-app-qnatter/htdocs/luci-static/resources/qnatter/qnatter.css 'border-radius: 14px'
+# aurora 圆角不再写死像素，改为取主题令牌 calc(var(--radius-base) * 2)，
+# 与原生 .cbi-section / .cbi-input-text 的 16px 圆角一致。
+assert_contains luci-app-qnatter/htdocs/luci-static/resources/qnatter/qnatter.css 'border-radius: calc\(var\(--radius-base\) \* 2\)'
 assert_contains luci-app-qnatter/htdocs/luci-static/resources/qnatter/qnatter.css 'var\(--hover-faint'
 assert_contains luci-app-qnatter/htdocs/luci-static/resources/qnatter/qnatter.css 'font-variant-numeric: tabular-nums'
 assert_css_block_contains luci-app-qnatter/htdocs/luci-static/resources/qnatter/qnatter.css '.qnatter-theme-aurora .qnatter-card h3 .cbi-button' 'background: var(--surface-sunken, rgba(248, 250, 253, 0.96));'

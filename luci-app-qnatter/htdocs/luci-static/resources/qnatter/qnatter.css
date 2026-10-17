@@ -23,24 +23,30 @@
 /* ===== 令牌层 ===== */
 .qnatter-page {
 	--qn-surface: var(--surface-overlay, var(--surface-raised, var(--background-color-high, #ffffff)));
-	--qn-surface-muted: var(--surface-muted, var(--background-color-medium, #f6f9fc));
+	--qn-surface-muted: var(--surface-muted, var(--surface-sunken, var(--background-color-medium, #f6f9fc)));
 	--qn-surface-sunken: var(--surface-sunken, var(--surface-inset, var(--background-color-medium, #f4f5f7)));
 	--qn-border: var(--hairline, var(--border-color, var(--border-color-high, rgba(25, 35, 50, 0.12))));
-	--qn-border-strong: var(--border-strong, var(--border-color-high, rgba(25, 35, 50, 0.24)));
-	--qn-text: var(--text, var(--text-strong, var(--text-color, #1f2933)));
-	--qn-text-muted: var(--text-muted, var(--muted-text, var(--text-color, #526176)));
+	--qn-border-strong: var(--border-strong, var(--hairline, var(--border-color-high, rgba(25, 35, 50, 0.24))));
+	--qn-text: var(--text, var(--text-strong, var(--text-color, var(--text-color-high, #1f2933))));
+	--qn-text-muted: var(--text-muted, var(--muted-text, var(--text-color-medium, #526176)));
 	--qn-brand: var(--brand, var(--primary, var(--primary-color-high, #5e72e4)));
-	--qn-brand-soft: var(--brand-subtle, var(--dropdown-selected-bg, rgba(94, 114, 228, 0.12)));
+	--qn-brand-soft: var(--brand-subtle, var(--dropdown-selected-bg, color-mix(in srgb, var(--qn-brand) 14%, transparent)));
 	--qn-success: var(--success, var(--success-color-high, #166534));
-	--qn-success-surface: var(--success-surface, rgba(45, 206, 137, 0.14));
+	--qn-success-surface: var(--success-surface, color-mix(in srgb, var(--qn-success) 14%, transparent));
 	--qn-danger: var(--danger, var(--error-color-high, #991b1b));
-	--qn-danger-surface: var(--danger-surface, rgba(245, 54, 92, 0.12));
+	--qn-danger-surface: var(--danger-surface, color-mix(in srgb, var(--qn-danger) 14%, transparent));
 	--qn-warning: var(--warning, var(--warn-color-high, #92400e));
-	--qn-warning-surface: var(--warning-surface, rgba(251, 191, 36, 0.18));
+	--qn-warning-surface: var(--warning-surface, color-mix(in srgb, var(--qn-warning) 16%, transparent));
 	--qn-info: var(--info, var(--primary-color-high, #1d4ed8));
-	--qn-info-surface: var(--info-surface, rgba(59, 130, 246, 0.12));
-	--qn-radius: var(--radius-base, var(--radius-card, 8px));
-	--qn-radius-control: var(--radius-control, var(--radius-base, 10px));
+	--qn-info-surface: var(--info-surface, color-mix(in srgb, var(--qn-info) 12%, transparent));
+	/* 语义色在浅底上往往偏亮（argon --success #2dce89 对浅绿底约 2:1），
+	   把语义色与正文色混合：浅色模式变深、暗色模式变浅，两个方向都回到 WCAG AA 以上。 */
+	--qn-success-text: var(--success-text, color-mix(in srgb, var(--qn-success) 30%, var(--qn-text)));
+	--qn-danger-text: var(--danger-text, color-mix(in srgb, var(--qn-danger) 30%, var(--qn-text)));
+	--qn-warning-text: var(--warning-text, color-mix(in srgb, var(--qn-warning) 30%, var(--qn-text)));
+	--qn-info-text: var(--info-text, color-mix(in srgb, var(--qn-info) 30%, var(--qn-text)));
+	--qn-radius: var(--radius-base, var(--radius-card, 4px));
+	--qn-radius-control: var(--radius-control, var(--radius-base, 4px));
 	--qn-radius-pill: var(--radius-pill, 999px);
 	--qn-shadow-sm: var(--app-shadow-sm, 0 1px 3px rgba(0, 0, 0, 0.06));
 	--qn-font-mono: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace);
@@ -300,12 +306,12 @@
 
 .qnatter-copy-button.is-copied {
 	background: var(--qn-success-surface);
-	color: var(--qn-success);
+	color: var(--qn-success-text);
 }
 
 .qnatter-copy-button.is-error {
 	background: var(--qn-danger-surface);
-	color: var(--qn-danger);
+	color: var(--qn-danger-text);
 }
 
 .qnatter-copy-button.is-copied .qnatter-copy-icon,
@@ -374,17 +380,17 @@
 
 .qnatter-pill.is-running {
 	background: var(--qn-success-surface);
-	color: var(--qn-success);
+	color: var(--qn-success-text);
 }
 
 .qnatter-pill.is-stopped {
 	background: var(--qn-danger-surface);
-	color: var(--qn-danger);
+	color: var(--qn-danger-text);
 }
 
 .qnatter-pill.is-error {
 	background: var(--qn-warning-surface);
-	color: var(--qn-warning);
+	color: var(--qn-warning-text);
 }
 
 .qnatter-pill-clickable[data-enabled="0"] {
@@ -442,7 +448,7 @@
 	background: var(--qn-danger-surface);
 	border: 1px solid var(--qn-border);
 	border-radius: var(--qn-radius);
-	color: var(--qn-danger);
+	color: var(--qn-danger-text);
 	display: flex;
 	flex-wrap: wrap;
 	gap: 10px;
@@ -670,19 +676,19 @@
 .qnatter-automation-result.is-running {
 	background: var(--qn-info-surface);
 	border-color: var(--qn-border);
-	color: var(--qn-info);
+	color: var(--qn-info-text);
 }
 
 .qnatter-automation-result.is-success {
 	background: var(--qn-success-surface);
 	border-color: var(--qn-border);
-	color: var(--qn-success);
+	color: var(--qn-success-text);
 }
 
 .qnatter-automation-result.is-error {
 	background: var(--qn-danger-surface);
 	border-color: var(--qn-border);
-	color: var(--qn-danger);
+	color: var(--qn-danger-text);
 }
 
 @media (max-width: 700px) {
@@ -777,18 +783,31 @@
 	width: auto;
 }
 
+/* 与 argon 原生 .cbi-section 保持同一张卡片形态：
+   background-color: var(--surface-color); border-radius: var(--radius-card);
+   box-shadow: var(--section-shadow)（见 argon cascade.css:2103-2127）。
+   argon 用 --section-inset 给 .cbi-value 留边距，因此这里不设左右内边距，
+   只补上下留白，避免表单行比原生页面更靠内。 */
 .qnatter-theme-argon.qnatter-form-page .cbi-section {
-	background: transparent;
+	background: var(--surface-color, var(--qn-surface));
 	border: 0;
-	margin-bottom: 24px;
-	padding: 0;
+	border-radius: var(--radius-card, var(--qn-radius));
+	box-shadow: var(--section-shadow, var(--qn-shadow-sm));
+	margin-bottom: 20px;
+	padding: 8px 0;
 }
 
-.qnatter-theme-argon.qnatter-form-page .cbi-section > legend {
-	border-bottom: 1px solid var(--qn-border);
-	font-size: 18px;
+/* 现代 LuCI 用 <h3> 渲染 section 标题（form.js:2491），旧版用 <legend>；
+   argon 全局隐藏 legend（cascade.css:2176 display:none !important），
+   这里只在本应用的容器内恢复，让「Instance: wan」这类标题仍然可见。 */
+.qnatter-theme-argon.qnatter-form-page .cbi-section > legend,
+.qnatter-theme-argon.qnatter-form-page .cbi-section > h3 {
+	border-bottom: 1px solid var(--border-color, var(--qn-border));
+	color: var(--text-strong, var(--qn-text));
+	display: block !important;
+	font-size: 1.05rem;
 	font-weight: 600;
-	margin-bottom: 12px;
+	margin: 0 var(--section-inset, 16px) 8px;
 	padding: 0 0 8px 0;
 }
 
@@ -817,7 +836,7 @@
 	--qnatter-card-text: var(--text, var(--text-color, #1f2933));
 	--qnatter-card-dt: var(--text-muted, #667085);
 	--qnatter-card-shadow: var(--app-shadow-sm, 0 1px 3px rgba(0, 0, 0, 0.06));
-	--qnatter-input-bg: var(--surface-overlay, rgba(248, 250, 253, 0.96));
+	--qnatter-input-bg: var(--control-bg, var(--surface-overlay, rgba(248, 250, 253, 0.96)));
 	--qnatter-input-border: var(--hairline, rgba(25, 35, 50, 0.12));
 	--qnatter-input-text: var(--text, var(--text-color, #1f2933));
 	--qnatter-address-bg: var(--surface-sunken, rgba(248, 250, 253, 0.96));
@@ -915,7 +934,7 @@
 .qnatter-theme-aurora .qnatter-address-field {
 	background: var(--control-bg, var(--surface-overlay, #ffffff));
 	border-color: var(--qnatter-input-border);
-	border-radius: 10px;
+	border-radius: calc(var(--radius-base) * 2);
 	box-shadow: var(--app-shadow-sm);
 	color: var(--qnatter-input-text);
 	min-height: 36px;
@@ -978,15 +997,22 @@
 	color: var(--brand, #485bc7);
 }
 
+/* 输入框圆角取自 aurora 原生 .cbi-input-text（main.css: border-radius:
+   calc(var(--radius-base) * 2)），与主题控件完全一致。 */
 .qnatter-theme-aurora .qnatter-log,
 .qnatter-theme-aurora .cbi-input-text,
 .qnatter-theme-aurora .cbi-input-select,
 .qnatter-theme-aurora .cbi-input-textarea {
 	background: var(--qnatter-input-bg);
 	border-color: var(--qnatter-input-border);
-	border-radius: 14px;
+	border-radius: calc(var(--radius-base) * 2);
 	box-shadow: var(--app-shadow-sm);
 	color: var(--qnatter-input-text);
+}
+
+/* aurora 原生按钮是 calc(var(--radius-base) * 1.5) = 12px，比 section 小一档。 */
+.qnatter-theme-aurora .cbi-button:not(.qnatter-pill) {
+	border-radius: calc(var(--radius-base) * 1.5);
 }
 
 .qnatter-theme-aurora .cbi-section,
@@ -995,9 +1021,9 @@
 }
 
 .qnatter-theme-aurora.qnatter-form-page .cbi-section {
-	background: var(--surface-overlay, rgba(255, 255, 255, 0.92));
+	background: var(--surface, var(--surface-overlay, rgba(255, 255, 255, 0.92)));
 	border: 1px solid var(--hairline, rgba(25, 35, 50, 0.12));
-	border-radius: 18px;
+	border-radius: calc(var(--radius-base) * 2);
 	box-shadow: var(--app-shadow-sm);
 	padding: 18px 20px;
 }
@@ -1005,7 +1031,7 @@
 .qnatter-theme-aurora.qnatter-form-page .cbi-section-table {
 	background: var(--surface, rgba(255, 255, 255, 0.88));
 	border: 1px solid var(--hairline, rgba(25, 35, 50, 0.12));
-	border-radius: 14px;
+	border-radius: calc(var(--radius-base) * 2);
 	overflow: hidden;
 }
 
@@ -1071,7 +1097,7 @@
 .qnatter-theme-aurora.qnatter-log-page .qnatter-log {
 	background: var(--surface-overlay, rgba(255, 255, 255, 0.92));
 	border: 1px solid var(--hairline, rgba(25, 35, 50, 0.12));
-	border-radius: 18px;
+	border-radius: calc(var(--radius-base) * 2);
 	box-shadow: var(--app-shadow-sm);
 	line-height: 1.55;
 	padding: 14px;
