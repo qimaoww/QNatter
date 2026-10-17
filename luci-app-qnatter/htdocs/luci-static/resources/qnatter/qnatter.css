@@ -1,7 +1,58 @@
-/* ===== 基础样式 ===== */
+/*!
+ * QNatter LuCI 视图样式
+ *
+ * 主题融合策略：所有颜色、圆角、阴影、等宽字体只在「令牌层」定义一次，
+ * 通过 var(--a, var(--b, fallback)) 链式取值，依次命中：
+ *   1) luci-theme-aurora  htdocs/luci-static/aurora/main.css
+ *        --surface-overlay / --surface-sunken / --hairline / --text / --text-muted
+ *        --brand / --radius-base / --app-shadow-sm / --font-mono / --hover-faint
+ *   2) luci-theme-argon   htdocs/luci-static/argon/css/cascade.css
+ *        --surface-color / --surface-raised / --surface-inset / --border-color
+ *        --text-strong / --text-color / --muted-text / --primary / --radius-card
+ *        --radius-control / --radius-pill / --input-bg / --table-border
+ *   3) luci-theme-bootstrap htdocs/luci-static/bootstrap/cascade.css
+ *        --background-color-high / --background-color-medium / --text-color
+ *        --border-color / --primary-color-high / --success-color-high / --font-mono
+ *        （注意：bootstrap 只有 --primary-color-high/-medium/-low，没有 --primary-color）
+ *   4) 内置浅色回退值，保证未安装外部主题时依然可用
+ *
+ * 明暗模式：三个主题都在 :root 上翻转自己的令牌，因此本文件不判断明暗，
+ * 只对缺少阴影令牌的主题补一个暗色阴影（见文末 [data-darkmode] 规则）。
+ */
+
+/* ===== 令牌层 ===== */
 .qnatter-page {
+	--qn-surface: var(--surface-overlay, var(--surface-raised, var(--background-color-high, #ffffff)));
+	--qn-surface-muted: var(--surface-muted, var(--surface-sunken, var(--background-color-medium, #f6f9fc)));
+	--qn-surface-sunken: var(--surface-sunken, var(--surface-inset, var(--background-color-medium, #f4f5f7)));
+	--qn-border: var(--hairline, var(--border-color, var(--border-color-high, rgba(25, 35, 50, 0.12))));
+	--qn-border-strong: var(--border-strong, var(--hairline, var(--border-color-high, rgba(25, 35, 50, 0.24))));
+	--qn-text: var(--text, var(--text-strong, var(--text-color, var(--text-color-high, #1f2933))));
+	--qn-text-muted: var(--text-muted, var(--muted-text, var(--text-color-medium, #526176)));
+	--qn-brand: var(--brand, var(--primary, var(--primary-color-high, #5e72e4)));
+	--qn-brand-soft: var(--brand-subtle, var(--dropdown-selected-bg, color-mix(in srgb, var(--qn-brand) 14%, transparent)));
+	--qn-success: var(--success, var(--success-color-high, #166534));
+	--qn-success-surface: var(--success-surface, color-mix(in srgb, var(--qn-success) 14%, transparent));
+	--qn-danger: var(--danger, var(--error-color-high, #991b1b));
+	--qn-danger-surface: var(--danger-surface, color-mix(in srgb, var(--qn-danger) 14%, transparent));
+	--qn-warning: var(--warning, var(--warn-color-high, #92400e));
+	--qn-warning-surface: var(--warning-surface, color-mix(in srgb, var(--qn-warning) 16%, transparent));
+	--qn-info: var(--info, var(--primary-color-high, #1d4ed8));
+	--qn-info-surface: var(--info-surface, color-mix(in srgb, var(--qn-info) 12%, transparent));
+	/* 语义色在浅底上往往偏亮（argon --success #2dce89 对浅绿底约 2:1），
+	   把语义色与正文色混合：浅色模式变深、暗色模式变浅，两个方向都回到 WCAG AA 以上。 */
+	--qn-success-text: var(--success-text, color-mix(in srgb, var(--qn-success) 30%, var(--qn-text)));
+	--qn-danger-text: var(--danger-text, color-mix(in srgb, var(--qn-danger) 30%, var(--qn-text)));
+	--qn-warning-text: var(--warning-text, color-mix(in srgb, var(--qn-warning) 30%, var(--qn-text)));
+	--qn-info-text: var(--info-text, color-mix(in srgb, var(--qn-info) 30%, var(--qn-text)));
+	--qn-radius: var(--radius-base, var(--radius-card, 4px));
+	--qn-radius-control: var(--radius-control, var(--radius-base, 4px));
+	--qn-radius-pill: var(--radius-pill, 999px);
+	--qn-shadow-sm: var(--app-shadow-sm, 0 1px 3px rgba(0, 0, 0, 0.06));
+	--qn-font-mono: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace);
+
 	box-sizing: border-box;
-	color: var(--text-color, #1f2933);
+	color: var(--qn-text);
 	max-width: 100%;
 	min-width: 0;
 	overflow-x: hidden;
@@ -46,6 +97,7 @@
 	overflow-x: auto;
 }
 
+/* ===== 工具栏 ===== */
 .qnatter-toolbar {
 	align-items: center;
 	display: flex;
@@ -73,6 +125,7 @@
 	min-width: 160px;
 }
 
+/* ===== 网格 ===== */
 .qnatter-grid {
 	align-items: stretch;
 	display: grid;
@@ -93,10 +146,13 @@
 	}
 }
 
+/* ===== 卡片 ===== */
 .qnatter-card {
-	background: rgba(255, 255, 255, 0.88);
-	border: 1px solid rgba(25, 35, 50, 0.12);
-	border-radius: 8px;
+	background: var(--qn-surface);
+	border: 1px solid var(--qn-border);
+	border-radius: var(--qn-radius);
+	box-shadow: var(--qn-shadow-sm);
+	color: var(--qn-text);
 	min-width: 0;
 	padding: 14px;
 }
@@ -125,7 +181,7 @@
 }
 
 .qnatter-card dt {
-	color: #667085;
+	color: var(--qn-text-muted);
 	font-weight: 600;
 	min-width: 0;
 	overflow-wrap: anywhere;
@@ -137,16 +193,17 @@
 	overflow-wrap: anywhere;
 }
 
+/* ===== 地址字段与复制按钮 ===== */
 .qnatter-address-cell {
 	overflow: hidden;
 }
 
 .qnatter-address-field {
 	align-items: stretch;
-	background: rgba(255, 255, 255, 0.82);
-	border: 1px solid rgba(25, 35, 50, 0.15);
-	border-radius: 10px;
-	box-shadow: inset 0 1px 1px rgba(25, 35, 50, 0.025);
+	background: var(--control-bg, var(--input-bg, var(--qn-surface)));
+	border: 1px solid var(--qn-border);
+	border-radius: var(--qn-radius-control);
+	box-shadow: var(--qn-shadow-sm);
 	display: flex;
 	min-height: 36px;
 	min-width: 0;
@@ -156,20 +213,19 @@
 }
 
 .qnatter-address-field:hover {
-	background: rgba(255, 255, 255, 0.90);
-	border-color: rgba(25, 35, 50, 0.24);
+	border-color: var(--qn-border-strong);
 }
 
 .qnatter-address-field:focus-within {
-	border-color: var(--primary-color, #5e72e4);
-	box-shadow: 0 0 0 2px rgba(94, 114, 228, 0.14);
+	border-color: var(--qn-brand);
+	box-shadow: 0 0 0 2px var(--qn-brand-soft);
 }
 
 .qnatter-address-value {
 	color: inherit;
 	display: block;
 	flex: 1 1 auto;
-	font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+	font-family: var(--qn-font-mono);
 	font-size: 12.5px;
 	font-variant-numeric: tabular-nums;
 	letter-spacing: 0.01em;
@@ -186,8 +242,8 @@
 	align-items: center;
 	background: transparent;
 	border: 0;
-	border-left: 1px solid rgba(25, 35, 50, 0.10);
-	color: #526176;
+	border-left: 1px solid var(--qn-border);
+	color: var(--qn-text-muted);
 	cursor: pointer;
 	display: inline-flex;
 	flex: 0 0 32px;
@@ -234,12 +290,12 @@
 }
 
 .qnatter-copy-button:hover:not(:disabled) {
-	background: rgba(94, 114, 228, 0.10);
-	color: var(--primary-color, #485bc7);
+	background: var(--qn-brand-soft);
+	color: var(--qn-brand);
 }
 
 .qnatter-copy-button:focus-visible {
-	box-shadow: inset 0 0 0 2px var(--primary-color, #5e72e4);
+	box-shadow: inset 0 0 0 2px var(--qn-brand);
 	outline: none;
 }
 
@@ -249,13 +305,13 @@
 }
 
 .qnatter-copy-button.is-copied {
-	background: rgba(45, 206, 137, 0.14);
-	color: #166534;
+	background: var(--qn-success-surface);
+	color: var(--qn-success-text);
 }
 
 .qnatter-copy-button.is-error {
-	background: rgba(245, 54, 92, 0.12);
-	color: #991b1b;
+	background: var(--qn-danger-surface);
+	color: var(--qn-danger-text);
 }
 
 .qnatter-copy-button.is-copied .qnatter-copy-icon,
@@ -285,8 +341,9 @@
 	content: "!";
 }
 
+/* ===== 状态徽章 ===== */
 .qnatter-pill {
-	border-radius: 999px;
+	border-radius: var(--qn-radius-pill);
 	font-size: 12px;
 	font-weight: 700;
 	padding: 3px 8px;
@@ -300,11 +357,16 @@
 
 .qnatter-pill-clickable:hover {
 	transform: translateY(-1px);
-	box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+	box-shadow: var(--qn-shadow-sm);
 }
 
 .qnatter-pill-clickable:active {
 	transform: translateY(0);
+}
+
+.qnatter-pill-clickable:focus-visible {
+	box-shadow: 0 0 0 2px var(--qn-brand-soft);
+	outline: none;
 }
 
 .qnatter-pill-clickable:disabled {
@@ -317,49 +379,109 @@
 }
 
 .qnatter-pill.is-running {
-	background: #dcfce7;
-	color: #166534;
+	background: var(--qn-success-surface);
+	color: var(--qn-success-text);
 }
 
 .qnatter-pill.is-stopped {
-	background: #fee2e2;
-	color: #991b1b;
+	background: var(--qn-danger-surface);
+	color: var(--qn-danger-text);
 }
 
 .qnatter-pill.is-error {
-	background: #fef3c7;
-	color: #92400e;
+	background: var(--qn-warning-surface);
+	color: var(--qn-warning-text);
 }
 
 .qnatter-pill-clickable[data-enabled="0"] {
-	opacity: 0.6;
-	background: #f1f5f9;
-	color: #64748b;
+	background: var(--qn-surface-sunken);
+	color: var(--qn-text-muted);
+	opacity: 0.9;
 }
 
 .qnatter-pill-clickable[data-enabled="0"]:hover {
-	opacity: 0.8;
-	background: #e2e8f0;
+	background: var(--qn-surface-muted);
 }
 
+/* ===== 空态 ===== */
 .qnatter-empty {
-	background: rgba(255, 255, 255, 0.82);
-	border: 1px solid rgba(25, 35, 50, 0.12);
-	border-radius: 8px;
+	background: var(--qn-surface-muted);
+	border: 1px dashed var(--qn-border-strong);
+	border-radius: var(--qn-radius);
+	color: var(--qn-text-muted);
 	min-width: 0;
 	overflow-wrap: anywhere;
 	padding: 18px;
 }
 
+.qnatter-empty-title {
+	font-weight: 700;
+	margin: 0 0 6px;
+}
+
+.qnatter-empty p {
+	margin: 0 0 6px;
+}
+
+.qnatter-empty p:last-child {
+	margin-bottom: 0;
+}
+
+.qnatter-empty-actions {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px;
+	margin-top: 12px;
+}
+
+.qnatter-grid > .qnatter-empty {
+	grid-column: 1 / -1;
+}
+
+.qnatter-notice {
+	margin: 0 0 16px;
+}
+
+/* ===== 页内提示条（状态页刷新失败） ===== */
+.qnatter-alert {
+	align-items: center;
+	background: var(--qn-danger-surface);
+	border: 1px solid var(--qn-border);
+	border-radius: var(--qn-radius);
+	color: var(--qn-danger-text);
+	display: flex;
+	flex-wrap: wrap;
+	gap: 10px;
+	justify-content: space-between;
+	margin: 0 0 14px;
+	min-width: 0;
+	padding: 10px 12px;
+}
+
+.qnatter-alert.is-hidden {
+	display: none !important;
+}
+
+.qnatter-alert-text {
+	min-width: 0;
+	overflow-wrap: anywhere;
+}
+
+/* ===== 日志 ===== */
 .qnatter-log {
+	background: var(--qn-surface-sunken);
+	border: 1px solid var(--qn-border);
+	border-radius: var(--qn-radius);
 	box-sizing: border-box;
-	font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+	color: var(--qn-text);
+	font-family: var(--qn-font-mono);
 	height: 640px;
 	max-width: 100%;
 	min-width: 0;
 	width: 100%;
 }
 
+/* ===== 自定义触发（自动化面板） ===== */
 .qnatter-form-page .cbi-value[data-name="_automation_panel"] {
 	display: block;
 	margin-top: 18px;
@@ -380,7 +502,7 @@
 }
 
 .qnatter-automation-panel {
-	border-top: 1px solid rgba(25, 35, 50, 0.12);
+	border-top: 1px solid var(--qn-border);
 	margin-top: 10px;
 	min-width: 0;
 	padding-top: 18px;
@@ -393,17 +515,18 @@
 }
 
 .qnatter-automation-title {
-	color: #102033;
+	color: var(--qn-text);
 	font-size: 18px;
 	font-weight: 600;
 	line-height: 1.35;
+	margin: 0;
 	overflow-wrap: anywhere;
 }
 
 .qnatter-automation-section {
-	background: rgba(255, 255, 255, 0.45);
-	border: 1px solid rgba(16, 32, 51, 0.14);
-	border-radius: 8px;
+	background: var(--qn-surface-muted);
+	border: 1px solid var(--qn-border);
+	border-radius: var(--qn-radius);
 	box-sizing: border-box;
 	margin-top: 10px;
 	min-width: 0;
@@ -421,7 +544,7 @@
 }
 
 .qnatter-automation-section-head strong {
-	color: #102033;
+	color: var(--qn-text);
 	font-size: 15px;
 	font-weight: 600;
 	margin-right: auto;
@@ -456,7 +579,7 @@
 }
 
 .qnatter-automation-label {
-	color: #667085;
+	color: var(--qn-text-muted);
 	font-size: 13px;
 	font-weight: 600;
 	line-height: 1.4;
@@ -470,14 +593,21 @@
 
 .qnatter-automation-input,
 .qnatter-automation-textarea {
-	background: #fbfdff;
-	border: 1px solid rgba(16, 32, 51, 0.18);
-	border-radius: 8px;
+	background: var(--control-bg, var(--input-bg, var(--qn-surface)));
+	border: 1px solid var(--qn-border);
+	border-radius: var(--qn-radius-control);
 	box-sizing: border-box;
-	color: #102033;
+	color: var(--qn-text);
 	max-width: 100%;
 	min-width: 0;
 	width: 100%;
+}
+
+.qnatter-automation-input:focus,
+.qnatter-automation-textarea:focus {
+	border-color: var(--qn-brand);
+	box-shadow: 0 0 0 2px var(--qn-brand-soft);
+	outline: none;
 }
 
 .qnatter-automation-input {
@@ -496,7 +626,7 @@
 }
 
 .qnatter-automation-monospace {
-	font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+	font-family: var(--qn-font-mono);
 }
 
 .qnatter-automation-grid {
@@ -520,10 +650,16 @@
 	opacity: 0.72;
 }
 
+.qnatter-automation-test:disabled {
+	cursor: not-allowed;
+}
+
 .qnatter-automation-result {
-	border: 1px solid rgba(16, 32, 51, 0.14);
-	border-radius: 8px;
+	background: var(--qn-surface-muted);
+	border: 1px solid var(--qn-border);
+	border-radius: var(--qn-radius);
 	box-sizing: border-box;
+	color: var(--qn-text);
 	font-size: 13px;
 	line-height: 1.45;
 	margin-top: 10px;
@@ -538,21 +674,21 @@
 }
 
 .qnatter-automation-result.is-running {
-	background: #eff6ff;
-	border-color: #bfdbfe;
-	color: #1d4ed8;
+	background: var(--qn-info-surface);
+	border-color: var(--qn-border);
+	color: var(--qn-info-text);
 }
 
 .qnatter-automation-result.is-success {
-	background: #ecfdf3;
-	border-color: #bbf7d0;
-	color: #166534;
+	background: var(--qn-success-surface);
+	border-color: var(--qn-border);
+	color: var(--qn-success-text);
 }
 
 .qnatter-automation-result.is-error {
-	background: #fff1f2;
-	border-color: #fecdd3;
-	color: #be123c;
+	background: var(--qn-danger-surface);
+	border-color: var(--qn-border);
+	color: var(--qn-danger-text);
 }
 
 @media (max-width: 700px) {
@@ -574,35 +710,21 @@
 	}
 }
 
-/* ===== luci-theme-argon 完整适配 ===== */
-.qnatter-theme-argon {
-	--argon-primary: #5e72e4;
-	--argon-primary-dark: #483d8b;
-	--argon-success: #2dce89;
-	--argon-danger: #f5365c;
-	--argon-text: #32325d;
-	--argon-muted: #525f7f;
-	--argon-surface: rgba(255, 255, 255, 0.88);
-	--argon-border: rgba(136, 152, 170, 0.18);
-	--argon-shadow: 0 0 1rem 0 rgba(136, 152, 170, 0.15);
-	--argon-radius: 0.25rem;
-	--argon-blur: 10px;
-	--argon-font: "Google Sans", "Microsoft Yahei", "WenQuanYi Micro Hei", sans-serif, "Helvetica Neue", Helvetica, "Hiragino Sans GB";
-	color: var(--argon-text);
-	font-family: var(--argon-font);
+/* ===== luci-theme-argon 适配 =====
+ * argon 已提供完整语义令牌（cascade.css :root），因此这里只做「对齐形态」：
+ * 容器不再重绘背景、不再用 !important 覆盖原生控件，明暗由主题令牌翻转。
+ */
+.qnatter-page.qnatter-theme-argon {
+	background: transparent;
+	color: var(--qn-text);
+	font-family: inherit;
 }
 
-/* 卡片和空状态容器 */
-.qnatter-theme-argon .qnatter-card,
-.qnatter-theme-argon .qnatter-empty {
-	background: #ffffff !important;
-	-webkit-backdrop-filter: none;
-	backdrop-filter: none;
-	border: 1px solid var(--argon-border) !important;
-	border-radius: var(--argon-radius) !important;
-	box-shadow: 0 1px 3px rgba(136, 152, 170, 0.08) !important;
-	color: var(--argon-text);
-	font-family: var(--argon-font);
+.qnatter-theme-argon .qnatter-toolbar h2 {
+	font-size: 1.25rem;
+	font-weight: 700;
+	letter-spacing: -0.01em;
+	margin: 0;
 }
 
 .qnatter-theme-argon .qnatter-card {
@@ -613,446 +735,100 @@
 	padding: 20px;
 }
 
-/* 强制所有子元素背景透明（Argon 全局 CSS 会覆盖） */
-.qnatter-theme-argon .qnatter-card *,
-.qnatter-theme-argon .qnatter-empty * {
-	background: transparent !important;
-}
-
-/* 工具栏 */
-.qnatter-theme-argon .qnatter-toolbar {
-	margin: 0 !important;
-}
-
-.qnatter-theme-argon .qnatter-toolbar h2 {
-	background: transparent !important;
-	border-radius: 0 !important;
-	box-shadow: none !important;
-	color: var(--argon-text);
-	font-family: var(--argon-font);
-	font-size: 1.25rem;
-	font-weight: 700;
-	letter-spacing: -0.01em;
-	margin: 0;
-	padding: 16px 20px;
-	border-bottom: 1px solid var(--argon-border);
-}
-
-/* 整个页面用白色容器包裹 */
-.qnatter-page.qnatter-theme-argon {
-	background: #ffffff !important;
-	border-radius: var(--argon-radius);
-	box-shadow: var(--argon-shadow);
-	overflow: hidden;
-}
-
-/* 网格区域 */
-.qnatter-page.qnatter-theme-argon .qnatter-grid {
-	background: rgba(244, 245, 247, 0.3);
-	padding: 20px;
-}
-
-/* 卡片头部 */
 .qnatter-theme-argon .qnatter-card-head {
-	align-items: center;
-	border-bottom: 1px solid var(--argon-border);
+	border-bottom: 1px solid var(--qn-border);
 	margin-bottom: 12px;
 	padding-bottom: 12px;
 }
 
 .qnatter-theme-argon .qnatter-card h3 {
-	color: var(--argon-text);
-	font-family: var(--argon-font);
 	font-size: 1.05rem;
 	font-weight: 600;
 	letter-spacing: -0.01em;
 	line-height: 1.3;
 }
 
-/* 定义列表 */
 .qnatter-theme-argon .qnatter-card dl {
 	gap: 8px 14px;
 	grid-template-columns: 124px minmax(0, 1fr);
 }
 
 .qnatter-theme-argon .qnatter-card dt {
-	color: var(--argon-muted);
 	font-size: 12px;
 	font-weight: 700;
 	letter-spacing: 0.02em;
 }
 
 .qnatter-theme-argon .qnatter-card dd {
-	color: var(--argon-text);
 	font-variant-numeric: tabular-nums;
 	line-height: 1.45;
 }
 
-.qnatter-theme-argon .qnatter-card .qnatter-address-field {
-	background: #f7f9fc !important;
-	border-color: var(--argon-border) !important;
-	border-radius: 0.5rem !important;
+.qnatter-theme-argon .qnatter-copy-button {
+	flex-basis: 46px;
+	min-width: 46px;
+	width: 46px;
 }
 
-.qnatter-theme-argon .qnatter-card .qnatter-address-field:hover {
-	background: #fbfcfe !important;
-	border-color: rgba(94, 114, 228, 0.28) !important;
+.qnatter-theme-argon .qnatter-copy-icon {
+	display: none;
 }
 
-.qnatter-theme-argon .qnatter-card .qnatter-address-field:focus-within {
-	border-color: var(--argon-primary) !important;
-	box-shadow: 0 0 0 2px rgba(94, 114, 228, 0.16) !important;
+.qnatter-theme-argon .qnatter-copy-label {
+	clip: auto;
+	clip-path: none;
+	height: auto;
+	overflow: visible;
+	position: static;
+	width: auto;
 }
 
-.qnatter-theme-argon .qnatter-card .qnatter-copy-button {
-	background: transparent !important;
-	border-left-color: var(--argon-border);
-	color: var(--argon-muted);
-}
-
-.qnatter-theme-argon .qnatter-card .qnatter-copy-button:hover:not(:disabled) {
-	background: rgba(94, 114, 228, 0.13) !important;
-	color: var(--argon-primary);
-}
-
-.qnatter-theme-argon .qnatter-card .qnatter-copy-button.is-copied {
-	background: rgba(45, 206, 137, 0.16) !important;
-	color: #1f9d63;
-}
-
-.qnatter-theme-argon .qnatter-card .qnatter-copy-button.is-error {
-	background: rgba(245, 54, 92, 0.14) !important;
-	color: #d12e50;
-}
-
-/* 状态徽章 */
-.qnatter-theme-argon .qnatter-pill {
-	border-radius: 999px;
-	font-weight: 700;
-}
-
-.qnatter-theme-argon .qnatter-pill.is-running {
-	background: rgba(45, 206, 137, 0.15);
-	color: #1f9d63;
-}
-
-.qnatter-theme-argon .qnatter-pill.is-stopped {
-	background: rgba(245, 54, 92, 0.15);
-	color: #d12e50;
-}
-
-.qnatter-theme-argon .qnatter-pill.is-error {
-	background: rgba(251, 177, 60, 0.18);
-	color: #b45309;
-}
-
-/* 可点击徽章 */
-.qnatter-theme-argon .qnatter-pill-clickable {
-	transition: all 0.2s ease;
-}
-
-.qnatter-theme-argon .qnatter-pill-clickable:hover {
-	box-shadow: 0 4px 12px rgba(94, 114, 228, 0.18);
-	transform: translateY(-1px);
-}
-
-.qnatter-theme-argon .qnatter-pill-clickable:focus-visible {
-	outline: none;
-	box-shadow: 0 0 0 3px rgba(94, 114, 228, 0.35);
-}
-
-.qnatter-theme-argon .qnatter-pill-clickable:active {
-	transform: translateY(0);
-}
-
-.qnatter-theme-argon .qnatter-pill-clickable[data-enabled="0"] {
-	background: rgba(136, 152, 170, 0.15);
-	color: var(--argon-muted);
-}
-
-.qnatter-theme-argon .qnatter-pill-clickable[data-enabled="0"]:hover {
-	background: rgba(94, 114, 228, 0.15);
-	color: var(--argon-primary);
-}
-
-.qnatter-theme-argon .qnatter-pill-clickable:disabled {
-	cursor: not-allowed;
-	opacity: 0.55;
-}
-
-/* 日志视图 */
-.qnatter-theme-argon .qnatter-log {
-	background: var(--argon-surface);
-	-webkit-backdrop-filter: blur(var(--argon-blur));
-	backdrop-filter: blur(var(--argon-blur));
-	border: 1px solid var(--argon-border);
-	border-radius: var(--argon-radius);
-	box-shadow: var(--argon-shadow);
-	color: var(--argon-text);
-}
-
-/* ===== Argon 表单页面适配 ===== */
-
-/* 表单页面整体容器 */
-.qnatter-page.qnatter-theme-argon.qnatter-form-page {
-	background: #ffffff !important;
-	border-radius: var(--argon-radius);
-	box-shadow: var(--argon-shadow);
-	padding: 20px;
-}
-
-/* 表单标题 */
-.qnatter-theme-argon.qnatter-form-page h2,
-.qnatter-theme-argon.qnatter-form-page h3 {
-	color: var(--argon-text);
-	font-family: var(--argon-font);
-	font-weight: 600;
-}
-
-/* 表单描述文字 */
-.qnatter-theme-argon.qnatter-form-page .cbi-section-descr {
-	color: var(--argon-muted);
-	font-size: 14px;
-	margin-bottom: 16px;
-}
-
-/* 表单区块 */
+/* 与 argon 原生 .cbi-section 保持同一张卡片形态：
+   background-color: var(--surface-color); border-radius: var(--radius-card);
+   box-shadow: var(--section-shadow)（见 argon cascade.css:2103-2127）。
+   argon 用 --section-inset 给 .cbi-value 留边距，因此这里不设左右内边距，
+   只补上下留白，避免表单行比原生页面更靠内。 */
 .qnatter-theme-argon.qnatter-form-page .cbi-section {
-	background: transparent !important;
-	border: 0 !important;
-	margin-bottom: 24px;
-	padding: 0 !important;
+	background: var(--surface-color, var(--qn-surface));
+	border: 0;
+	border-radius: var(--radius-card, var(--qn-radius));
+	box-shadow: var(--section-shadow, var(--qn-shadow-sm));
+	margin-bottom: 20px;
+	padding: 8px 0;
 }
 
-/* 表单区块标题 */
-.qnatter-theme-argon.qnatter-form-page .cbi-section > legend {
-	background: transparent !important;
-	color: var(--argon-text);
-	font-family: var(--argon-font);
-	font-size: 18px;
+/* 现代 LuCI 用 <h3> 渲染 section 标题（form.js:2491），旧版用 <legend>；
+   argon 全局隐藏 legend（cascade.css:2176 display:none !important），
+   这里只在本应用的容器内恢复，让「Instance: wan」这类标题仍然可见。 */
+.qnatter-theme-argon.qnatter-form-page .cbi-section > legend,
+.qnatter-theme-argon.qnatter-form-page .cbi-section > h3 {
+	border-bottom: 1px solid var(--border-color, var(--qn-border));
+	color: var(--text-strong, var(--qn-text));
+	display: block !important;
+	font-size: 1.05rem;
 	font-weight: 600;
-	margin-bottom: 12px;
-	padding: 0 0 8px 0 !important;
-	border-bottom: 1px solid var(--argon-border);
+	margin: 0 var(--section-inset, 16px) 8px;
+	padding: 0 0 8px 0;
 }
 
-/* 表格容器 */
 .qnatter-theme-argon.qnatter-form-page .cbi-section-table-titles,
 .qnatter-theme-argon.qnatter-form-page .cbi-section-table {
-	background: #ffffff !important;
-	border: 1px solid var(--argon-border) !important;
-	border-radius: var(--argon-radius);
+	border: var(--table-border, 1px solid var(--qn-border));
+	border-radius: var(--qn-radius);
 	overflow: hidden;
 }
 
-/* 表头 */
-.qnatter-theme-argon.qnatter-form-page .cbi-section-table-titles th,
-.qnatter-theme-argon.qnatter-form-page .cbi-section-table thead th {
-	background: rgba(244, 245, 247, 0.5) !important;
-	border-bottom: 1px solid var(--argon-border) !important;
-	color: var(--argon-muted);
-	font-family: var(--argon-font);
-	font-size: 12px;
-	font-weight: 700;
-	letter-spacing: 0.02em;
-	padding: 12px 16px !important;
-}
-
-/* 表格行 */
 .qnatter-theme-argon.qnatter-form-page .cbi-section-table-row {
-	background: #ffffff !important;
-	border-bottom: 1px solid var(--argon-border) !important;
-	transition: background 0.15s ease;
+	border-bottom: 1px solid var(--qn-border);
 }
 
-.qnatter-theme-argon.qnatter-form-page .cbi-section-table-row:hover {
-	background: rgba(244, 245, 247, 0.3) !important;
+.qnatter-theme-argon.qnatter-form-page .cbi-value-title,
+.qnatter-theme-argon.qnatter-form-page .cbi-value-description,
+.qnatter-theme-argon.qnatter-form-page .cbi-section-descr {
+	color: var(--qn-text-muted);
 }
 
-.qnatter-theme-argon.qnatter-form-page .cbi-section-table-row:last-child {
-	border-bottom: 0 !important;
-}
-
-/* 表格单元格 */
-.qnatter-theme-argon.qnatter-form-page .cbi-section-table td {
-	background: transparent !important;
-	border-right: 0 !important;
-	color: var(--argon-text);
-	font-family: var(--argon-font);
-	padding: 12px 16px !important;
-	vertical-align: middle;
-}
-
-/* 输入框和下拉框 */
-.qnatter-theme-argon.qnatter-form-page .cbi-input-text,
-.qnatter-theme-argon.qnatter-form-page .cbi-input-select,
-.qnatter-theme-argon.qnatter-form-page .cbi-input-password,
-.qnatter-theme-argon.qnatter-form-page input[type="text"],
-.qnatter-theme-argon.qnatter-form-page input[type="number"],
-.qnatter-theme-argon.qnatter-form-page input[type="password"],
-.qnatter-theme-argon.qnatter-form-page select {
-	background: #ffffff !important;
-	border: 1px solid rgba(136, 152, 170, 0.35) !important;
-	border-radius: var(--argon-radius) !important;
-	color: var(--argon-text) !important;
-	font-family: var(--argon-font) !important;
-	padding: 6px 12px !important;
-	transition: all 0.2s ease;
-}
-
-.qnatter-theme-argon.qnatter-form-page .cbi-input-text:focus,
-.qnatter-theme-argon.qnatter-form-page .cbi-input-select:focus,
-.qnatter-theme-argon.qnatter-form-page .cbi-input-password:focus,
-.qnatter-theme-argon.qnatter-form-page input[type="text"]:focus,
-.qnatter-theme-argon.qnatter-form-page input[type="number"]:focus,
-.qnatter-theme-argon.qnatter-form-page input[type="password"]:focus,
-.qnatter-theme-argon.qnatter-form-page select:focus {
-	border-color: var(--argon-primary) !important;
-	box-shadow: 0 0 0 3px rgba(94, 114, 228, 0.1) !important;
-	outline: none !important;
-}
-
-/* 复选框 */
-.qnatter-theme-argon.qnatter-form-page .cbi-checkbox {
-	accent-color: var(--argon-primary);
-}
-
-/* 按钮 */
-.qnatter-theme-argon.qnatter-form-page .cbi-button {
-	background: var(--argon-primary) !important;
-	border: 0 !important;
-	border-radius: var(--argon-radius);
-	color: #ffffff !important;
-	font-family: var(--argon-font);
-	font-weight: 600;
-	padding: 8px 16px;
-	transition: all 0.2s ease;
-}
-
-.qnatter-theme-argon.qnatter-form-page .cbi-button:hover {
-	background: #4c63d2 !important;
-	box-shadow: 0 4px 12px rgba(94, 114, 228, 0.3);
-	transform: translateY(-1px);
-}
-
-.qnatter-theme-argon.qnatter-form-page .cbi-button:active {
-	transform: translateY(0);
-}
-
-/* 删除按钮 */
-.qnatter-theme-argon.qnatter-form-page .cbi-button-remove,
-.qnatter-theme-argon.qnatter-form-page .cbi-button-negative {
-	background: var(--argon-danger) !important;
-}
-
-.qnatter-theme-argon.qnatter-form-page .cbi-button-remove:hover,
-.qnatter-theme-argon.qnatter-form-page .cbi-button-negative:hover {
-	background: #d32f4f !important;
-}
-
-/* 添加按钮 */
-.qnatter-theme-argon.qnatter-form-page .cbi-button-add,
-.qnatter-theme-argon.qnatter-form-page .cbi-button-positive {
-	background: var(--argon-success) !important;
-}
-
-.qnatter-theme-argon.qnatter-form-page .cbi-button-add:hover,
-.qnatter-theme-argon.qnatter-form-page .cbi-button-positive:hover {
-	background: #26b87c !important;
-}
-
-/* 表单字段标签 */
-.qnatter-theme-argon.qnatter-form-page .cbi-value-title {
-	color: var(--argon-muted);
-	font-family: var(--argon-font);
-	font-size: 13px;
-	font-weight: 600;
-}
-
-/* 表单字段描述 */
-.qnatter-theme-argon.qnatter-form-page .cbi-value-description {
-	color: var(--argon-muted);
-	font-family: var(--argon-font);
-	font-size: 12px;
-}
-
-/* ===== Argon 暗色模式 ===== */
-.qnatter-theme-argon.qnatter-argon-dark {
-	--argon-primary: var(--argon-primary-dark);
-	--argon-text: #cccccc;
-	--argon-muted: #9a9a9a;
-	--argon-surface: #1e1e1e;
-	--argon-border: #3c3c3c;
-	--argon-shadow: 0 0 0.5rem 0 rgba(0, 0, 0, 0.35);
-}
-
-.qnatter-page.qnatter-theme-argon.qnatter-argon-dark {
-	background: #2a2a2a !important;
-}
-
-.qnatter-page.qnatter-theme-argon.qnatter-argon-dark .qnatter-grid {
-	background: rgba(0, 0, 0, 0.2);
-}
-
-.qnatter-theme-argon.qnatter-argon-dark .qnatter-card,
-.qnatter-theme-argon.qnatter-argon-dark .qnatter-empty,
-.qnatter-theme-argon.qnatter-argon-dark .qnatter-log {
-	background: #1e1e1e !important;
-	border-color: var(--argon-border) !important;
-	box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3) !important;
-}
-
-.qnatter-theme-argon.qnatter-argon-dark .qnatter-toolbar h2 {
-	border-bottom-color: var(--argon-border);
-}
-
-.qnatter-theme-argon.qnatter-argon-dark .qnatter-toolbar h2,
-.qnatter-theme-argon.qnatter-argon-dark .qnatter-card h3,
-.qnatter-theme-argon.qnatter-argon-dark .qnatter-card dd {
-	color: var(--argon-text);
-}
-
-.qnatter-theme-argon.qnatter-argon-dark .qnatter-card dt {
-	color: var(--argon-muted);
-}
-
-.qnatter-theme-argon.qnatter-argon-dark .qnatter-card .qnatter-address-field {
-	background: #252525 !important;
-	border-color: var(--argon-border) !important;
-}
-
-.qnatter-theme-argon.qnatter-argon-dark .qnatter-card .qnatter-copy-button {
-	background: transparent !important;
-	border-left-color: var(--argon-border);
-	color: var(--argon-muted);
-}
-
-.qnatter-theme-argon.qnatter-argon-dark .qnatter-card .qnatter-copy-button:hover:not(:disabled) {
-	background: rgba(94, 114, 228, 0.22) !important;
-	color: #b7c0ff;
-}
-
-.qnatter-theme-argon.qnatter-argon-dark .qnatter-pill.is-running {
-	background: rgba(45, 206, 137, 0.2);
-	color: #4ed99a;
-}
-
-.qnatter-theme-argon.qnatter-argon-dark .qnatter-pill.is-stopped {
-	background: rgba(245, 54, 92, 0.2);
-	color: #f56e8a;
-}
-
-.qnatter-theme-argon.qnatter-argon-dark .qnatter-pill.is-error {
-	background: rgba(251, 177, 60, 0.22);
-	color: #fbbf24;
-}
-
-.qnatter-theme-argon.qnatter-argon-dark .qnatter-pill-clickable[data-enabled="0"] {
-	background: rgba(136, 152, 170, 0.2);
-	color: var(--argon-muted);
-}
-
-/* ===== luci-theme-aurora 完整适配 ===== */
+/* ===== luci-theme-aurora 适配 ===== */
 .qnatter-theme-aurora {
 	color: var(--text, var(--text-color, #1f2933));
 	--qnatter-card-bg: var(--surface-overlay, rgba(255, 255, 255, 0.92));
@@ -1060,7 +836,7 @@
 	--qnatter-card-text: var(--text, var(--text-color, #1f2933));
 	--qnatter-card-dt: var(--text-muted, #667085);
 	--qnatter-card-shadow: var(--app-shadow-sm, 0 1px 3px rgba(0, 0, 0, 0.06));
-	--qnatter-input-bg: var(--surface-overlay, rgba(248, 250, 253, 0.96));
+	--qnatter-input-bg: var(--control-bg, var(--surface-overlay, rgba(248, 250, 253, 0.96)));
 	--qnatter-input-border: var(--hairline, rgba(25, 35, 50, 0.12));
 	--qnatter-input-text: var(--text, var(--text-color, #1f2933));
 	--qnatter-address-bg: var(--surface-sunken, rgba(248, 250, 253, 0.96));
@@ -1158,7 +934,7 @@
 .qnatter-theme-aurora .qnatter-address-field {
 	background: var(--control-bg, var(--surface-overlay, #ffffff));
 	border-color: var(--qnatter-input-border);
-	border-radius: 10px;
+	border-radius: calc(var(--radius-base) * 2);
 	box-shadow: var(--app-shadow-sm);
 	color: var(--qnatter-input-text);
 	min-height: 36px;
@@ -1221,15 +997,22 @@
 	color: var(--brand, #485bc7);
 }
 
+/* 输入框圆角取自 aurora 原生 .cbi-input-text（main.css: border-radius:
+   calc(var(--radius-base) * 2)），与主题控件完全一致。 */
 .qnatter-theme-aurora .qnatter-log,
 .qnatter-theme-aurora .cbi-input-text,
 .qnatter-theme-aurora .cbi-input-select,
 .qnatter-theme-aurora .cbi-input-textarea {
 	background: var(--qnatter-input-bg);
 	border-color: var(--qnatter-input-border);
-	border-radius: 14px;
+	border-radius: calc(var(--radius-base) * 2);
 	box-shadow: var(--app-shadow-sm);
 	color: var(--qnatter-input-text);
+}
+
+/* aurora 原生按钮是 calc(var(--radius-base) * 1.5) = 12px，比 section 小一档。 */
+.qnatter-theme-aurora .cbi-button:not(.qnatter-pill) {
+	border-radius: calc(var(--radius-base) * 1.5);
 }
 
 .qnatter-theme-aurora .cbi-section,
@@ -1238,9 +1021,9 @@
 }
 
 .qnatter-theme-aurora.qnatter-form-page .cbi-section {
-	background: var(--surface-overlay, rgba(255, 255, 255, 0.92));
+	background: var(--surface, var(--surface-overlay, rgba(255, 255, 255, 0.92)));
 	border: 1px solid var(--hairline, rgba(25, 35, 50, 0.12));
-	border-radius: 18px;
+	border-radius: calc(var(--radius-base) * 2);
 	box-shadow: var(--app-shadow-sm);
 	padding: 18px 20px;
 }
@@ -1248,7 +1031,7 @@
 .qnatter-theme-aurora.qnatter-form-page .cbi-section-table {
 	background: var(--surface, rgba(255, 255, 255, 0.88));
 	border: 1px solid var(--hairline, rgba(25, 35, 50, 0.12));
-	border-radius: 14px;
+	border-radius: calc(var(--radius-base) * 2);
 	overflow: hidden;
 }
 
@@ -1314,7 +1097,7 @@
 .qnatter-theme-aurora.qnatter-log-page .qnatter-log {
 	background: var(--surface-overlay, rgba(255, 255, 255, 0.92));
 	border: 1px solid var(--hairline, rgba(25, 35, 50, 0.12));
-	border-radius: 18px;
+	border-radius: calc(var(--radius-base) * 2);
 	box-shadow: var(--app-shadow-sm);
 	line-height: 1.55;
 	padding: 14px;
@@ -1360,121 +1143,7 @@
 	}
 }
 
-/* ===== Argon 暗色模式表单适配 ===== */
-.qnatter-page.qnatter-theme-argon.qnatter-argon-dark.qnatter-form-page {
-	background: #2a2a2a !important;
-}
-
-.qnatter-theme-argon.qnatter-argon-dark.qnatter-form-page .cbi-section > legend {
-	border-bottom-color: var(--argon-border);
-}
-
-.qnatter-theme-argon.qnatter-argon-dark.qnatter-form-page .cbi-section-table-titles,
-.qnatter-theme-argon.qnatter-argon-dark.qnatter-form-page .cbi-section-table {
-	background: #1e1e1e !important;
-	border-color: var(--argon-border) !important;
-}
-
-.qnatter-theme-argon.qnatter-argon-dark.qnatter-form-page .cbi-section-table-titles th,
-.qnatter-theme-argon.qnatter-argon-dark.qnatter-form-page .cbi-section-table thead th {
-	background: rgba(0, 0, 0, 0.3) !important;
-	border-bottom-color: var(--argon-border) !important;
-}
-
-.qnatter-theme-argon.qnatter-argon-dark.qnatter-form-page .cbi-section-table-row {
-	background: transparent !important;
-	border-bottom-color: var(--argon-border) !important;
-}
-
-.qnatter-theme-argon.qnatter-argon-dark.qnatter-form-page .cbi-section-table-row:hover {
-	background: rgba(255, 255, 255, 0.05) !important;
-}
-
-.qnatter-theme-argon.qnatter-argon-dark.qnatter-form-page .cbi-input-text,
-.qnatter-theme-argon.qnatter-argon-dark.qnatter-form-page .cbi-input-select,
-.qnatter-theme-argon.qnatter-argon-dark.qnatter-form-page .cbi-input-password,
-.qnatter-theme-argon.qnatter-argon-dark.qnatter-form-page input[type="text"],
-.qnatter-theme-argon.qnatter-argon-dark.qnatter-form-page input[type="number"],
-.qnatter-theme-argon.qnatter-argon-dark.qnatter-form-page input[type="password"],
-.qnatter-theme-argon.qnatter-argon-dark.qnatter-form-page select {
-	background: #1e1e1e !important;
-	border-color: rgba(136, 152, 170, 0.35) !important;
-}
-
-/* ===== Argon 日志页面适配 ===== */
-
-/* 日志页面整体容器 */
-.qnatter-page.qnatter-theme-argon.qnatter-log-page {
-	background: #ffffff !important;
-	border-radius: var(--argon-radius);
-	box-shadow: var(--argon-shadow);
-	overflow: hidden;
-}
-
-/* 日志页面工具栏 */
-.qnatter-page.qnatter-theme-argon.qnatter-log-page .qnatter-toolbar {
-	background: transparent;
-	border-bottom: 1px solid var(--argon-border);
-	margin: 0;
-	padding: 16px 20px;
-}
-
-.qnatter-page.qnatter-theme-argon.qnatter-log-page .qnatter-toolbar h2 {
-	background: transparent !important;
-	border-bottom: 0 !important;
-	margin: 0;
-	padding: 0;
-}
-
-/* 日志文本框 */
-.qnatter-page.qnatter-theme-argon.qnatter-log-page .qnatter-log {
-	background: rgba(244, 245, 247, 0.3) !important;
-	border: 0 !important;
-	border-radius: 0 !important;
-	box-shadow: none !important;
-	color: var(--argon-text);
-	font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
-	padding: 16px 20px;
-}
-
-/* 暗色模式日志页面 */
-.qnatter-page.qnatter-theme-argon.qnatter-argon-dark.qnatter-log-page {
-	background: #2a2a2a !important;
-}
-
-.qnatter-page.qnatter-theme-argon.qnatter-argon-dark.qnatter-log-page .qnatter-toolbar {
-	border-bottom-color: var(--argon-border);
-}
-
-.qnatter-page.qnatter-theme-argon.qnatter-argon-dark.qnatter-log-page .qnatter-log {
-	background: rgba(0, 0, 0, 0.3) !important;
-}
-
-/* ===== 修复表单输入框宽度 ===== */
-.qnatter-theme-argon.qnatter-form-page .cbi-value-field input[type="text"],
-.qnatter-theme-argon.qnatter-form-page .cbi-value-field input[type="number"],
-.qnatter-theme-argon.qnatter-form-page .cbi-value-field select,
-.qnatter-theme-argon.qnatter-form-page .cbi-value-field .cbi-input-text,
-.qnatter-theme-argon.qnatter-form-page .cbi-value-field .cbi-input-select {
-	min-width: 200px !important;
-	width: auto !important;
-}
-
-/* ===== 优化表单字段宽度（不改变布局）===== */
-.qnatter-theme-argon.qnatter-form-page .cbi-value-field input[type="text"],
-.qnatter-theme-argon.qnatter-form-page .cbi-value-field input[type="number"],
-.qnatter-theme-argon.qnatter-form-page .cbi-value-field select,
-.qnatter-theme-argon.qnatter-form-page .cbi-value-field .cbi-input-text,
-.qnatter-theme-argon.qnatter-form-page .cbi-value-field .cbi-input-select {
-	max-width: 400px !important;
-	min-width: 200px !important;
-}
-
-/* ===== 修复 Global Settings 区域高度不足导致溢出 ===== */
-.qnatter-theme-argon.qnatter-form-page .cbi-section {
-	padding-bottom: 20px !important;
-}
-
-.qnatter-theme-argon.qnatter-form-page .cbi-value {
-	margin-bottom: 12px !important;
+/* bootstrap 没有阴影令牌，暗色下补一个可辨识的阴影强度 */
+:root[data-darkmode="true"] .qnatter-page {
+	--qn-shadow-sm: var(--app-shadow-sm, 0 2px 8px rgba(0, 0, 0, 0.45));
 }

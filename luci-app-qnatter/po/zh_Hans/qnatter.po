@@ -393,3 +393,36 @@ msgstr "从不重载 fw4"
 
 msgid "OpenClash injects its own rules directly into the inet fw4 table, and a full fw4 reload wipes them until its watchdog restores them (about two minutes). Automatic mode therefore skips the reload while OpenClash is running: the UCI rule is still written and takes effect at the next firewall reload."
 msgstr "OpenClash 会把自己的规则直接注入 inet fw4 表，整表重载会清掉这些规则，需等它的 watchdog 恢复（约两分钟）。因此“自动”模式在检测到 OpenClash 运行时跳过重载：UCI 规则照常写入，并会在下一次防火墙重载时生效。"
+
+msgid "Fill in the script content first"
+msgstr "请先填写脚本内容"
+
+msgid "Fill in the webhook URL first"
+msgstr "请先填写 Webhook 地址"
+
+msgid "Failed to clear logs"
+msgstr "清空日志失败"
+
+msgid "Failed to load the QNatter configuration"
+msgstr "QNatter 配置加载失败"
+
+msgid "Reload page"
+msgstr "重新加载页面"
+
+msgid "No instances yet"
+msgstr "还没有实例"
+
+msgid "Use Add below to create the first instance. Enabled, protocol, WAN interface and port stay editable in the row; the remaining fields open in a dialog."
+msgstr "点击下方“添加”创建第一个实例。启用开关、协议、WAN 接口和端口可直接在行内编辑，其余字段在弹窗中设置。"
+
+msgid "Add an instance on the Instances page to start mapping."
+msgstr "在“实例”页面添加实例后即可开始映射。"
+
+msgid "Open instances"
+msgstr "打开实例页面"
+
+msgid "Failed to read status"
+msgstr "读取状态失败"
+
+msgid "Retry"
+msgstr "重试"
