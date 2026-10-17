@@ -402,3 +402,27 @@ msgstr "请先填写 Webhook 地址"
 
 msgid "Failed to clear logs"
 msgstr "清空日志失败"
+
+msgid "Failed to load the QNatter configuration"
+msgstr "QNatter 配置加载失败"
+
+msgid "Reload page"
+msgstr "重新加载页面"
+
+msgid "No instances yet"
+msgstr "还没有实例"
+
+msgid "Use Add below to create the first instance. Enabled, protocol, WAN interface and port stay editable in the row; the remaining fields open in a dialog."
+msgstr "点击下方“添加”创建第一个实例。启用开关、协议、WAN 接口和端口可直接在行内编辑，其余字段在弹窗中设置。"
+
+msgid "Add an instance on the Instances page to start mapping."
+msgstr "在“实例”页面添加实例后即可开始映射。"
+
+msgid "Open instances"
+msgstr "打开实例页面"
+
+msgid "Failed to read status"
+msgstr "读取状态失败"
+
+msgid "Retry"
+msgstr "重试"

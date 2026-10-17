@@ -265,6 +265,11 @@ return view.extend({
 		var fieldByName = {};
 		var refreshInFlight = false;
 		var refreshTimer = null;
+		var alertBox = E('div', {
+			'class': 'qnatter-alert is-hidden',
+			'role': 'alert',
+			'aria-live': 'assertive'
+		});
 		var grid = E('div', { 'class': 'qnatter-grid' }, [
 			E('div', { 'class': 'qnatter-empty' }, [ _('Collecting data...') ])
 		]);
@@ -276,6 +281,7 @@ return view.extend({
 			E('div', { 'class': 'qnatter-toolbar' }, [
 				E('h2', {}, [ _('QNatter Status') ])
 			]),
+			alertBox,
 			grid
 		]));
 
@@ -285,11 +291,20 @@ return view.extend({
 			if (!instances.length) {
 				cardByName = {};
 				fieldByName = {};
-				grid.replaceChildren(E('div', { 'class': 'qnatter-empty' }, [ _('No instances configured.') ]));
+				grid.replaceChildren(E('div', { 'class': 'qnatter-empty' }, [
+					E('p', { 'class': 'qnatter-empty-title' }, [ _('No instances configured.') ]),
+					E('p', {}, [ _('Add an instance on the Instances page to start mapping.') ]),
+					E('div', { 'class': 'qnatter-empty-actions' }, [
+						E('a', {
+							'class': 'cbi-button cbi-button-add',
+							'href': L.url('admin/services/qnatter/instances')
+						}, [ _('Open instances') ])
+					])
+				]));
 				return;
 			}
 
-			if (grid.firstElementChild && grid.firstElementChild.className === 'qnatter-empty')
+			if (grid.firstElementChild && /qnatter-empty/.test(grid.firstElementChild.className))
 				grid.replaceChildren();
 
 			for (var i = 0; i < instances.length; i++) {
@@ -314,17 +329,39 @@ return view.extend({
 			});
 		}
 
+		// 刷新失败只影响提示条：已渲染的卡片保持原样，避免把用户正在看的数据擦掉。
+		function showError(err) {
+			var message = (err && err.message) || String(err);
+
+			alertBox.replaceChildren(
+				E('span', { 'class': 'qnatter-alert-text' }, [ _('Failed to read status') + ': ' + message ]),
+				E('button', {
+					'type': 'button',
+					'class': 'cbi-button cbi-button-neutral',
+					'click': function() { refresh(); }
+				}, [ _('Retry') ])
+			);
+			alertBox.classList.remove('is-hidden');
+		}
+
+		function clearError() {
+			if (alertBox.classList.contains('is-hidden') && !alertBox.firstChild)
+				return;
+
+			alertBox.replaceChildren();
+			alertBox.classList.add('is-hidden');
+		}
+
 		function refresh() {
 			if (refreshInFlight)
 				return Promise.resolve();
 
 			refreshInFlight = true;
 			return callStatus().then(function(data) {
+				clearError();
 				renderInstances(data.instances || []);
 			}).catch(function(err) {
-				cardByName = {};
-				fieldByName = {};
-				grid.replaceChildren(E('div', { 'class': 'qnatter-empty' }, [ err.message || String(err) ]));
+				showError(err);
 			}).finally(function() {
 				refreshInFlight = false;
 			});
@@ -339,12 +376,21 @@ return view.extend({
 			}, delay);
 		}
 
-		document.addEventListener('visibilitychange', function() {
+		function handleVisibilityChange() {
+			// 视图被导航替换后 root 不再在文档里，顺手注销监听，避免闭包长期驻留。
+			if (!document.contains(root)) {
+				document.removeEventListener('visibilitychange', handleVisibilityChange);
+				window.clearTimeout(refreshTimer);
+				return;
+			}
+
 			if (!document.hidden) {
 				window.clearTimeout(refreshTimer);
 				refresh().finally(function() { scheduleRefresh(3000); });
 			}
-		});
+		}
+
+		document.addEventListener('visibilitychange', handleVisibilityChange);
 
 		refresh();
 		scheduleRefresh(3000);

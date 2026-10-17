@@ -408,11 +408,57 @@
 	padding: 18px;
 }
 
+.qnatter-empty-title {
+	font-weight: 700;
+	margin: 0 0 6px;
+}
+
+.qnatter-empty p {
+	margin: 0 0 6px;
+}
+
+.qnatter-empty p:last-child {
+	margin-bottom: 0;
+}
+
 .qnatter-empty-actions {
 	display: flex;
 	flex-wrap: wrap;
 	gap: 8px;
 	margin-top: 12px;
+}
+
+.qnatter-grid > .qnatter-empty {
+	grid-column: 1 / -1;
+}
+
+.qnatter-notice {
+	margin: 0 0 16px;
+}
+
+/* ===== 页内提示条（状态页刷新失败） ===== */
+.qnatter-alert {
+	align-items: center;
+	background: var(--qn-danger-surface);
+	border: 1px solid var(--qn-border);
+	border-radius: var(--qn-radius);
+	color: var(--qn-danger);
+	display: flex;
+	flex-wrap: wrap;
+	gap: 10px;
+	justify-content: space-between;
+	margin: 0 0 14px;
+	min-width: 0;
+	padding: 10px 12px;
+}
+
+.qnatter-alert.is-hidden {
+	display: none !important;
+}
+
+.qnatter-alert-text {
+	min-width: 0;
+	overflow-wrap: anywhere;
 }
 
 /* ===== 日志 ===== */

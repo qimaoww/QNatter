@@ -960,13 +960,38 @@ return view.extend({
 			return parseAutomationPanel(section_id);
 		};
 
+		var loadError = data[0] && data[0].error;
+		var instanceCount = uci.sections('qnatter', 'instance').length;
+		var notice = null;
+
+		if (loadError) {
+			notice = E('div', { 'class': 'qnatter-empty qnatter-notice' }, [
+				E('p', { 'class': 'qnatter-empty-title' }, [ _('Failed to load the QNatter configuration') ]),
+				E('p', {}, [ (loadError.message || String(loadError)) ]),
+				E('div', { 'class': 'qnatter-empty-actions' }, [
+					E('button', {
+						'type': 'button',
+						'class': 'cbi-button cbi-button-neutral',
+						'click': function() { window.location.reload(); }
+					}, [ _('Reload page') ])
+				])
+			]);
+		}
+		else if (!instanceCount) {
+			notice = E('div', { 'class': 'qnatter-empty qnatter-notice' }, [
+				E('p', { 'class': 'qnatter-empty-title' }, [ _('No instances yet') ]),
+				E('p', {}, [ _('Use Add below to create the first instance. Enabled, protocol, WAN interface and port stay editable in the row; the remaining fields open in a dialog.') ])
+			]);
+		}
+
 		return Promise.resolve(m.render()).then(function(node) {
 			return qnatterTheme.annotate(E('div', { 'class': 'qnatter-page qnatter-form-page' + qnatterTheme.className() }, [
 				E('link', {
 					'rel': 'stylesheet',
 					'href': L.resource('qnatter/qnatter.css') + '?v=1.1.0-r2&layout=automation6'
 				}),
-				node
+				notice ? notice : '',
+				loadError ? '' : node
 			]));
 		});
 	}
